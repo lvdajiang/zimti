@@ -257,11 +257,12 @@ async function confirmScript(): Promise<void> {
 async function createBlankScript(): Promise<void> {
   try {
     const { createScript } = await import('@/api/script')
-    const topicRes = await (await import('@/api/client')).default.post<{ id: number }>('/topic-proposals', {
-      title: '新脚本', hook: '', main_points: [], visual_description: '',
+    const api = (await import('@/api/client')).default
+    const taskRes = await api.post<{ id: string }>('/tasks', {
+      title: '新脚本任务', platform: 'xiaohongshu',
     })
-    const taskRes = await (await import('@/api/client')).default.post<{ id: string }>('/tasks', {
-      topic_proposal_id: topicRes.id, platform: 'xiaohongshu',
+    const topicRes = await api.post<{ id: number }>('/topic-proposals', {
+      task_id: taskRes.id, title: '新脚本', hook: '', main_points: [], visual_description: '',
     })
     const scriptRes = await createScript({ task_id: taskRes.id, topic_id: topicRes.id, full_text: '' })
     store.scriptId = scriptRes.id
