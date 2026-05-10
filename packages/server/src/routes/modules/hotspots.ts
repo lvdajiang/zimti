@@ -12,6 +12,8 @@ function mapHotspot(h: {
   id: number; title: string; sourcePlatform: string; source: string;
   sourceUrl: string | null; relevanceScore: { toNumber: () => number };
   validUntil: Date | null; createdAt: Date;
+  heatValue: number; heatTrend: string; keywords: string[];
+  usageStatus: string; note: string | null;
 }) {
   return {
     id: h.id,
@@ -23,6 +25,11 @@ function mapHotspot(h: {
     relevance_score: Number(h.relevanceScore),
     valid_until: h.validUntil?.toISOString() ?? null,
     is_expired: h.validUntil ? h.validUntil < new Date() : false,
+    heat_value: h.heatValue,
+    heat_trend: h.heatTrend,
+    keywords: h.keywords,
+    usage_status: h.usageStatus,
+    note: h.note,
     created_at: h.createdAt.toISOString(),
   }
 }
@@ -30,20 +37,46 @@ function mapHotspot(h: {
 // GET /api/v1/hotspots — 热点列表
 router.get('/hotspots', async (req: Request, res: Response) => {
   try {
-    const { platform, page = '1', page_size = '20' } = req.query
-    const ps = Math.min(Number(page_size), 100)
-    const skip = (Number(page) - 1) * ps
+    const {
+      platform, keyword, sort_by = 'heat_value', order = 'desc',
+      time_range, page = '1', page_size = '20',
+    } = req.query
+    const p = toInt(String(page), 1)
+    const ps = Math.min(toInt(String(page_size), 20), 100)
+    const skip = (p - 1) * ps
 
     const where: Record<string, unknown> = {}
     if (platform && platform !== 'all') where.sourcePlatform = String(platform)
 
+    if (keyword) {
+      where.OR = [
+        { title: { contains: String(keyword), mode: 'insensitive' } },
+        { keywords: { has: String(keyword) } },
+      ]
+    }
+
+    if (time_range) {
+      const now = new Date()
+      let start: Date
+      if (time_range === 'today') {
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      } else if (time_range === 'week') {
+        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      } else if (time_range === 'month') {
+        start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      } else {
+        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      }
+      where.createdAt = { gte: start }
+    }
+
+    const sortField = String(sort_by) === 'relevance_score' ? 'relevanceScore'
+      : String(sort_by) === 'created_at' ? 'createdAt'
+      : 'heatValue'
+    const orderBy: Record<string, string> = { [sortField]: order === 'asc' ? 'asc' : 'desc' }
+
     const [items, total] = await Promise.all([
-      prisma.hotspot.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: ps,
-      }),
+      prisma.hotspot.findMany({ where, orderBy, skip, take: ps }),
       prisma.hotspot.count({ where }),
     ])
 
@@ -55,10 +88,15 @@ router.get('/hotspots', async (req: Request, res: Response) => {
 })
 
 // POST /api/v1/hotspots/refresh — 刷新热点（桩）
-router.post('/hotspots/refresh', async (_req: Request, res: Response) => {
+router.post('/hotspots/refresh', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入热点爬取服务
-    markStub(res, '热点刷新未接入爬取服务')
+    // TODO: 接入热点爬取服务，支持按平台刷新
+    const { source_platform } = req.query
+    if (source_platform) {
+      markStub(res, `热点刷新未接入爬取服务 (platform=${source_platform})`)
+    } else {
+      markStub(res, '热点刷新未接入爬取服务')
+    }
     res.json({ success: true, message: 'Refresh queued (stub)' })
   } catch (error) {
     console.error('[POST /hotspots/refresh]', error)
@@ -69,7 +107,7 @@ router.post('/hotspots/refresh', async (_req: Request, res: Response) => {
 // POST /api/v1/hotspots — 手动创建热点
 router.post('/hotspots', async (req: Request, res: Response) => {
   try {
-    const { title, source_platform, source, source_url, relevance_score, valid_until } = req.body
+    const { title, source_platform, source, source_url, keywords, relevance_score, valid_until, note } = req.body
     if (!title || !source_platform || !source) {
       res.status(400).json({ error: 'title, source_platform, source are required' })
       return
@@ -80,14 +118,34 @@ router.post('/hotspots', async (req: Request, res: Response) => {
         sourcePlatform: source_platform,
         source,
         sourceUrl: source_url ?? null,
+        keywords: keywords ?? [],
         relevanceScore: relevance_score ?? 0,
         validUntil: valid_until ? new Date(valid_until) : null,
+        note: note ?? null,
       },
     })
     res.json(mapHotspot(hotspot))
   } catch (error) {
     console.error('[POST /hotspots]', error)
     res.status(500).json({ error: 'Failed to create hotspot' })
+  }
+})
+
+// PUT /api/v1/hotspots/:id — 编辑热点
+router.put('/hotspots/:id', async (req: Request, res: Response) => {
+  try {
+    const id = toInt(req.params.id)
+    const { note, usage_status, keywords } = req.body
+    const data: Record<string, unknown> = {}
+    if (note !== undefined) data.note = note
+    if (usage_status !== undefined) data.usageStatus = usage_status
+    if (keywords !== undefined) data.keywords = keywords
+
+    const hotspot = await prisma.hotspot.update({ where: { id }, data })
+    res.json(mapHotspot(hotspot))
+  } catch (error) {
+    console.error('[PUT /hotspots/:id]', error)
+    res.status(500).json({ error: 'Failed to update hotspot' })
   }
 })
 
@@ -101,6 +159,20 @@ router.post('/hotspots/:id/expire', async (req: Request, res: Response) => {
     res.json(mapHotspot(hotspot))
   } catch (error) {
     console.error('[POST /hotspots/:id/expire]', error)
+    res.status(500).json({ error: 'Failed to expire hotspot' })
+  }
+})
+
+// PUT /api/v1/hotspots/:id/expire — 标记过期（兼容）
+router.put('/hotspots/:id/expire', async (req: Request, res: Response) => {
+  try {
+    const hotspot = await prisma.hotspot.update({
+      where: { id: toInt(req.params.id) },
+      data: { validUntil: new Date() },
+    })
+    res.json(mapHotspot(hotspot))
+  } catch (error) {
+    console.error('[PUT /hotspots/:id/expire]', error)
     res.status(500).json({ error: 'Failed to expire hotspot' })
   }
 })

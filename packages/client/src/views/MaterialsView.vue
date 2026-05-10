@@ -33,6 +33,7 @@
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
+    <div v-else-if="materials.length === 0 && (searchKeyword || typeFilter !== 'all')" class="empty-state"><p>未找到匹配的素材，请尝试其他关键词或筛选条件</p></div>
     <div v-else-if="materials.length === 0" class="empty-state"><p>暂无素材，点击上方按钮上传或生成</p></div>
     <div v-else class="material-grid">
       <div v-for="m in materials" :key="m.id" class="material-card">
@@ -302,6 +303,7 @@ const showAiModal = ref(false)
 const genType = ref('image')
 const genDescription = ref('')
 const genProgress = ref(0)
+const genTaskId = ref<string | null>(null)
 let genPollTimer: ReturnType<typeof setInterval> | null = null
 
 // Pexels
@@ -420,7 +422,7 @@ async function doUpload(): Promise<void> {
     uploadFiles.value = []
     await loadData()
     await loadStats()
-  } catch (e) { console.error(e); alert('上传失败') }
+  } catch (e) { console.error(e); toast.error('上传失败') }
   finally { uploading.value = false }
 }
 
@@ -428,6 +430,7 @@ async function startGenerate(): Promise<void> {
   genProgress.value = 1
   try {
     const res = await api.post<{ task_id: string }>('/materials/generate', { type: genType.value, description: genDescription.value })
+    genTaskId.value = res.task_id
     genPollTimer = setInterval(async () => {
       try {
         const status = await api.get<{ status: string; progress: number }>(`/materials/generate/${res.task_id}/status`)
@@ -436,23 +439,28 @@ async function startGenerate(): Promise<void> {
           if (genPollTimer) clearInterval(genPollTimer)
           genProgress.value = status.status === 'completed' ? 100 : 0
           if (status.status === 'completed') {
-            alert('素材生成完成')
+            // 确认 AI 生成素材入库
+            try {
+              await api.post(`/materials/generate/${res.task_id}/confirm`)
+            } catch (e) { console.error(e); toast.error('确认素材入库失败') }
+            toast.success('素材生成完成')
             await loadData()
             await loadStats()
             closeAiModal()
           } else {
-            alert('生成失败，请重试')
+            toast.error('生成失败，请重试')
           }
         }
       } catch (e) { console.error(e); toast.error('查询生成状态失败') }
     }, 2000)
-  } catch (e) { console.error(e); genProgress.value = 0; alert('启动生成失败') }
+  } catch (e) { console.error(e); genProgress.value = 0; toast.error('启动生成失败') }
 }
 
 function closeAiModal(): void {
   showAiModal.value = false
   genDescription.value = ''
   genProgress.value = 0
+  genTaskId.value = null
   if (genPollTimer) { clearInterval(genPollTimer); genPollTimer = null }
 }
 
@@ -471,10 +479,10 @@ async function searchPexels(): Promise<void> {
 async function importPexels(item: PexelsItem): Promise<void> {
   try {
     await api.post('/materials/pexels-import', { pexels_id: item.id, type: item.type, source_url: item.source_url })
-    alert('导入成功')
+    toast.success('导入成功')
     await loadData()
     await loadStats()
-  } catch (e) { console.error(e); alert('导入失败') }
+  } catch (e) { console.error(e); toast.error('导入失败') }
 }
 
 function openEdit(m: Material): void {
@@ -505,7 +513,7 @@ async function saveEdit(): Promise<void> {
     })
     showEditModal.value = false
     await loadData()
-  } catch (e) { console.error(e); alert('保存失败') }
+  } catch (e) { console.error(e); toast.error('保存失败') }
 }
 
 async function openDelete(m: Material): Promise<void> {
@@ -525,7 +533,7 @@ async function confirmDelete(): Promise<void> {
     showDeleteModal.value = false
     await loadData()
     await loadStats()
-  } catch (e) { console.error(e); alert('删除失败') }
+  } catch (e) { console.error(e); toast.error('删除失败') }
 }
 
 async function downloadMaterial(m: Material): Promise<void> {

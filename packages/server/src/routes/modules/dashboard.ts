@@ -51,7 +51,30 @@ router.get('/dashboard/stats', async (_req: Request, res: Response) => {
       prisma.material.count({ where: { userId: DEMO_USER_ID } }),
       prisma.contentAsset.count({ where: { userId: DEMO_USER_ID } }),
     ])
-    res.json({ total_tasks: totalTasks, active_tasks: activeTasks, total_videos: totalVideos, published_videos: publishedVideos, total_materials: totalMaterials, total_assets: totalAssets })
+
+    // 近7天新增任务数（用于趋势对比）
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const recentTasks = await prisma.task.count({ where: { userId: DEMO_USER_ID, createdAt: { gte: sevenDaysAgo } } })
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    const prevTasks = await prisma.task.count({ where: { userId: DEMO_USER_ID, createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } } })
+    const taskTrend = prevTasks > 0
+      ? Math.round((recentTasks - prevTasks) / prevTasks * 100)
+      : (recentTasks > 0 ? 100 : null)
+
+    // 近7天新增视频数
+    const recentVideos = await prisma.videoProduct.count({ where: { task: { userId: DEMO_USER_ID }, createdAt: { gte: sevenDaysAgo } } })
+    const prevVideos = await prisma.videoProduct.count({ where: { task: { userId: DEMO_USER_ID }, createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } } })
+    const videoTrend = prevVideos > 0
+      ? Math.round((recentVideos - prevVideos) / prevVideos * 100)
+      : (recentVideos > 0 ? 100 : null)
+
+    res.json({
+      total_tasks: totalTasks, active_tasks: activeTasks, total_videos: totalVideos,
+      published_videos: publishedVideos, total_materials: totalMaterials, total_assets: totalAssets,
+      task_trend: taskTrend, video_trend: videoTrend,
+    })
   } catch (error) {
     console.error('[GET /dashboard/stats]', error)
     res.status(500).json({ error: 'Failed to load stats' })
@@ -68,12 +91,22 @@ router.get('/dashboard/overview', async (_req: Request, res: Response) => {
       where: { videoProduct: { task: { userId: DEMO_USER_ID } }, publishedAt: { gte: sevenDaysAgo } },
     })
 
+    // 上周发布数（趋势对比）
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    const prevWeekPublishes = await prisma.publishRecord.count({
+      where: { videoProduct: { task: { userId: DEMO_USER_ID } }, publishedAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+    })
+    const publishTrend = prevWeekPublishes > 0
+      ? Math.round((recentPublishes - prevWeekPublishes) / prevWeekPublishes * 100)
+      : (recentPublishes > 0 ? 100 : null)
+
     // 平均完播率
     const snapshots = await prisma.dataSnapshot.findMany({
       where: { userId: DEMO_USER_ID },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      select: { completionRate: true },
+      select: { completionRate: true, playCount: true },
     })
     const avgCompletion = snapshots.length > 0
       ? snapshots.reduce((sum, s) => sum + Number(s.completionRate), 0) / snapshots.length
@@ -87,6 +120,7 @@ router.get('/dashboard/overview', async (_req: Request, res: Response) => {
 
     res.json({
       recent_publishes_7d: recentPublishes,
+      recent_publishes_7d_trend: publishTrend,
       avg_completion_rate: Math.round(avgCompletion * 100) / 100,
       total_plays: totalPlays._max.playCount ?? 0,
       total_snapshots: snapshots.length,
@@ -100,12 +134,17 @@ router.get('/dashboard/overview', async (_req: Request, res: Response) => {
 // GET /api/v1/dashboard/video-records — 视频发布记录
 router.get('/dashboard/video-records', async (req: Request, res: Response) => {
   try {
-    const { page = '1', page_size = '20' } = req.query
+    const { page = '1', page_size = '20', platform } = req.query
     const ps = Math.min(Number(page_size), 100)
     const skip = (Number(page) - 1) * ps
 
+    const whereClause: any = { videoProduct: { task: { userId: DEMO_USER_ID } } }
+    if (platform && platform !== 'all') {
+      whereClause.platform = platform as string
+    }
+
     const records = await prisma.publishRecord.findMany({
-      where: { videoProduct: { task: { userId: DEMO_USER_ID } } },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       skip,
       take: ps,
@@ -119,7 +158,7 @@ router.get('/dashboard/video-records', async (req: Request, res: Response) => {
       },
     })
     const total = await prisma.publishRecord.count({
-      where: { videoProduct: { task: { userId: DEMO_USER_ID } } },
+      where: whereClause,
     })
 
     res.json({
@@ -144,7 +183,7 @@ router.get('/dashboard/video-records', async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/v1/dashboard/trends — 趋势数据（桩）
+// GET /api/v1/dashboard/trends — 趋势数据
 router.get('/dashboard/trends', async (_req: Request, res: Response) => {
   try {
     const thirtyDaysAgo = new Date()

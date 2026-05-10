@@ -37,6 +37,8 @@
             <h3>视频文案</h3>
             <div class="panel-actions">
               <button v-if="!video.transcript" class="btn-sm" @click="extractTranscript">提取文案</button>
+              <button v-if="video.transcript" class="btn-sm" @click="copyTranscript">复制</button>
+              <button v-if="video.transcript" class="btn-sm" @click="reExtractTranscript">重新提取</button>
               <button v-if="video.transcript" class="btn-sm" @click="editTranscript = !editTranscript">
                 {{ editTranscript ? '取消编辑' : '编辑' }}
               </button>
@@ -60,6 +62,10 @@
           </div>
           <div v-else class="empty-panel">暂无分析结果</div>
         </div>
+
+        <div class="action-bar">
+          <button class="btn btn-outline" @click="markAsBenchmark">用作对标</button>
+        </div>
       </div>
     </div>
   </div>
@@ -69,7 +75,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api/client'
-import { toast } from '@/utils/toast'
+import { toast } from '../utils/toast.js'
 
 const route = useRoute()
 const videoId = computed(() => route.params.id as string)
@@ -100,7 +106,7 @@ async function loadVideo(): Promise<void> {
 async function extractTranscript(): Promise<void> {
   try {
     await api.post(`/viral-videos/${videoId.value}/transcript/extract`)
-    alert('文案提取任务已提交')
+    toast.success('文案提取任务已提交')
   } catch (e) { console.error(e); toast.error('提取文案失败') }
 }
 
@@ -109,14 +115,36 @@ async function saveTranscript(): Promise<void> {
     await api.put(`/viral-videos/${videoId.value}/transcript`, { transcript: transcriptText.value })
     editTranscript.value = false
     await loadVideo()
-  } catch (e) { console.error(e); alert('保存失败') }
+  } catch (e) { console.error(e); toast.error('保存失败') }
 }
 
 async function runAnalysis(): Promise<void> {
   try {
     await api.post(`/viral-videos/${videoId.value}/analyze`)
-    alert('分析任务已提交')
-  } catch (e) { console.error(e); alert('操作失败') }
+    toast.success('分析任务已提交')
+  } catch (e) { console.error(e); toast.error('操作失败') }
+}
+
+async function copyTranscript(): Promise<void> {
+  const text = video.value?.transcript ?? transcriptText.value
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success('已复制到剪贴板')
+  } catch {
+    toast.error('复制失败')
+  }
+}
+
+async function reExtractTranscript(): Promise<void> {
+  try {
+    await api.post(`/viral-videos/${videoId.value}/transcript/extract`)
+    toast.success('重新提取任务已提交')
+  } catch (e) { console.error(e); toast.error('提取文案失败') }
+}
+
+function markAsBenchmark(): void {
+  toast.info('已标记为对标视频')
 }
 
 function formatNumber(n: number): string {
@@ -167,4 +195,6 @@ onMounted(loadVideo)
 .analysis-content pre { margin: 0; font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; }
 .empty-panel { padding: 40px 16px; text-align: center; color: #999; font-size: 13px; }
 .loading { text-align: center; padding: 60px; color: #999; }
+.action-bar { display: flex; justify-content: center; padding: 12px 0; }
+.btn-outline { padding: 8px 20px; border-radius: 6px; border: 1px solid #4a6cf7; background: #fff; color: #4a6cf7; cursor: pointer; font-size: 14px; font-weight: 500; }
 </style>

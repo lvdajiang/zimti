@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { DEMO_USER_ID } from '../../constants.js'
+import { markStub } from '../../middleware/stubMarker.js'
 
 const router = Router()
 
@@ -154,7 +155,7 @@ router.post('/materials/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'type and description are required' })
       return
     }
-    // TODO: 接入 AI 生成服务
+    markStub(res, 'AI 生成服务未接入')
     const taskId = crypto.randomUUID()
     res.json({ task_id: taskId, status: 'pending' })
   } catch (error) {
@@ -165,13 +166,13 @@ router.post('/materials/generate', async (req: Request, res: Response) => {
 
 // GET /api/v1/materials/generate/:taskId/status — AI 生成状态（桩）
 router.get('/materials/generate/:taskId/status', async (_req: Request, res: Response) => {
-  // TODO: 接入 AI 生成服务
+  markStub(res, 'AI 生成状态查询为桩')
   res.json({ status: 'pending', progress: 0 })
 })
 
 // POST /api/v1/materials/generate/:taskId/confirm — AI 生成确认（桩）
 router.post('/materials/generate/:taskId/confirm', async (_req: Request, res: Response) => {
-  // TODO: 接入 AI 生成服务
+  markStub(res, 'AI 生成确认为桩')
   res.json({ message: 'Generate confirm — stub' })
 })
 
@@ -183,7 +184,7 @@ router.get('/materials/pexels-search', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'keyword is required' })
       return
     }
-    // TODO: 接入 Pexels API
+    markStub(res, 'Pexels API 未接入')
     res.json({
       items: [],
       total: 0,
@@ -298,7 +299,7 @@ router.get('/materials/:id/download', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Material not found' })
       return
     }
-    // TODO: 实际文件流下载
+    markStub(res, '文件流下载未实现')
     res.json({ url: material.fileUrl, name: material.name })
   } catch (error) {
     console.error('[GET /materials/:id/download]', error)

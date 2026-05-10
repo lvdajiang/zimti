@@ -16,6 +16,18 @@
         </button>
       </div>
       <input v-model="searchKeyword" class="search-input" placeholder="搜索视频标题..." @input="debouncedLoad" />
+      <select v-model="sortOption" class="filter-select" @change="loadData(true)">
+        <option value="play_count_desc">热度降序</option>
+        <option value="like_count_desc">点赞数降序</option>
+        <option value="comment_count_desc">评论数降序</option>
+        <option value="created_at_desc">最新发布</option>
+      </select>
+      <select v-model="timeRange" class="filter-select" @change="loadData(true)">
+        <option value="all">全部时间</option>
+        <option value="7d">近7天</option>
+        <option value="30d">近30天</option>
+      </select>
+      <span class="total-count">共 {{ totalCount }} 个视频</span>
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
@@ -69,10 +81,10 @@
       </table>
     </div>
 
-    <div v-if="videos.length > 0" class="pagination">
+    <div v-if="totalCount > 0" class="pagination">
+      <span class="page-info">共 {{ totalCount }} 条 第 {{ currentPage }}/{{ totalPages }} 页</span>
       <button class="btn-sm" :disabled="currentPage <= 1" @click="currentPage--; loadData()">上一页</button>
-      <span class="page-info">{{ currentPage }}</span>
-      <button class="btn-sm" :disabled="videos.length < 20" @click="currentPage++; loadData()">下一页</button>
+      <button class="btn-sm" :disabled="currentPage >= totalPages" @click="currentPage++; loadData()">下一页</button>
     </div>
   </div>
 </template>
@@ -95,6 +107,9 @@ const loading = ref(false)
 const platformFilter = ref('all')
 const searchKeyword = ref('')
 const currentPage = ref(1)
+const totalCount = ref(0)
+const sortOption = ref('play_count_desc')
+const timeRange = ref('all')
 const selected = ref<number[]>([])
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -106,6 +121,7 @@ const platformTabs = [
 ]
 
 const allSelected = computed(() => videos.value.length > 0 && selected.value.length === videos.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / 20)))
 
 function toggleSelect(id: number): void {
   const idx = selected.value.indexOf(id)
@@ -138,11 +154,18 @@ async function loadData(reset = false): Promise<void> {
     if (reset) currentPage.value = 1
     const params: string[] = []
     if (platformFilter.value !== 'all') params.push(`platform=${platformFilter.value}`)
+    if (searchKeyword.value.trim()) params.push(`keyword=${encodeURIComponent(searchKeyword.value.trim())}`)
     params.push(`page=${currentPage.value}`)
     params.push('page_size=20')
+    const sortBy = sortOption.value.replace(/_(asc|desc)$/, '')
+    const order = sortOption.value.includes('_asc') ? 'asc' : 'desc'
+    params.push(`sort_by=${sortBy}`)
+    params.push(`order=${order}`)
+    if (timeRange.value !== 'all') params.push(`time_range=${timeRange.value}`)
     const query = `?${params.join('&')}`
     const res = await api.get<{ items: ViralVideo[]; total: number }>(`/viral-videos${query}`)
     videos.value = res.items
+    totalCount.value = res.total
     selected.value = []
   } catch (e) { console.error(e); toast.error('加载视频列表失败') }
   finally { loading.value = false }
@@ -151,16 +174,16 @@ async function loadData(reset = false): Promise<void> {
 async function extractTranscript(id: number): Promise<void> {
   try {
     await api.post(`/viral-videos/${id}/transcript/extract`)
-    alert('文案提取任务已提交')
-  } catch (e) { console.error(e); alert('提取失败') }
+    toast.success('文案提取任务已提交')
+  } catch (e) { console.error(e); toast.error('提取失败') }
 }
 
 async function analyzeSelected(): Promise<void> {
   try {
     await api.post('/viral-videos/analyze-batch', { ids: selected.value })
-    alert(`已提交 ${selected.value.length} 个视频分析任务`)
+    toast.success(`已提交 ${selected.value.length} 个视频分析任务`)
     selected.value = []
-  } catch (e) { console.error(e); alert('分析失败') }
+  } catch (e) { console.error(e); toast.error('分析失败') }
 }
 
 onMounted(() => { loadData() })
@@ -181,6 +204,9 @@ onMounted(() => { loadData() })
 .filter-tab.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
 .search-input { padding: 7px 14px; border: 1px solid #ddd; border-radius: 20px; font-size: 13px; outline: none; width: 220px; }
 .search-input:focus { border-color: #4a6cf7; }
+.filter-select { padding: 7px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; background: #fff; cursor: pointer; color: #333; }
+.filter-select:focus { border-color: #4a6cf7; }
+.total-count { margin-left: auto; font-size: 13px; color: #999; }
 .video-table-wrap { background: #fff; border-radius: 10px; border: 1px solid #eee; overflow-x: auto; }
 .video-table { width: 100%; border-collapse: collapse; min-width: 800px; }
 .video-table th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 500; color: #666; background: #fafafa; border-bottom: 1px solid #eee; }

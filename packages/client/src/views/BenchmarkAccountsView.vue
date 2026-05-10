@@ -220,12 +220,12 @@ async function loadStats(): Promise<void> {
 
 function debouncedLoad(): void {
   if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(loadData, 300)
+  debounceTimer = setTimeout(loadData, 500)
 }
 
 async function saveAccount(): Promise<void> {
   if (!form.account_name || !form.platform || !form.homepage_url || !form.content_direction) {
-    alert('请填写所有必填字段')
+    toast.error('请填写所有必填字段')
     return
   }
   try {
@@ -239,7 +239,7 @@ async function saveAccount(): Promise<void> {
     await loadStats()
   } catch (e) {
     console.error(e)
-    alert('保存失败')
+    toast.error('保存失败')
   }
 }
 
@@ -268,7 +268,7 @@ async function confirmDelete(): Promise<void> {
     await loadStats()
   } catch (e) {
     console.error(e)
-    alert('删除失败')
+    toast.error('删除失败')
   }
 }
 
@@ -276,19 +276,18 @@ async function startCollect(account: BenchmarkAccount): Promise<void> {
   try {
     await api.post('/collect-tasks', {
       target_account_id: account.id,
-      task_type: 'video',
-      max_count: 50,
+      task_type: 'video_list',
+      max_count: 100,
     })
-    alert(`已为「${account.account_name}」创建采集任务`)
+    toast.success(`已为「${account.account_name}」创建采集任务`)
   } catch (e) {
     console.error(e)
-    alert('创建采集任务失败')
+    toast.error('创建采集任务失败')
   }
 }
 
 onMounted(() => {
-  loadData()
-  loadStats()
+  Promise.all([loadData(), loadStats()])
 })
 </script>
 

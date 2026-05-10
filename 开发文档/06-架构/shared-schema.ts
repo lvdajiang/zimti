@@ -642,6 +642,7 @@ export const API = {
     LIST: '/api/v1/hotspots',
     REFRESH: '/api/v1/hotspots/refresh',
     CREATE: '/api/v1/hotspots',
+    UPDATE: (id: number) => `/api/v1/hotspots/${id}`,
     EXPIRE: (id: number) => `/api/v1/hotspots/${id}/expire`,
     RECOMMENDED: '/api/v1/hotspots/recommended',
   },

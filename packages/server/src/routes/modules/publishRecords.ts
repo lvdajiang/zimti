@@ -65,6 +65,7 @@ router.get('/publish-records', async (req: Request, res: Response) => {
 // POST /api/v1/publish-records/:id/generate-copy — AI 生成文案（桩）
 router.post('/publish-records/:id/generate-copy', async (req: Request, res: Response) => {
   try {
+    markStub(res, 'AI 文案生成未接入实际服务')
     const { platform } = req.body
     // TODO: 接入 AI 文案生成服务
     res.json({ success: true, message: 'Copy generation queued (stub)' })
@@ -96,9 +97,11 @@ router.put('/publish-records/:id/content', async (req: Request, res: Response) =
   }
 })
 
-// GET /api/v1/publish-records/:id/seo-check — SEO 检查（桩）
-router.get('/publish-records/:id/seo-check', async (_req: Request, res: Response) => {
+// GET/POST /api/v1/publish-records/:id/seo-check — SEO 检查（桩）
+async function seoCheckHandler(req: Request, res: Response): Promise<void> {
   markStub(res, 'SEO 检查返回硬编码数据')
+  // POST 时可接收 body 参数（title, description, tags 等），暂未使用
+  const _body = req.body
   res.json({
     score: 72,
     issues: [
@@ -106,7 +109,9 @@ router.get('/publish-records/:id/seo-check', async (_req: Request, res: Response
       { field: 'tags', message: '标签数量不足', severity: 'info' },
     ],
   })
-})
+}
+router.get('/publish-records/:id/seo-check', seoCheckHandler)
+router.post('/publish-records/:id/seo-check', seoCheckHandler)
 
 // POST /api/v1/publish-records/:id/auto-save — 自动保存
 router.post('/publish-records/:id/auto-save', async (req: Request, res: Response) => {
@@ -171,9 +176,10 @@ router.post('/publish-records/:id/generate-geo', async (_req: Request, res: Resp
   res.json({ message: 'Geo generation — stub' })
 })
 
-// POST /api/v1/publish-records/:id/publish — 发布（桩）
+// POST /api/v1/publish-records/:id/publish — 发布（桩，仅更新数据库状态）
 router.post('/publish-records/:id/publish', async (req: Request, res: Response) => {
   try {
+    markStub(res, '发布仅更新数据库状态，未对接实际平台')
     const record = await prisma.publishRecord.update({
       where: { id: req.params.id },
       data: { status: 'published', publishedAt: new Date() },

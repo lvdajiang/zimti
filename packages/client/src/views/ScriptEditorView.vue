@@ -218,7 +218,7 @@ async function saveScript(): Promise<void> {
     script.value.full_text = fullText.value
     script.value.video_type = videoType.value
     script.value.oral_ratio = oralRatio.value
-  } catch (e) { console.error(e); alert('保存失败') }
+  } catch (e) { console.error(e); toast.error('保存失败') }
 }
 
 async function saveSegment(seg: Segment): Promise<void> {
@@ -230,7 +230,7 @@ async function saveSegment(seg: Segment): Promise<void> {
       visual_description: seg.visual_description,
       duration: seg.duration,
     })
-  } catch (e) { console.error(e); alert('保存失败') }
+  } catch (e) { console.error(e); toast.error('保存失败') }
 }
 
 async function addSegment(): Promise<void> {
@@ -255,7 +255,7 @@ async function deleteSegment(segmentId: number): Promise<void> {
 
 async function generateStoryboard(): Promise<void> {
   if (!script.value || script.value.id === 0 || !fullText.value.trim()) {
-    alert('请先输入脚本内容')
+    toast.warning('请先输入脚本内容')
     return
   }
   generating.value = true
@@ -273,7 +273,7 @@ async function generateStoryboard(): Promise<void> {
         }
         if (status.status === 'failed') {
           generating.value = false
-          alert('分镜生成失败，请重试')
+          toast.error('分镜生成失败，请重试')
           return
         }
         setTimeout(poll, 2000)
@@ -285,7 +285,7 @@ async function generateStoryboard(): Promise<void> {
 
 async function runAiCheck(): Promise<void> {
   if (!script.value || script.value.id === 0 || !fullText.value.trim()) {
-    alert('请先输入脚本内容')
+    toast.warning('请先输入脚本内容')
     return
   }
   aiChecking.value = true
@@ -300,8 +300,8 @@ async function confirmScript(): Promise<void> {
   try {
     await api.put(`/scripts/${script.value.id}/status`, { status: 'confirmed' })
     script.value.status = 'confirmed'
-    alert('脚本已确认，可以进入视频制作')
-  } catch (e) { console.error(e); alert('确认失败') }
+    toast.success('脚本已确认，可以进入视频制作')
+  } catch (e) { console.error(e); toast.error('确认失败') }
 }
 
 onMounted(() => { loadScript() })

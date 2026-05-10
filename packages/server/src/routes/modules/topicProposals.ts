@@ -25,6 +25,86 @@ function mapProposal(p: {
   }
 }
 
+// GET /api/v1/topic-proposals — 选题列表（支持搜索、排序）
+router.get('/topic-proposals', async (req: Request, res: Response) => {
+  try {
+    const { keyword, sort_by, status, page, page_size } = req.query
+    const pageNum = toInt(String(page ?? '')) || 1
+    const pageSize = Math.min(toInt(String(page_size ?? '')) || 20, 100)
+
+    const where: Record<string, unknown> = {}
+    if (keyword) {
+      where.title = { contains: String(keyword) }
+    }
+    if (status) {
+      where.status = String(status)
+    }
+
+    const orderBy: Record<string, string> = {}
+    const sortBy = String(sort_by || 'created_at_desc')
+    if (sortBy === 'created_at_asc') {
+      orderBy.createdAt = 'asc'
+    } else if (sortBy === 'title_asc') {
+      orderBy.title = 'asc'
+    } else if (sortBy === 'title_desc') {
+      orderBy.title = 'desc'
+    } else {
+      orderBy.createdAt = 'desc'
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.topicProposal.findMany({
+        where,
+        orderBy,
+        skip: (pageNum - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.topicProposal.count({ where }),
+    ])
+
+    res.json({
+      items: items.map(mapProposal),
+      total,
+      page: pageNum,
+      page_size: pageSize,
+      total_pages: Math.ceil(total / pageSize),
+    })
+  } catch (error) {
+    console.error('[GET /topic-proposals]', error)
+    res.status(500).json({ error: 'Failed to fetch topic proposals' })
+  }
+})
+
+// PUT /api/v1/topic-proposals/:id — 编辑选题
+router.put('/topic-proposals/:id', async (req: Request, res: Response) => {
+  try {
+    const id = toInt(String(req.params.id))
+    const { title, description, keywords, angle, video_count, status } = req.body
+
+    const data: Record<string, unknown> = {}
+    if (title !== undefined) data.title = title
+    if (description !== undefined) data.description = description
+    if (keywords !== undefined) data.keywords = keywords
+    if (angle !== undefined) data.angle = angle
+    if (video_count !== undefined) data.videoCount = toInt(String(video_count))
+    if (status !== undefined) data.status = status
+
+    if (Object.keys(data).length === 0) {
+      res.status(400).json({ error: 'No fields to update' })
+      return
+    }
+
+    const proposal = await prisma.topicProposal.update({
+      where: { id },
+      data,
+    })
+    res.json(mapProposal(proposal))
+  } catch (error) {
+    console.error('[PUT /topic-proposals/:id]', error)
+    res.status(500).json({ error: 'Failed to update topic proposal' })
+  }
+})
+
 // POST /api/v1/topic-proposals — 创建选题（支持直接创建和生成）
 router.post('/topic-proposals', async (req: Request, res: Response) => {
   try {
@@ -84,7 +164,7 @@ router.get('/topic-proposals/generate/:taskId/status', async (_req: Request, res
 router.post('/topic-proposals/:topicId/select', async (req: Request, res: Response) => {
   try {
     const proposal = await prisma.topicProposal.update({
-      where: { id: toInt(req.params.topicId) },
+      where: { id: toInt(String(req.params.topicId)) },
       data: { status: 'selected' },
     })
     res.json(mapProposal(proposal))
@@ -103,6 +183,7 @@ router.post('/topic-proposals/merge', async (req: Request, res: Response) => {
       return
     }
     // TODO: AI 合并逻辑
+    markStub(res, 'AI 合并选题未接入')
     res.json({ success: true, merged_count: ids.length })
   } catch (error) {
     console.error('[POST /topic-proposals/merge]', error)
@@ -118,14 +199,14 @@ router.post('/topic-proposals/add-videos', async (req: Request, res: Response) =
       res.status(400).json({ error: 'topic_id and video_ids array required' })
       return
     }
-    const proposal = await prisma.topicProposal.findUnique({ where: { id: toInt(topic_id) } })
+    const proposal = await prisma.topicProposal.findUnique({ where: { id: toInt(String(topic_id)) } })
     if (!proposal) {
       res.status(404).json({ error: 'Topic not found' })
       return
     }
     const updated = await prisma.topicProposal.update({
-      where: { id: toInt(topic_id) },
-      data: { videoIds: Array.from(new Set(proposal.videoIds.concat(video_ids.map(toInt)))) },
+      where: { id: toInt(String(topic_id)) },
+      data: { videoIds: Array.from(new Set(proposal.videoIds.concat(video_ids.map((v: unknown) => toInt(String(v)))))) },
     })
     res.json(mapProposal(updated))
   } catch (error) {

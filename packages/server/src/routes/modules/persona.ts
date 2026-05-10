@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { DEMO_USER_ID } from '../../constants.js'
+import { markStub } from '../../middleware/stubMarker.js'
 
 const router = Router()
 
@@ -110,6 +111,7 @@ router.put('/persona', async (req: Request, res: Response) => {
 
 // POST /api/v1/persona/samples — 上传样稿文件（桩实现，后续接入对象存储）
 router.post('/persona/samples', async (req: Request, res: Response) => {
+  markStub(res, '样稿上传功能未实现，待接入对象存储')
   try {
     // TODO: 接入 MinIO/S3 文件上传
     // 当前返回模拟数据
@@ -131,6 +133,7 @@ router.post('/persona/samples', async (req: Request, res: Response) => {
 
 // DELETE /api/v1/persona/samples/:id — 删除样稿文件（桩实现）
 router.delete('/persona/samples/:id', async (req: Request, res: Response) => {
+  markStub(res, '样稿删除功能未实现，待接入对象存储')
   try {
     // TODO: 从 MinIO/S3 删除文件，并从 persona_config JSONB 中移除记录
     res.json({ success: true })
@@ -142,6 +145,7 @@ router.delete('/persona/samples/:id', async (req: Request, res: Response) => {
 
 // POST /api/v1/persona/preview — AI 生成预览文案（桩实现）
 router.post('/persona/preview', async (req: Request, res: Response) => {
+  markStub(res, 'AI预览文案生成未实现，当前返回模拟数据')
   try {
     // TODO: 接入 AI 服务生成预览文案
     const { display_name, language_styles, catchphrases, narrative_viewpoint } = req.body

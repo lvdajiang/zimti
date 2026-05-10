@@ -16,6 +16,16 @@
           {{ tab.label }}
         </button>
       </div>
+      <div class="filter-tabs">
+        <button v-for="tab in platformTabs" :key="tab.value" class="filter-tab" :class="{ active: platformFilter === tab.value }" @click="platformFilter = tab.value; loadData()">
+          {{ tab.label }}
+        </button>
+      </div>
+      <div class="filter-tabs">
+        <button v-for="tab in timeTabs" :key="tab.value" class="filter-tab" :class="{ active: timeFilter === tab.value }" @click="timeFilter = tab.value; loadData()">
+          {{ tab.label }}
+        </button>
+      </div>
       <input v-model="searchKeyword" class="search-input" placeholder="搜索标题..." @input="debouncedLoad" />
     </div>
 
@@ -104,6 +114,23 @@
             <span v-for="pl in detailAsset.platform_labels" :key="pl" class="platform-tag">{{ pl }}</span>
             <span v-if="detailAsset.platform_labels.length === 0">未设置</span>
           </div>
+          <div class="detail-section metrics-section" v-if="detailAsset.core_metrics && (detailAsset.core_metrics.play_count || detailAsset.core_metrics.interaction_rate)">
+            <span class="detail-label">数据指标</span>
+            <div class="metrics-grid">
+              <div v-if="detailAsset.core_metrics.play_count" class="metric-item">
+                <span class="metric-value">{{ formatNumber(detailAsset.core_metrics.play_count) }}</span>
+                <span class="metric-label">播放量</span>
+              </div>
+              <div v-if="detailAsset.core_metrics.interaction_rate" class="metric-item">
+                <span class="metric-value">{{ detailAsset.core_metrics.interaction_rate }}%</span>
+                <span class="metric-label">互动率</span>
+              </div>
+              <div v-if="detailAsset.core_metrics.completion_rate" class="metric-item">
+                <span class="metric-value">{{ detailAsset.core_metrics.completion_rate }}%</span>
+                <span class="metric-label">完播率</span>
+              </div>
+            </div>
+          </div>
           <div v-if="detailAsset.element_highlights.length > 0" class="detail-section">
             <span class="detail-label">亮点元素</span>
             <div class="highlight-list">
@@ -149,6 +176,8 @@ const assets = ref<ContentAsset[]>([])
 const loading = ref(false)
 const statusFilter = ref('all')
 const typeFilter = ref('all')
+const platformFilter = ref('all')
+const timeFilter = ref('all')
 const searchKeyword = ref('')
 const showCreate = ref(false)
 const detailAsset = ref<ContentAsset | null>(null)
@@ -174,6 +203,20 @@ const typeTabs = [
   { value: 'image_text', label: '图文' },
 ]
 
+const platformTabs = [
+  { value: 'all', label: '全部平台' },
+  { value: 'xiaohongshu', label: '小红书' },
+  { value: 'douyin', label: '抖音' },
+  { value: 'weixin', label: '视频号' },
+  { value: 'wechat', label: '微信' },
+]
+
+const timeTabs = [
+  { value: 'all', label: '全部时间' },
+  { value: 'recent_7d', label: '近7天' },
+  { value: 'recent_30d', label: '近30天' },
+]
+
 const platformOptions = [
   { value: 'xiaohongshu', label: '小红书' },
   { value: 'douyin', label: '抖音' },
@@ -186,6 +229,7 @@ const perfLabels: Record<string, string> = {
 
 function perfLabel(tag: string): string { return perfLabels[tag] ?? tag }
 function formatDate(iso: string): string { return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) }
+function formatNumber(n: number): string { return n >= 10000 ? (n / 10000).toFixed(1) + '万' : n.toLocaleString() }
 
 function debouncedLoad(): void {
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -198,6 +242,8 @@ async function loadData(): Promise<void> {
     const params: string[] = []
     if (statusFilter.value !== 'all') params.push(`status=${statusFilter.value}`)
     if (typeFilter.value !== 'all') params.push(`type=${typeFilter.value}`)
+    if (platformFilter.value !== 'all') params.push(`platform=${platformFilter.value}`)
+    if (timeFilter.value !== 'all') params.push(`time_filter=${timeFilter.value}`)
     if (searchKeyword.value) params.push(`keyword=${encodeURIComponent(searchKeyword.value)}`)
     const query = params.length ? `?${params.join('&')}` : ''
     const res = await api.get<{ items: ContentAsset[]; total: number }>(`/content-assets${query}`)
@@ -207,7 +253,7 @@ async function loadData(): Promise<void> {
 }
 
 async function createAsset(): Promise<void> {
-  if (!createForm.title) { alert('请输入标题'); return }
+  if (!createForm.title) { toast.warning('请输入标题'); return }
   try {
     await api.post('/content-assets/auto-create', createForm)
     showCreate.value = false
@@ -215,7 +261,7 @@ async function createAsset(): Promise<void> {
     createForm.type = 'video'
     createForm.platforms = []
     await loadData()
-  } catch (e) { console.error(e); alert('创建失败') }
+  } catch (e) { console.error(e); toast.error('创建失败') }
 }
 
 function openDetail(asset: ContentAsset): void { detailAsset.value = asset }
@@ -233,7 +279,7 @@ async function deleteAsset(asset: ContentAsset): Promise<void> {
   try {
     await api.delete(`/content-assets/${asset.id}`)
     await loadData()
-  } catch (e) { console.error(e); alert('删除失败') }
+  } catch (e) { console.error(e); toast.error('删除失败') }
 }
 
 onMounted(() => { loadData() })
@@ -293,5 +339,10 @@ onMounted(() => { loadData() })
 .highlight-list { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .highlight-tag { padding: 2px 8px; border-radius: 8px; font-size: 12px; background: #e0f2fe; color: #0369a1; }
 .custom-tag-sm { padding: 2px 8px; border-radius: 8px; font-size: 12px; background: #f5f5f5; color: #666; }
+.metrics-section { margin-bottom: 16px; }
+.metrics-grid { display: flex; gap: 20px; margin-top: 8px; }
+.metric-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; background: #f8f9fc; border-radius: 8px; }
+.metric-item .metric-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+.metric-item .metric-label { font-size: 12px; color: #999; }
 .empty-state, .loading { text-align: center; padding: 60px; color: #999; background: #fff; border-radius: 10px; }
 </style>

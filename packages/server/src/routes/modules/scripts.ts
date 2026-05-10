@@ -259,6 +259,7 @@ router.put('/scripts/:id/segments/reorder', async (req: Request, res: Response) 
 router.post('/scripts/:id/ai-check', async (req: Request, res: Response) => {
   try {
     // TODO: 接入 AI 风味检查服务
+    markStub(res, 'AI 风味检查返回硬编码数据')
     res.json({
       score: 75,
       issues: [
@@ -278,6 +279,7 @@ router.post('/scripts/:id/apply-suggestion', async (req: Request, res: Response)
   try {
     const { suggestion_index } = req.body
     // TODO: 接入 AI 建议应用
+    markStub(res, 'AI 建议应用未实现')
     res.json({ success: true, applied: suggestion_index })
   } catch (error) {
     console.error('[POST /scripts/:id/apply-suggestion]', error)
@@ -290,6 +292,7 @@ router.post('/scripts/:id/generate-voiceover', async (req: Request, res: Respons
   try {
     // TODO: 接入 TTS 服务
     const taskId = crypto.randomUUID()
+    markStub(res, 'TTS 配音生成未接入')
     res.json({ task_id: taskId, status: 'pending' })
   } catch (error) {
     console.error('[POST /scripts/:id/generate-voiceover]', error)
@@ -299,6 +302,7 @@ router.post('/scripts/:id/generate-voiceover', async (req: Request, res: Respons
 
 // GET /api/v1/scripts/:scriptId/generate-voiceover/:taskId/status — 配音状态（桩）
 router.get('/scripts/:scriptId/generate-voiceover/:taskId/status', async (_req: Request, res: Response) => {
+  markStub(res, 'TTS 配音状态查询为桩')
   res.json({ status: 'pending', progress: 0 })
 })
 

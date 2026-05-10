@@ -200,7 +200,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { usePersonaStore } from '@/stores/persona'
 import type { CatchphraseItem, SampleFile } from '@/api/persona'
-import { previewPersonaEffect } from '@/api/persona'
+import { previewPersonaEffect, uploadSampleFile, deleteSampleFile } from '@/api/persona'
+import { toast } from '@/utils/toast'
 
 const store = usePersonaStore()
 const loading = computed(() => store.loading)
@@ -294,29 +295,34 @@ function triggerUpload(type: 'text' | 'audio'): void {
   else audioInputRef.value?.click()
 }
 
-function handleFileUpload(event: Event, type: 'text' | 'audio'): void {
+async function handleFileUpload(event: Event, type: 'text' | 'audio'): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
   if (file.size > 10 * 1024 * 1024) {
-    alert('文件不能超过 10MB')
+    toast.error('文件不能超过 10MB')
     return
   }
-  const list = type === 'text' ? form.sample_texts : form.sample_audios
-  list.push({
-    id: Date.now(),
-    url: URL.createObjectURL(file),
-    filename: file.name,
-    size: file.size,
-    type,
-  })
+  try {
+    const res = await uploadSampleFile(file, type)
+    const list = type === 'text' ? form.sample_texts : form.sample_audios
+    list.push(res.data)
+  } catch {
+    toast.error('文件上传失败，请重试')
+  }
   input.value = ''
 }
 
-function handleDeleteSample(id: number, type: 'text' | 'audio'): void {
+async function handleDeleteSample(id: number, type: 'text' | 'audio'): Promise<void> {
   const list = type === 'text' ? form.sample_texts : form.sample_audios
   const idx = list.findIndex(f => f.id === id)
-  if (idx !== -1) list.splice(idx, 1)
+  if (idx === -1) return
+  try {
+    await deleteSampleFile(id)
+    list.splice(idx, 1)
+  } catch {
+    toast.error('文件删除失败，请重试')
+  }
 }
 
 function formatFileSize(bytes: number): string {
@@ -352,6 +358,7 @@ async function handleSave(): Promise<void> {
     setTimeout(() => { saveStatus.value = 'idle' }, 2000)
   } catch {
     saveStatus.value = 'failed'
+    toast.error('保存失败，请重试')
   }
 }
 
@@ -371,6 +378,7 @@ async function handlePreview(): Promise<void> {
     previewText.value = res.data.preview_text
   } catch {
     previewText.value = null
+    toast.error('预览生成超时，请重试')
   } finally {
     previewGenerating.value = false
   }

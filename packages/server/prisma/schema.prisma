@@ -156,9 +156,16 @@ model Hotspot {
   sourceUrl      String?   @map("source_url") @db.VarChar(500)
   relevanceScore Decimal   @default(0) @map("relevance_score") @db.Decimal(3, 2)
   validUntil     DateTime? @map("valid_until") @db.Timestamptz()
+  heatValue      Int       @default(0) @map("heat_value")
+  heatTrend      String    @default("stable") @map("heat_trend") @db.VarChar(10)
+  keywords       String[]  @default([])
+  usageStatus    String    @default("unused") @map("usage_status") @db.VarChar(20)
+  note           String?   @db.VarChar(500)
   createdAt      DateTime  @default(now()) @map("created_at")
 
   @@index([sourcePlatform])
+  @@index([heatValue(sort: Desc)])
+  @@index([usageStatus])
   @@map("hotspots")
 }
 

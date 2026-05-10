@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { DEMO_USER_ID } from '../../constants.js'
+import { markStub } from '../../middleware/stubMarker.js'
 
 const router = Router()
 
@@ -39,6 +40,7 @@ router.post('/video-products/:id/generate-copy/batch', async (req: Request, res:
   try {
     const { platforms } = req.body
     // TODO: 接入 AI 文案批量生成
+    markStub(res, 'AI 文案批量生成未接入')
     res.json({ success: true, platforms: platforms ?? [], message: 'Batch copy generation queued (stub)' })
   } catch (error) {
     console.error('[POST generate-copy/batch]', error)
@@ -85,6 +87,7 @@ router.get('/video-products/:id/preview', async (req: Request, res: Response) =>
 router.post('/video-products/render', async (req: Request, res: Response) => {
   try {
     // TODO: 接入 Remotion 渲染服务
+    markStub(res, 'Remotion 渲染服务未接入')
     const taskId = crypto.randomUUID()
     res.json({ task_id: taskId, status: 'pending' })
   } catch (error) {
@@ -95,11 +98,13 @@ router.post('/video-products/render', async (req: Request, res: Response) => {
 
 // GET /api/v1/video-products/:id/render-status — 渲染状态（桩）
 router.get('/video-products/:id/render-status', async (_req: Request, res: Response) => {
+  markStub(res, '渲染状态查询为桩')
   res.json({ status: 'pending', progress: 0 })
 })
 
 // POST /api/v1/video-products/:id/render-cancel — 取消渲染（桩）
 router.post('/video-products/:id/render-cancel', async (_req: Request, res: Response) => {
+  markStub(res, '渲染取消为桩')
   res.json({ success: true, message: 'Render cancel — stub' })
 })
 
@@ -108,6 +113,7 @@ router.post('/video-products/:id/derive', async (req: Request, res: Response) =>
   try {
     const { platform } = req.body
     // TODO: 接入 Remotion 派生渲染
+    markStub(res, 'Remotion 派生渲染未接入')
     res.json({ success: true, message: 'Derive queued (stub)' })
   } catch (error) {
     console.error('[POST derive]', error)

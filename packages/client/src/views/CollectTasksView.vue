@@ -2,7 +2,7 @@
   <div class="collect-page">
     <div class="title-bar">
       <h2>数据采集任务</h2>
-      <button class="btn btn-primary" @click="showCreate = true">+ 新建任务</button>
+      <button class="btn btn-primary" @click="openCreate">+ 新建任务</button>
     </div>
 
     <div class="stats-bar" v-if="stats">
@@ -19,6 +19,12 @@
           {{ tab.label }} ({{ tabCount(tab.value) }})
         </button>
       </div>
+      <div class="filter-tabs" style="margin-left: 12px;">
+        <button v-for="tab in typeTabs" :key="tab.value" class="filter-tab" :class="{ active: typeFilter === tab.value }" @click="typeFilter = tab.value">
+          {{ tab.label }}
+        </button>
+      </div>
+      <input class="search-input" type="text" placeholder="搜索账号名称..." v-model="searchInput" />
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
@@ -45,7 +51,7 @@
                 <span class="platform-badge" :class="task.platform">{{ platformLabel(task.platform) }}</span>
               </div>
             </td>
-            <td><span class="type-tag">{{ task.task_type === 'video' ? '视频采集' : '账号信息' }}</span></td>
+            <td><span class="type-tag">{{ taskTypeLabel(task.task_type) }}</span></td>
             <td><span class="status-tag" :class="task.status">{{ statusLabel(task.status) }}</span></td>
             <td>
               <div class="progress-cell">
@@ -60,6 +66,8 @@
                 <button v-if="task.status === 'running'" class="btn-sm" @click="pauseTask(task.id)">暂停</button>
                 <button v-if="task.status === 'failed'" class="btn-sm" @click="retryTask(task.id)">重试</button>
                 <button v-if="task.status === 'completed' || task.status === 'failed'" class="btn-sm" @click="rerunTask(task.id)">重新采集</button>
+                <button v-if="task.status === 'pending'" class="btn-sm btn-edit" @click="openEdit(task)">编辑</button>
+                <button class="btn-sm" @click="viewLogs(task.id)">日志</button>
                 <button class="btn-sm btn-danger" @click="deleteTask(task)">删除</button>
               </div>
             </td>
@@ -72,44 +80,67 @@
       </div>
     </div>
 
-    <!-- 新建任务弹窗 -->
-    <div v-if="showCreate" class="overlay" @click.self="showCreate = false">
+    <!-- 分页 -->
+    <div v-if="total > 0" class="pagination-bar">
+      <span class="pagination-info">共 {{ total }} 条 第 {{ page }}/{{ totalPages }} 页</span>
+      <button class="btn-sm" :disabled="page <= 1" @click="page--; loadData()">上一页</button>
+      <button class="btn-sm" :disabled="page >= totalPages" @click="page++; loadData()">下一页</button>
+    </div>
+
+    <!-- 新建/编辑任务弹窗 -->
+    <div v-if="showForm" class="overlay" @click.self="showForm = false">
       <div class="dialog">
         <div class="dialog-header">
-          <h3>新建采集任务</h3>
-          <button class="dialog-close" @click="showCreate = false">&times;</button>
+          <h3>{{ editingId ? '编辑采集任务' : '新建采集任务' }}</h3>
+          <button class="dialog-close" @click="showForm = false">&times;</button>
         </div>
         <div class="dialog-body">
           <div class="form-field">
             <label>目标账号 <span class="required">*</span></label>
-            <select v-model="createForm.target_account_id">
+            <select v-model="form.target_account_id">
               <option value="">请选择账号</option>
               <option v-for="acc in accountOptions" :key="acc.id" :value="acc.id">{{ acc.account_name }} ({{ platformLabel(acc.platform) }})</option>
             </select>
           </div>
           <div class="form-field">
             <label>采集类型 <span class="required">*</span></label>
-            <select v-model="createForm.task_type">
+            <select v-model="form.task_type">
               <option value="video">视频采集</option>
-              <option value="account_info">账号信息</option>
+              <option value="transcript">文案提取</option>
+              <option value="hotspot">热点采集</option>
             </select>
           </div>
           <div class="form-field">
             <label>最大采集数</label>
-            <input v-model.number="createForm.max_count" type="number" min="1" max="500" />
+            <input v-model.number="form.max_count" type="number" min="1" max="500" />
           </div>
           <div class="form-field">
             <label>日期范围（可选）</label>
             <div class="date-range">
-              <input v-model="createForm.date_range_start" type="date" />
+              <input v-model="form.date_range_start" type="date" />
               <span>~</span>
-              <input v-model="createForm.date_range_end" type="date" />
+              <input v-model="form.date_range_end" type="date" />
             </div>
           </div>
           <div class="form-actions">
-            <button class="btn btn-primary" @click="createTask">创建</button>
-            <button class="btn" @click="showCreate = false">取消</button>
+            <button class="btn btn-primary" @click="submitForm">{{ editingId ? '保存' : '创建' }}</button>
+            <button class="btn" @click="showForm = false">取消</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日志弹窗 -->
+    <div v-if="showLogs" class="overlay" @click.self="showLogs = false">
+      <div class="dialog dialog-wide">
+        <div class="dialog-header">
+          <h3>任务日志</h3>
+          <button class="dialog-close" @click="showLogs = false">&times;</button>
+        </div>
+        <div class="dialog-body log-body">
+          <div v-if="logsLoading" class="loading">加载中...</div>
+          <div v-else-if="logs.length === 0" class="empty-state" style="padding: 30px;">暂无日志</div>
+          <pre v-else class="log-terminal"><span v-for="(log, i) in logs" :key="i" class="log-line">{{ formatLogLine(log) }}</span></pre>
         </div>
       </div>
     </div>
@@ -117,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 
@@ -135,23 +166,57 @@ interface CollectTask {
   created_at: string
 }
 
+interface TaskLog {
+  id: string
+  level: string
+  message: string
+  created_at: string
+  [key: string]: unknown
+}
+
 interface Stats { total: number; pending: number; running: number; completed: number; failed: number }
 
 const tasks = ref<CollectTask[]>([])
 const stats = ref<Stats | null>(null)
 const loading = ref(false)
 const statusFilter = ref('all')
+const typeFilter = ref('')
+const searchInput = ref('')
+const keyword = ref('')
 const selected = ref<string[]>([])
-const showCreate = ref(false)
+const showForm = ref(false)
+const editingId = ref<string | null>(null)
 const accountOptions = ref<{ id: string; account_name: string; platform: string }[]>([])
 
-const createForm = reactive({
+const page = ref(1)
+const page_size = 20
+const total = ref(0)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / page_size)))
+
+const form = reactive({
   target_account_id: '',
   task_type: 'video',
   max_count: 50,
   date_range_start: '',
   date_range_end: '',
 })
+
+const showLogs = ref(false)
+const logs = ref<TaskLog[]>([])
+const logsLoading = ref(false)
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+watch(searchInput, (val) => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    keyword.value = val.trim()
+    page.value = 1
+    loadData()
+  }, 500)
+})
+
+watch(statusFilter, () => { page.value = 1; loadData() })
+watch(typeFilter, () => { page.value = 1; loadData() })
 
 const statusTabs = [
   { value: 'all', label: '全部' },
@@ -162,13 +227,22 @@ const statusTabs = [
   { value: 'failed', label: '失败' },
 ]
 
+const typeTabs = [
+  { value: '', label: '全部类型' },
+  { value: 'video', label: '视频采集' },
+  { value: 'transcript', label: '文案提取' },
+  { value: 'hotspot', label: '热点采集' },
+]
+
 const statusLabels: Record<string, string> = {
   pending: '等待中', running: '采集中', paused: '已暂停', completed: '已完成', failed: '采集失败',
 }
 const platformLabels: Record<string, string> = { xiaohongshu: '小红书', douyin: '抖音', weixin: '视频号' }
+const taskTypeLabels: Record<string, string> = { video: '视频采集', transcript: '文案提取', hotspot: '热点采集' }
 
 function statusLabel(s: string): string { return statusLabels[s] ?? s }
 function platformLabel(p: string): string { return platformLabels[p] ?? p }
+function taskTypeLabel(t: string): string { return taskTypeLabels[t] ?? t }
 
 function tabCount(value: string): number {
   if (value === 'all') return tasks.value.length
@@ -190,6 +264,12 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
+function formatLogLine(log: TaskLog): string {
+  const time = log.created_at ? new Date(log.created_at).toLocaleString('zh-CN') : ''
+  const level = log.level ? `[${log.level.toUpperCase()}]` : ''
+  return time ? `${time} ${level} ${log.message}` : `${level} ${log.message}`
+}
+
 const allSelected = computed(() => tasks.value.length > 0 && selected.value.length === tasks.value.length)
 
 function toggleSelect(id: string): void {
@@ -208,9 +288,14 @@ async function loadData(): Promise<void> {
   try {
     const params: string[] = []
     if (statusFilter.value !== 'all') params.push(`status=${statusFilter.value}`)
-    const query = params.length ? `?${params.join('&')}` : ''
+    if (typeFilter.value) params.push(`task_type=${typeFilter.value}`)
+    if (keyword.value) params.push(`keyword=${encodeURIComponent(keyword.value)}`)
+    params.push(`page=${page.value}`)
+    params.push(`page_size=${page_size}`)
+    const query = `?${params.join('&')}`
     const res = await api.get<{ items: CollectTask[]; total: number }>(`/collect-tasks${query}`)
     tasks.value = res.items
+    total.value = res.total
     selected.value = []
   } catch (e) { console.error(e); toast.error('加载列表失败') }
   finally { loading.value = false }
@@ -227,38 +312,67 @@ async function loadAccounts(): Promise<void> {
   } catch (e) { console.error(e); toast.error('加载账号列表失败') }
 }
 
-async function createTask(): Promise<void> {
-  if (!createForm.target_account_id || !createForm.task_type) {
-    alert('请选择目标账号和采集类型')
+function resetForm(): void {
+  form.target_account_id = ''
+  form.task_type = 'video'
+  form.max_count = 50
+  form.date_range_start = ''
+  form.date_range_end = ''
+  editingId.value = null
+}
+
+function openCreate(): void {
+  resetForm()
+  showForm.value = true
+}
+
+function openEdit(task: CollectTask): void {
+  editingId.value = task.id
+  form.target_account_id = task.target_account_id
+  form.task_type = task.task_type
+  form.max_count = task.max_count
+  form.date_range_start = task.date_range_start ?? ''
+  form.date_range_end = task.date_range_end ?? ''
+  showForm.value = true
+}
+
+async function submitForm(): Promise<void> {
+  if (!form.target_account_id || !form.task_type) {
+    toast.error('请选择目标账号和采集类型')
     return
   }
   try {
-    await api.post('/collect-tasks', createForm)
-    showCreate.value = false
-    createForm.target_account_id = ''
-    createForm.task_type = 'video'
-    createForm.max_count = 50
-    createForm.date_range_start = ''
-    createForm.date_range_end = ''
+    if (editingId.value) {
+      await api.put(`/collect-tasks/${editingId.value}`, form)
+      toast.success('任务已更新')
+    } else {
+      await api.post('/collect-tasks', form)
+      toast.success('任务已创建')
+    }
+    showForm.value = false
+    resetForm()
     await loadData()
     await loadStats()
-  } catch (e) { console.error(e); alert('创建失败') }
+  } catch (e) {
+    console.error(e)
+    toast.error(editingId.value ? '更新失败' : '创建失败')
+  }
 }
 
 async function executeTask(id: string): Promise<void> {
-  try { await api.post(`/collect-tasks/${id}/execute`); await loadData(); await loadStats() } catch (e) { console.error(e); alert('操作失败') }
+  try { await api.post(`/collect-tasks/${id}/execute`); await loadData(); await loadStats() } catch (e) { console.error(e); toast.error('操作失败') }
 }
 
 async function pauseTask(id: string): Promise<void> {
-  try { await api.post(`/collect-tasks/${id}/pause`); await loadData(); await loadStats() } catch (e) { console.error(e); alert('操作失败') }
+  try { await api.post(`/collect-tasks/${id}/pause`); await loadData(); await loadStats() } catch (e) { console.error(e); toast.error('操作失败') }
 }
 
 async function retryTask(id: string): Promise<void> {
-  try { await api.post(`/collect-tasks/${id}/retry`); await loadData(); await loadStats() } catch (e) { console.error(e); alert('操作失败') }
+  try { await api.post(`/collect-tasks/${id}/retry`); await loadData(); await loadStats() } catch (e) { console.error(e); toast.error('操作失败') }
 }
 
 async function rerunTask(id: string): Promise<void> {
-  try { await api.post(`/collect-tasks/${id}/rerun`); await loadData(); await loadStats() } catch (e) { console.error(e); alert('操作失败') }
+  try { await api.post(`/collect-tasks/${id}/rerun`); await loadData(); await loadStats() } catch (e) { console.error(e); toast.error('操作失败') }
 }
 
 function deleteTask(task: CollectTask): void {
@@ -267,7 +381,7 @@ function deleteTask(task: CollectTask): void {
 }
 
 async function doDelete(id: string): Promise<void> {
-  try { await api.delete(`/collect-tasks/${id}`); await loadData(); await loadStats() } catch (e) { console.error(e); alert('删除失败') }
+  try { await api.delete(`/collect-tasks/${id}`); await loadData(); await loadStats() } catch (e) { console.error(e); toast.error('删除失败') }
 }
 
 async function batchDelete(): Promise<void> {
@@ -277,7 +391,23 @@ async function batchDelete(): Promise<void> {
     selected.value = []
     await loadData()
     await loadStats()
-  } catch (e) { console.error(e); alert('批量删除失败') }
+  } catch (e) { console.error(e); toast.error('批量删除失败') }
+}
+
+async function viewLogs(id: string): Promise<void> {
+  showLogs.value = true
+  logs.value = []
+  logsLoading.value = true
+  try {
+    const data = await api.get<TaskLog[]>(`/collect-tasks/${id}/logs`)
+    logs.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    console.error(e)
+    toast.error('加载日志失败')
+    logs.value = []
+  } finally {
+    logsLoading.value = false
+  }
 }
 
 onMounted(() => { loadData(); loadStats(); loadAccounts() })
@@ -290,16 +420,20 @@ onMounted(() => { loadData(); loadStats(); loadAccounts() })
 .btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-primary { background: #4fc3f7; color: #fff; }
 .btn-sm { padding: 4px 12px; border-radius: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 12px; }
+.btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-sm.btn-danger { border-color: #ffcdd2; color: #e53935; }
+.btn-sm.btn-edit { border-color: #c8e6c9; color: #2e7d32; }
 .stats-bar { display: flex; gap: 12px; margin-bottom: 20px; }
 .stat-card { background: #fff; border-radius: 8px; padding: 12px 20px; border: 1px solid #eee; display: flex; flex-direction: column; gap: 2px; }
 .stat-value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
 .stat-label { font-size: 12px; color: #999; }
 .text-danger { color: #e53935; }
-.filter-bar { margin-bottom: 16px; }
+.filter-bar { display: flex; align-items: center; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
 .filter-tabs { display: flex; gap: 4px; }
 .filter-tab { padding: 6px 16px; border: 1px solid #ddd; border-radius: 20px; background: #fff; cursor: pointer; font-size: 13px; }
 .filter-tab.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+.search-input { padding: 6px 14px; border: 1px solid #ddd; border-radius: 20px; font-size: 13px; width: 200px; margin-left: auto; outline: none; }
+.search-input:focus { border-color: #4fc3f7; }
 .task-table-wrap { background: #fff; border-radius: 10px; border: 1px solid #eee; overflow: hidden; }
 .task-table { width: 100%; border-collapse: collapse; }
 .task-table th { text-align: left; padding: 12px 16px; font-size: 13px; font-weight: 500; color: #666; background: #fafafa; border-bottom: 1px solid #eee; }
@@ -323,11 +457,12 @@ onMounted(() => { loadData(); loadStats(); loadAccounts() })
 .progress-bar { width: 120px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
 .progress-text { font-size: 12px; color: #999; white-space: nowrap; }
-.row-actions { display: flex; gap: 6px; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .batch-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 12px 16px; border-top: 1px solid #f0f0f0; }
 .empty-state, .loading { text-align: center; padding: 60px; color: #999; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .dialog { background: #fff; border-radius: 12px; width: 480px; }
+.dialog-wide { width: 680px; }
 .dialog-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee; }
 .dialog-header h3 { margin: 0; font-size: 16px; }
 .dialog-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; }
@@ -340,4 +475,9 @@ onMounted(() => { loadData(); loadStats(); loadAccounts() })
 .date-range { display: flex; align-items: center; gap: 8px; }
 .date-range input { flex: 1; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+.pagination-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; padding: 8px 0; }
+.pagination-info { font-size: 13px; color: #666; }
+.log-body { padding: 0; }
+.log-terminal { background: #1a1a1a; color: #33ff33; font-family: 'Courier New', Consolas, monospace; font-size: 13px; line-height: 1.6; padding: 20px; margin: 0; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.log-line { display: block; }
 </style>
