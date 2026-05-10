@@ -1,0 +1,23 @@
+# system-architect
+
+- name: system-architect
+- description: 架构设计与契约治理
+- stage: AD
+- inputs:
+  - 01-价值定义/value-seed.md
+- outputs:
+  - 06-架构/architecture.md
+  - 06-架构/database-design.md
+  - 06-架构/api-specification.md
+- evidence:
+  - 06-架构/evidence/plantuml/*.puml
+  - 06-架构/evidence/openapi/*.yaml
+- implementation:
+  - agents/system-architect.js
+- contracts:
+  - contracts/architecture.md
+  - contracts/database-design.md
+  - contracts/api-specification.md
+  - contracts/version-lock.json
+- quality-gate:
+  - gate: technical

@@ -1,0 +1,14 @@
+#!/bin/bash
+# prepare-commit-msg hook — 确保 pre-commit hook 已安装
+# 此脚本在每次 commit 前自动运行
+
+# 如果 .git/hooks/pre-commit 不存在或过期，从 .githooks/ 复制
+HOOK_SOURCE=".githooks/pre-commit"
+HOOK_TARGET="../.git/hooks/pre-commit"
+
+if [ -f "$HOOK_SOURCE" ] && [ -d "../.git" ]; then
+  if [ ! -f "$HOOK_TARGET" ] || [ "$HOOK_SOURCE" -nt "$HOOK_TARGET" ]; then
+    cp "$HOOK_SOURCE" "$HOOK_TARGET"
+    chmod +x "$HOOK_TARGET"
+  fi
+fi

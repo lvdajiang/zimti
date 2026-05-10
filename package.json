@@ -1,0 +1,21 @@
+{
+  "name": "zimti",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter ./packages/* run dev",
+    "dev:server": "pnpm --filter @zimti/server run dev",
+    "dev:client": "pnpm --filter @zimti/client run dev",
+    "build": "pnpm --filter @zimti/shared build && pnpm --filter @zimti/server build",
+    "db:generate": "pnpm --filter @zimti/server prisma generate",
+    "db:migrate": "pnpm --filter @zimti/server prisma migrate dev",
+    "db:push": "pnpm --filter @zimti/server prisma db push",
+    "lint": "pnpm --parallel --filter ./packages/* run lint",
+    "typecheck": "pnpm --parallel --filter ./packages/* run typecheck"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

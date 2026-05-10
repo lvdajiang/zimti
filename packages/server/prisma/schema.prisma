@@ -1,0 +1,527 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SegmentType {
+  oral
+  visual
+  transition
+}
+
+enum MaterialUsageType {
+  main
+  bgm
+  sfx
+  subtitle
+}
+
+enum PerformanceTagType {
+  high_completion
+  high_interaction
+  high_conversion
+}
+
+// --- 3.1 users ---
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  username  String   @unique @db.VarChar(100)
+  avatarUrl String?  @map("avatar_url") @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tasks                Task[]
+  benchmarkAccounts    BenchmarkAccount[]
+  collectTasks         CollectTask[]
+  materials            Material[]
+  contentAssets        ContentAsset[]
+  videoMetrics         VideoMetric[]
+  dataSnapshots        DataSnapshot[]
+  experienceLogs       ExperienceLog[]
+  notifications        Notification[]
+  pendingItems         PendingItem[]
+  personaConfig        PersonaConfig?
+
+  @@map("users")
+}
+
+// --- 3.2 tasks ---
+model Task {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  title       String    @db.VarChar(200)
+  description String?   @db.Text
+  status      String    @default("todo") @db.VarChar(20)
+  currentStep Int       @default(1) @map("current_step") @db.SmallInt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user           User              @relation(fields: [userId], references: [id])
+  topicProposals TopicProposal[]
+  scripts        Script[]
+  videoProducts  VideoProduct[]
+  experienceLogs ExperienceLog[]
+
+  @@index([userId])
+  @@map("tasks")
+}
+
+// --- 3.3 benchmark_accounts ---
+model BenchmarkAccount {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  accountName     String    @map("account_name") @db.VarChar(100)
+  platform        String    @db.VarChar(20)
+  homepageUrl     String    @map("homepage_url") @db.VarChar(500)
+  followerCount   Int       @default(0) @map("follower_count")
+  contentDirection String   @map("content_direction") @db.Text
+  monitorStatus   String    @default("active") @map("monitor_status") @db.VarChar(20)
+  lastCollectedAt DateTime? @map("last_collected_at") @db.Timestamptz()
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user          User          @relation(fields: [userId], references: [id])
+  collectTasks  CollectTask[]
+  viralVideos   ViralVideo[]
+
+  @@index([userId])
+  @@map("benchmark_accounts")
+}
+
+// --- 3.4 collect_tasks ---
+model CollectTask {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  targetAccountId String    @map("target_account_id") @db.Uuid
+  taskType        String    @map("task_type") @db.VarChar(20)
+  status          String    @default("pending") @db.VarChar(20)
+  maxCount        Int       @default(50) @map("max_count")
+  collectedCount  Int       @default(0) @map("collected_count")
+  dateRangeStart  DateTime? @map("date_range_start") @db.Date
+  dateRangeEnd    DateTime? @map("date_range_end") @db.Date
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user            User          @relation(fields: [userId], references: [id])
+  targetAccount   BenchmarkAccount @relation(fields: [targetAccountId], references: [id])
+  viralVideos     ViralVideo[]
+  collectTaskLogs CollectTaskLog[]
+
+  @@index([userId])
+  @@index([targetAccountId])
+  @@map("collect_tasks")
+}
+
+// --- 3.5 viral_videos ---
+model ViralVideo {
+  id              Int       @id @default(autoincrement())
+  accountId       String    @map("account_id") @db.Uuid
+  platform        String    @db.VarChar(20)
+  platformVideoId String    @map("platform_video_id") @db.VarChar(100)
+  title           String    @db.VarChar(500)
+  coverUrl        String?   @map("cover_url") @db.VarChar(500)
+  videoUrl        String?   @map("video_url") @db.VarChar(500)
+  duration        Int
+  playCount       Int       @default(0) @map("play_count")
+  likeCount       Int       @default(0) @map("like_count")
+  commentCount    Int       @default(0) @map("comment_count")
+  collectCount    Int       @default(0) @map("collect_count")
+  shareCount      Int       @default(0) @map("share_count")
+  interactionRate Decimal?  @map("interaction_rate") @db.Decimal(5, 2)
+  transcript      String?   @db.Text
+  analysisJson    Json?     @map("analysis_json")
+  publishedAt     DateTime  @map("published_at") @db.Timestamptz()
+  collectedAt     DateTime  @map("collected_at") @db.Timestamptz()
+  taskId          String?   @map("task_id") @db.Uuid
+
+  account         BenchmarkAccount @relation(fields: [accountId], references: [id])
+  collectTask     CollectTask?     @relation(fields: [taskId], references: [id])
+
+  @@index([accountId])
+  @@index([platform])
+  @@index([publishedAt])
+  @@map("viral_videos")
+}
+
+// --- 3.6 hotspots ---
+model Hotspot {
+  id             Int       @id @default(autoincrement())
+  title          String    @db.VarChar(200)
+  sourcePlatform String    @map("source_platform") @db.VarChar(20)
+  source         String    @db.VarChar(100)
+  sourceUrl      String?   @map("source_url") @db.VarChar(500)
+  relevanceScore Decimal   @default(0) @map("relevance_score") @db.Decimal(3, 2)
+  validUntil     DateTime? @map("valid_until") @db.Timestamptz()
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([sourcePlatform])
+  @@map("hotspots")
+}
+
+// --- 3.7 keyword_monitors ---
+model KeywordMonitor {
+  id        Int      @id @default(autoincrement())
+  keyword   String   @unique @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  keywordTrends KeywordTrend[]
+
+  @@map("keyword_monitors")
+}
+
+// --- 3.8 topic_proposals ---
+model TopicProposal {
+  id              Int      @id @default(autoincrement())
+  taskId          String   @map("task_id") @db.Uuid
+  title           String   @db.VarChar(200)
+  contentSkeleton Json     @map("content_skeleton")
+  voiceRatio      Decimal  @map("voice_ratio") @db.Decimal(3, 2)
+  status          String   @default("generated") @db.VarChar(20)
+  hotspotIds      Int[]    @map("hotspot_ids")
+  videoIds        Int[]    @map("video_ids")
+  personaId       Int?     @map("persona_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  task    Task     @relation(fields: [taskId], references: [id])
+  scripts Script[]
+
+  @@index([taskId])
+  @@map("topic_proposals")
+}
+
+// --- 3.9 scripts ---
+model Script {
+  id           Int      @id @default(autoincrement())
+  topicId      Int      @map("topic_id")
+  taskId       String   @map("task_id") @db.Uuid
+  fullText     String   @map("full_text") @db.Text
+  videoType    String?  @map("video_type") @db.VarChar(20)
+  oralRatio    Decimal  @default(0.6) @map("oral_ratio") @db.Decimal(3, 2)
+  status       String   @default("draft") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  topicProposal     TopicProposal       @relation(fields: [topicId], references: [id])
+  task              Task                @relation(fields: [taskId], references: [id])
+  storyboardSegments StoryboardSegment[]
+  videoProducts     VideoProduct[]
+
+  @@index([taskId])
+  @@index([topicId])
+  @@map("scripts")
+}
+
+// --- 3.10 storyboard_segments ---
+model StoryboardSegment {
+  id                Int      @id @default(autoincrement())
+  scriptId          Int      @map("script_id")
+  segmentIndex      Int      @map("segment_index")
+  segmentType       SegmentType @map("segment_type")
+  oralText          String?  @map("oral_text") @db.Text
+  visualDescription String   @map("visual_description") @db.Text
+  duration          Decimal  @default(3.0) @db.Decimal(5, 2)
+  materialIds       String[] @map("material_ids")
+  oralAudioUrl      String?  @map("oral_audio_url") @db.VarChar(500)
+  transitionType    String?  @map("transition_type") @db.VarChar(20)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  script Script @relation(fields: [scriptId], references: [id])
+
+  @@index([scriptId])
+  @@map("storyboard_segments")
+}
+
+// --- 3.11 materials ---
+model Material {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  name            String   @db.VarChar(200)
+  type            String   @db.VarChar(20)
+  source          String   @db.VarChar(20)
+  copyrightStatus String   @map("copyright_status") @db.VarChar(20)
+  fileUrl         String   @map("file_url") @db.VarChar(500)
+  thumbnailUrl    String?  @map("thumbnail_url") @db.VarChar(500)
+  fileSize        BigInt   @map("file_size")
+  tags            String[] @default([])
+  useCount        Int      @default(0) @map("use_count")
+  metadata        Json?    @map("metadata")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user            User              @relation(fields: [userId], references: [id])
+  videoMaterials  VideoMaterial[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([source])
+  @@map("materials")
+}
+
+// --- 3.12 video_materials ---
+model VideoMaterial {
+  id              String @id @default(uuid()) @db.Uuid
+  videoProductId  String @map("video_product_id") @db.Uuid
+  materialId      String @map("material_id") @db.Uuid
+  usageType       MaterialUsageType @map("usage_type")
+
+  videoProduct VideoProduct @relation(fields: [videoProductId], references: [id])
+  material     Material     @relation(fields: [materialId], references: [id])
+
+  @@index([videoProductId])
+  @@index([materialId])
+  @@map("video_materials")
+}
+
+// --- 3.13 video_products ---
+model VideoProduct {
+  id            String   @id @default(uuid()) @db.Uuid
+  taskId        String   @map("task_id") @db.Uuid
+  scriptId      Int      @map("script_id")
+  title         String   @db.VarChar(200)
+  status        String   @default("draft") @db.VarChar(20)
+  platform      String   @default("main") @db.VarChar(20)
+  resolution    String   @default("1080p") @db.VarChar(10)
+  videoUrl      String?  @map("video_url") @db.VarChar(500)
+  duration      Decimal? @db.Decimal(8, 2)
+  renderConfig  Json?    @map("render_config")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  task            Task             @relation(fields: [taskId], references: [id])
+  script          Script           @relation(fields: [scriptId], references: [id])
+  videoMaterials  VideoMaterial[]
+  publishRecords  PublishRecord[]
+  contentAssets   ContentAsset[]
+  renderTasks     RenderTask[]
+
+  @@index([taskId])
+  @@index([scriptId])
+  @@map("video_products")
+}
+
+// --- 3.14 publish_records ---
+model PublishRecord {
+  id               String   @id @default(uuid()) @db.Uuid
+  videoProductId   String   @map("video_product_id") @db.Uuid
+  platform         String   @db.VarChar(20)
+  conversionType   String   @default("awareness") @map("conversion_type") @db.VarChar(20)
+  title            String?  @db.VarChar(200)
+  description      String?  @db.Text
+  tags             String[] @default([])
+  commentGuide     String[] @default([])
+  replyTemplates   String[] @default([])
+  seoScore         Int?     @map("seo_score")
+  publishUrl       String?  @map("publish_url") @db.VarChar(500)
+  status           String   @default("unpublished") @db.VarChar(20)
+  aigcConfirmed    Boolean  @default(false) @map("aigc_confirmed")
+  publishedAt      DateTime? @map("published_at") @db.Timestamptz()
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  videoProduct  VideoProduct  @relation(fields: [videoProductId], references: [id])
+  dataSnapshots DataSnapshot[]
+
+  @@index([videoProductId])
+  @@index([platform])
+  @@map("publish_records")
+}
+
+// --- 3.15 content_assets ---
+model ContentAsset {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  title              String    @db.VarChar(200)
+  type               String    @db.VarChar(20)
+  videoProductId     String?   @map("video_product_id") @db.Uuid
+  platforms          String[]  @default([])
+  status             String    @default("draft") @db.VarChar(20)
+  coreMetrics        Json?     @map("core_metrics")
+  elementHighlights  String[]  @default([])
+  customTags         String[]  @default([])
+  performanceTags    PerformanceTagType[]  @default([])
+  publishedAt        DateTime? @map("published_at") @db.Timestamptz()
+  archivedAt         DateTime? @map("archived_at") @db.Timestamptz()
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  user         User            @relation(fields: [userId], references: [id])
+  videoProduct VideoProduct?   @relation(fields: [videoProductId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("content_assets")
+}
+
+// --- 3.16 video_metrics ---
+model VideoMetric {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  videoId         String   @map("video_id") @db.Uuid
+  date            DateTime @map("date") @db.Date
+  playCount       Int      @default(0) @map("play_count")
+  likeCount       Int      @default(0) @map("like_count")
+  commentCount    Int      @default(0) @map("comment_count")
+  collectCount    Int      @default(0) @map("collect_count")
+  interactionRate Decimal? @map("interaction_rate") @db.Decimal(5, 2)
+
+  @@unique([userId, videoId, date])
+  @@index([userId])
+  @@index([videoId])
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("video_metrics")
+}
+
+// --- 3.17 data_snapshots ---
+model DataSnapshot {
+  id                      Int      @id @default(autoincrement())
+  userId                  String   @map("user_id") @db.Uuid
+  publishRecordId         String   @map("publish_record_id") @db.Uuid
+  snapshotAt              DateTime @map("snapshot_at") @db.Timestamptz()
+  playCount               Int      @map("play_count")
+  completionRate          Decimal  @map("completion_rate") @db.Decimal(5, 2)
+  threeSecondBounceRate   Decimal  @map("three_second_bounce_rate") @db.Decimal(5, 2)
+  commentCount            Int      @map("comment_count")
+  privateMessageCount     Int      @map("private_message_count")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  user           User           @relation(fields: [userId], references: [id])
+  publishRecord  PublishRecord  @relation(fields: [publishRecordId], references: [id])
+
+  @@index([userId])
+  @@index([publishRecordId])
+  @@index([snapshotAt])
+  @@map("data_snapshots")
+}
+
+// --- 3.18 experience_logs ---
+model ExperienceLog {
+  id              Int      @id @default(autoincrement())
+  userId          String   @map("user_id") @db.Uuid
+  taskId          String   @map("task_id") @db.Uuid
+  weekNumber      Int      @map("week_number")
+  biggestSurprise String   @map("biggest_surprise") @db.Text
+  biggestMistake  String   @map("biggest_mistake") @db.Text
+  nextHypothesis  String   @map("next_hypothesis") @db.Text
+  tags            String[] @default([])
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+  task Task @relation(fields: [taskId], references: [id])
+
+  @@index([userId])
+  @@index([taskId])
+  @@map("experience_logs")
+}
+
+// --- 3.19 notifications ---
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String   @db.VarChar(200)
+  content   String?  @db.Text
+  type      String   @db.VarChar(50)
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// --- 3.20 pending_items ---
+model PendingItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  sourceType String   @map("source_type") @db.VarChar(50)
+  sourceId   String   @map("source_id") @db.Uuid
+  status     String   @default("pending") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([sourceType])
+  @@map("pending_items")
+}
+
+// --- 3.21 persona_configs ---
+model PersonaConfig {
+  id                    Int      @id @default(autoincrement())
+  userId                String   @unique @map("user_id") @db.Uuid
+  displayName           String   @default("") @map("display_name") @db.VarChar(100)
+  age                   Int?
+  careerBackground      String   @default("") @map("career_background") @db.VarChar(200)
+  yearsOfExperience     Int?     @map("years_of_experience")
+  coreExperience        String   @default("") @map("core_experience") @db.Text
+  oneLinePositioning    String   @default("") @map("one_line_positioning") @db.VarChar(500)
+  corePhilosophy        String   @default("") @map("core_philosophy") @db.Text
+  uniqueSellingPoint    Json     @default("[]") @map("unique_selling_point")
+  languageStyles        Json     @default("[]") @map("language_styles")
+  styleDescription      String   @default("") @map("style_description") @db.Text
+  catchphrases          Json     @default("[]") @map("catchphrases")
+  narrativeViewpoint    String   @default("first") @map("narrative_viewpoint") @db.VarChar(10)
+  sampleTexts           Json     @default("[]") @map("sample_texts")
+  sampleAudios          Json     @default("[]") @map("sample_audios")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("persona_configs")
+}
+
+// --- 3.23 keyword_trends ---
+model KeywordTrend {
+  id           Int      @id @default(autoincrement())
+  keywordId    Int      @map("keyword_id")
+  date         DateTime @map("date") @db.Date
+  hotValue     Int      @map("hot_value")
+  platformRank Int?     @map("platform_rank")
+
+  keywordMonitor KeywordMonitor @relation(fields: [keywordId], references: [id])
+
+  @@unique([keywordId, date])
+  @@index([keywordId])
+  @@map("keyword_trends")
+}
+
+// --- 3.25 collect_task_logs ---
+model CollectTaskLog {
+  id        Int      @id @default(autoincrement())
+  taskId    String   @map("task_id") @db.Uuid
+  level     String   @db.VarChar(10)
+  message   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  collectTask CollectTask @relation(fields: [taskId], references: [id])
+
+  @@index([taskId])
+  @@map("collect_task_logs")
+}
+
+// --- 3.26 render_tasks ---
+model RenderTask {
+  id             String    @id @default(uuid()) @db.Uuid
+  videoProductId String    @map("video_product_id") @db.Uuid
+  status         String    @db.VarChar(20)
+  progress       Decimal   @db.Decimal(5, 2)
+  errorMessage   String?   @map("error_message") @db.Text
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  videoProduct VideoProduct @relation(fields: [videoProductId], references: [id])
+
+  @@index([videoProductId])
+  @@map("render_tasks")
+}

@@ -1,0 +1,33 @@
+#!/bin/bash
+# pre-commit hook — 自动检查代码是否与 shared-schema.ts 对齐
+# 安装: cp .githooks/pre-commit .git/hooks/pre-commit (git init 后)
+
+echo "🔍 Schema 对齐检查..."
+
+# 检查是否有待提交的 .ts/.vue 文件
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|vue|tsx|jsx)$' | head -1)
+
+if [ -z "$STAGED" ]; then
+  echo "   没有 staged 的源码文件，跳过"
+  exit 0
+fi
+
+# 运行 schema check（只检查 staged 文件）
+npx tsx scripts/schema-check.ts --staged
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "⛔ 提交被阻止：发现代码中的命名不在 shared-schema.ts 中"
+  echo "   请先更新 开发文档/06-架构/shared-schema.ts 再提交"
+  echo ""
+  echo "   快速修复："
+  echo "   1. 在 shared-schema.ts 中添加新的枚举值/API路径/路由"
+  echo "   2. 重新 git add"
+  echo "   3. 再次提交"
+  exit 1
+fi
+
+echo "   ✅ 通过"
+exit 0
