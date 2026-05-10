@@ -1,16 +1,15 @@
 <template>
   <div class="editor-page">
-    <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
       <div class="toolbar-left">
         <button class="btn btn-sm" @click="$router.push('/')">&larr; 返回</button>
-        <span class="script-title">{{ script?.full_text?.slice(0, 30) ?? '新脚本' }}...</span>
-        <span class="script-status" :class="script?.status">{{ script?.status === 'confirmed' ? '已确认' : '草稿' }}</span>
+        <span class="script-title">{{ store.fullText?.slice(0, 30) ?? '新脚本' }}...</span>
+        <span class="script-status" :class="store.status">{{ store.status === 'confirmed' ? '已确认' : '草稿' }}</span>
       </div>
       <div class="toolbar-center">
         <div class="toolbar-field">
           <label>视频类型</label>
-          <select v-model="videoType" class="field-select" @change="saveScript">
+          <select v-model="store.videoType" class="field-select" @change="store.markUnsaved(); debouncedSave()">
             <option value="knowledge">知识讲解</option>
             <option value="story">故事型</option>
             <option value="list">盘点型</option>
@@ -20,14 +19,17 @@
         <div class="toolbar-field">
           <label>口语比例</label>
           <div class="oral-ratio-bar">
-            <div class="ratio-fill" :style="{ width: (oralRatio * 100) + '%' }"></div>
-            <span>{{ Math.round(oralRatio * 100) }}%</span>
+            <div class="ratio-fill" :style="{ width: (store.oralRatio * 100) + '%' }"></div>
+            <span>{{ Math.round(store.oralRatio * 100) }}%</span>
           </div>
         </div>
         <div class="toolbar-field">
           <label>预估时长</label>
-          <span class="duration">{{ estimatedDuration }}s</span>
+          <span class="duration">{{ store.estimatedDuration }}s</span>
         </div>
+        <span class="save-indicator" :class="store.saveStatus">
+          {{ saveStatusLabel }}
+        </span>
       </div>
       <div class="toolbar-right">
         <button class="btn btn-sm btn-purple" @click="runAiCheck" :disabled="aiChecking">AI 检查</button>
@@ -38,27 +40,25 @@
       </div>
     </div>
 
-    <div class="editor-body" v-if="script">
-      <!-- 左侧：脚本编辑区 -->
+    <div class="editor-body" v-if="store.isLoaded">
       <div class="editor-left">
         <div class="panel-header">
           <h3>脚本内容</h3>
-          <span class="char-count">{{ fullText.length }} 字</span>
+          <span class="char-count">{{ store.fullText.length }} 字</span>
         </div>
-        <textarea v-model="fullText" class="script-textarea" placeholder="在此输入脚本内容..." @input="debouncedSave"></textarea>
+        <textarea v-model="store.fullText" class="script-textarea" placeholder="在此输入脚本内容..." @input="onTextInput"></textarea>
 
-        <!-- AI 检查面板 -->
-        <div v-if="aiResult" class="ai-panel">
+        <div v-if="store.aiResult" class="ai-panel">
           <div class="panel-header">
             <h3>AI 风味检查</h3>
-            <button class="btn-link" @click="aiResult = null">关闭</button>
+            <button class="btn-link" @click="store.aiResult = null">关闭</button>
           </div>
           <div class="ai-score" :class="aiScoreClass">
-            <span class="score-num">{{ aiResult.score }}</span>
+            <span class="score-num">{{ store.aiResult.score }}</span>
             <span class="score-label">/ 100</span>
           </div>
           <div class="ai-issues">
-            <div v-for="(issue, i) in aiResult.issues" :key="i" class="ai-issue" :class="issue.type">
+            <div v-for="(issue, i) in store.aiResult.issues" :key="i" class="ai-issue" :class="issue.type">
               <span class="issue-icon">{{ issue.type === 'warning' ? '!' : 'i' }}</span>
               <span>{{ issue.message }}</span>
             </div>
@@ -66,33 +66,43 @@
         </div>
       </div>
 
-      <!-- 右侧：分镜时间线 -->
       <div class="editor-right">
         <div class="panel-header">
-          <h3>分镜片段 ({{ segments.length }})</h3>
-          <button class="btn-sm" @click="addSegment">+ 添加片段</button>
+          <h3>分镜片段 ({{ store.segments.length }})</h3>
+          <button class="btn-sm" @click="handleAddSegment">+ 添加片段</button>
         </div>
         <div class="segments-list">
-          <div v-if="segments.length === 0" class="empty-segments">
+          <div v-if="store.segments.length === 0" class="empty-segments">
             <p>暂无分镜片段</p>
             <button class="btn-sm" @click="generateStoryboard">AI 生成分镜</button>
           </div>
-          <div v-for="(seg, i) in segments" :key="seg.id" class="segment-card" :class="seg.segment_type">
+          <div
+            v-for="(seg, i) in store.segments"
+            :key="seg.id"
+            class="segment-card"
+            :class="[seg.segment_type, { dragging: dragState.draggingIndex === i, 'drag-over': dragState.dragOverIndex === i }]"
+            draggable="true"
+            @dragstart="onDragStart(i, $event)"
+            @dragover="onDragOver(i, $event)"
+            @drop="onDrop(i)"
+            @dragend="onDragEnd"
+          >
             <div class="segment-header">
               <span class="seg-index">#{{ i + 1 }}</span>
-              <select v-model="seg.segment_type" class="seg-type-select" @change="saveSegment(seg)">
+              <select v-model="seg.segment_type" class="seg-type-select" @change="store.updateSegment(seg)">
                 <option value="oral">口播</option>
                 <option value="visual">画面</option>
                 <option value="transition">转场</option>
               </select>
               <span class="seg-duration">{{ seg.duration }}s</span>
-              <button class="seg-del" @click="deleteSegment(seg.id)">&times;</button>
+              <button class="seg-action" title="复制片段" @click="handleDuplicate(seg.id)">&#x2398;</button>
+              <button class="seg-del" @click="store.removeSegment(seg.id)">&times;</button>
             </div>
             <div class="segment-body">
-              <textarea v-if="seg.segment_type === 'oral'" v-model="seg.oral_text" class="seg-textarea" placeholder="口播文案..." @blur="saveSegment(seg)"></textarea>
-              <textarea v-model="seg.visual_description" class="seg-textarea" :placeholder="seg.segment_type === 'transition' ? '转场描述...' : '画面描述...'" @blur="saveSegment(seg)"></textarea>
+              <textarea v-if="seg.segment_type === 'oral'" v-model="seg.oral_text" class="seg-textarea" placeholder="口播文案..." @blur="store.updateSegment(seg)"></textarea>
+              <textarea v-model="seg.visual_description" class="seg-textarea" :placeholder="seg.segment_type === 'transition' ? '转场描述...' : '画面描述...'" @blur="store.updateSegment(seg)"></textarea>
             </div>
-            <div v-if="seg.material_ids.length > 0" class="segment-materials">
+            <div v-if="seg.material_ids && seg.material_ids.length > 0" class="segment-materials">
               <span v-for="mid in seg.material_ids" :key="mid" class="mat-badge">素材 {{ mid.slice(0, 8) }}</span>
             </div>
           </div>
@@ -106,176 +116,125 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
-import api from '@/api/client'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { useScriptStore } from '@/stores/script'
+import { runAiCheck as apiAiCheck, generateStoryboard as apiGenStoryboard } from '@/api/script'
 import { toast } from '@/utils/toast'
 
+const store = useScriptStore()
 const route = useRoute()
 const scriptId = computed(() => Number(route.params.id) || 0)
 
-interface Segment {
-  id: number
-  script_id: number
-  segment_index: number
-  segment_type: string
-  oral_text: string | null
-  visual_description: string
-  duration: number
-  material_ids: string[]
-  oral_audio_url: string | null
-  transition_type: string | null
-}
-
-interface AiResult {
-  score: number
-  issues: { type: string; message: string; position: number }[]
-  suggestions: unknown[]
-}
-
-const script = ref<{ id: number; full_text: string; video_type: string | null; oral_ratio: number; status: string } | null>(null)
-const fullText = ref('')
-const videoType = ref('knowledge')
-const oralRatio = ref(0.6)
-const segments = ref<Segment[]>([])
-const aiResult = ref<AiResult | null>(null)
 const aiChecking = ref(false)
 const generating = ref(false)
-let saveTimer: ReturnType<typeof setTimeout> | null = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 let unmounted = false
 
-const estimatedDuration = computed(() => {
-  const oralSegments = segments.value.filter(s => s.segment_type === 'oral')
-  if (oralSegments.length === 0) return 0
-  return oralSegments.reduce((sum, s) => sum + s.duration, 0)
+const dragState = ref<{ draggingIndex: number | null; dragOverIndex: number | null }>({
+  draggingIndex: null, dragOverIndex: null,
 })
 
 const aiScoreClass = computed(() => {
-  if (!aiResult.value) return ''
-  if (aiResult.value.score >= 80) return 'good'
-  if (aiResult.value.score >= 60) return 'warn'
+  if (!store.aiResult) return ''
+  if (store.aiResult.score >= 80) return 'good'
+  if (store.aiResult.score >= 60) return 'warn'
   return 'bad'
 })
 
+const saveStatusLabel = computed(() => {
+  const map: Record<string, string> = { saved: '已保存', saving: '保存中...', unsaved: '未保存', error: '保存失败' }
+  return map[store.saveStatus] ?? ''
+})
+
+function onTextInput(): void {
+  store.markUnsaved()
+  debouncedSave()
+}
+
 function debouncedSave(): void {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(saveScript, 1000)
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => store.save(), 1000)
 }
 
-async function loadScript(): Promise<void> {
-  try {
-    const res = await api.get<{
-      id: number; full_text: string; video_type: string | null; oral_ratio: number; status: string; segments: Segment[]
-    }>(`/scripts/${scriptId.value}`)
-    script.value = res
-    fullText.value = res.full_text
-    videoType.value = res.video_type ?? 'knowledge'
-    oralRatio.value = res.oral_ratio
-    segments.value = res.segments ?? []
-  } catch (e) {
-    console.error(e)
-    toast.warning('加载脚本失败，已创建空白脚本')
-    // 如果没有脚本，创建一个
-    await createAndLoadScript()
+function startAutoSave(): void {
+  stopAutoSave()
+  autoSaveTimer = setInterval(() => {
+    if (store.hasUnsavedChanges && store.isReady) store.save()
+  }, 30000)
+}
+
+function stopAutoSave(): void {
+  if (autoSaveTimer) { clearInterval(autoSaveTimer); autoSaveTimer = null }
+}
+
+// ─── 拖拽排序 ───
+
+function onDragStart(index: number, event: DragEvent): void {
+  dragState.value.draggingIndex = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
   }
 }
 
-async function createAndLoadScript(): Promise<void> {
-  try {
-    // 创建 demo topic 和 task
-    const topicRes = await api.post<{ id: number }>('/topic-proposals', {
-      title: '新脚本',
-      hook: '',
-      main_points: [],
-      visual_description: '',
-    })
-    const taskRes = await api.post<{ id: string }>('/tasks', {
-      topic_proposal_id: topicRes.id,
-      platform: 'xiaohongshu',
-    })
-    const scriptRes = await api.post<{ id: number; full_text: string; video_type: string | null; oral_ratio: number; status: string }>('/scripts', {
-      task_id: taskRes.id,
-      topic_id: topicRes.id,
-      full_text: '',
-    })
-    script.value = scriptRes
-    fullText.value = ''
-  } catch (e) {
-    console.error('Failed to create script:', e)
-    toast.warning('创建脚本失败，使用空白脚本')
-    // 即使创建失败也显示编辑器
-    script.value = { id: 0, full_text: '', video_type: 'knowledge', oral_ratio: 0.6, status: 'draft' }
-  }
+function onDragOver(index: number, event: DragEvent): void {
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  dragState.value.dragOverIndex = index
 }
 
-async function saveScript(): Promise<void> {
-  if (!script.value || script.value.id === 0) return
-  try {
-    await api.put(`/scripts/${script.value.id}`, {
-      full_text: fullText.value,
-      video_type: videoType.value,
-      oral_ratio: oralRatio.value,
-    })
-    script.value.full_text = fullText.value
-    script.value.video_type = videoType.value
-    script.value.oral_ratio = oralRatio.value
-  } catch (e) { console.error(e); toast.error('保存失败') }
+function onDrop(targetIndex: number): void {
+  const fromIndex = dragState.value.draggingIndex
+  if (fromIndex === null || fromIndex === targetIndex) { onDragEnd(); return }
+  const reordered = [...store.segments]
+  const [moved] = reordered.splice(fromIndex, 1)
+  reordered.splice(targetIndex, 0, moved)
+  const newOrder = reordered.map(s => s.id)
+  store.segments = reordered
+  store.reorder(newOrder)
+  onDragEnd()
 }
 
-async function saveSegment(seg: Segment): Promise<void> {
-  if (!script.value || script.value.id === 0) return
-  try {
-    await api.put(`/scripts/${script.value.id}/segments/${seg.id}`, {
-      segment_type: seg.segment_type,
-      oral_text: seg.oral_text,
-      visual_description: seg.visual_description,
-      duration: seg.duration,
-    })
-  } catch (e) { console.error(e); toast.error('保存失败') }
+function onDragEnd(): void {
+  dragState.value = { draggingIndex: null, dragOverIndex: null }
 }
 
-async function addSegment(): Promise<void> {
-  if (!script.value || script.value.id === 0) return
-  try {
-    const res = await api.post<Segment>(`/scripts/${script.value.id}/segments`, {
-      segment_type: 'oral',
-      visual_description: '',
-      duration: 3.0,
-    })
-    segments.value.push(res)
-  } catch (e) { console.error(e); toast.error('添加分镜失败') }
+// ─── 操作 ───
+
+async function handleAddSegment(): Promise<void> {
+  const seg = await store.addNewSegment({ segment_type: 'oral', visual_description: '', duration: 3.0 })
+  if (seg) toast.success('已添加片段')
+  else toast.error('添加分镜失败')
 }
 
-async function deleteSegment(segmentId: number): Promise<void> {
-  if (!script.value || script.value.id === 0) return
+async function handleDuplicate(segmentId: number): Promise<void> {
+  const seg = await store.duplicate(segmentId)
+  if (seg) toast.success('已复制片段')
+  else toast.error('复制失败')
+}
+
+async function runAiCheck(): Promise<void> {
+  if (!store.isReady || !store.fullText.trim()) { toast.warning('请先输入脚本内容'); return }
+  aiChecking.value = true
   try {
-    await api.delete(`/scripts/${script.value.id}/segments/${segmentId}`)
-    segments.value = segments.value.filter(s => s.id !== segmentId)
-  } catch (e) { console.error(e); toast.error('删除分镜失败') }
+    store.aiResult = await apiAiCheck(store.scriptId)
+  } catch (e) { console.error(e); toast.error('AI检查失败') }
+  finally { aiChecking.value = false }
 }
 
 async function generateStoryboard(): Promise<void> {
-  if (!script.value || script.value.id === 0 || !fullText.value.trim()) {
-    toast.warning('请先输入脚本内容')
-    return
-  }
+  if (!store.isReady || !store.fullText.trim()) { toast.warning('请先输入脚本内容'); return }
   generating.value = true
   try {
-    const res = await api.post<{ task_id: string }>(`/scripts/${script.value.id}/generate-storyboard`)
-    // 轮询状态
+    const res = await apiGenStoryboard(store.scriptId)
     const poll = async () => {
       if (unmounted) return
       try {
-        const status = await api.get<{ status: string }>(`/scripts/${script.value!.id}/generate-storyboard/${res.task_id}/status`)
-        if (status.status === 'completed') {
-          generating.value = false
-          await loadScript()
-          return
-        }
-        if (status.status === 'failed') {
-          generating.value = false
-          toast.error('分镜生成失败，请重试')
-          return
-        }
+        const { getStoryboardStatus } = await import('@/api/script')
+        const st = await getStoryboardStatus(store.scriptId, res.task_id)
+        if (st.status === 'completed') { generating.value = false; await store.load(store.scriptId); return }
+        if (st.status === 'failed') { generating.value = false; toast.error('分镜生成失败，请重试'); return }
         setTimeout(poll, 2000)
       } catch (e) { console.error(e); generating.value = false; toast.error('查询生成状态失败') }
     }
@@ -283,29 +242,86 @@ async function generateStoryboard(): Promise<void> {
   } catch (e) { console.error(e); generating.value = false; toast.error('生成分镜失败') }
 }
 
-async function runAiCheck(): Promise<void> {
-  if (!script.value || script.value.id === 0 || !fullText.value.trim()) {
-    toast.warning('请先输入脚本内容')
-    return
-  }
-  aiChecking.value = true
-  try {
-    aiResult.value = await api.post<AiResult>(`/scripts/${script.value.id}/ai-check`)
-  } catch (e) { console.error(e); toast.error('AI检查失败') }
-  finally { aiChecking.value = false }
-}
-
 async function confirmScript(): Promise<void> {
-  if (!script.value || script.value.id === 0) return
+  if (!store.isReady) return
+  const { confirmScript: apiConfirm } = await import('@/api/script')
   try {
-    await api.put(`/scripts/${script.value.id}/status`, { status: 'confirmed' })
-    script.value.status = 'confirmed'
+    await apiConfirm(store.scriptId)
+    store.status = 'confirmed'
     toast.success('脚本已确认，可以进入视频制作')
   } catch (e) { console.error(e); toast.error('确认失败') }
 }
 
-onMounted(() => { loadScript() })
-onUnmounted(() => { unmounted = true; if (saveTimer) clearTimeout(saveTimer) })
+// ─── 创建空白脚本 ───
+
+async function createBlankScript(): Promise<void> {
+  try {
+    const { createScript } = await import('@/api/script')
+    const topicRes = await (await import('@/api/client')).default.post<{ id: number }>('/topic-proposals', {
+      title: '新脚本', hook: '', main_points: [], visual_description: '',
+    })
+    const taskRes = await (await import('@/api/client')).default.post<{ id: string }>('/tasks', {
+      topic_proposal_id: topicRes.id, platform: 'xiaohongshu',
+    })
+    const scriptRes = await createScript({ task_id: taskRes.id, topic_id: topicRes.id, full_text: '' })
+    store.scriptId = scriptRes.id
+    store.fullText = ''
+    store.videoType = 'knowledge'
+    store.oralRatio = 0.6
+    store.status = 'draft'
+    store.segments = []
+    store.isLoaded = true
+  } catch (e) {
+    console.error('Failed to create script:', e)
+    toast.warning('创建脚本失败，使用空白脚本')
+    store.scriptId = 0
+    store.fullText = ''
+    store.videoType = 'knowledge'
+    store.oralRatio = 0.6
+    store.status = 'draft'
+    store.segments = []
+    store.isLoaded = true
+  }
+}
+
+// ─── 离开确认 ───
+
+function handleBeforeUnload(e: BeforeUnloadEvent): void {
+  if (store.hasUnsavedChanges) { e.preventDefault(); e.returnValue = '' }
+}
+
+onBeforeRouteLeave(() => {
+  if (store.hasUnsavedChanges) {
+    stopAutoSave()
+    return window.confirm('有未保存的更改，确定要离开吗？')
+  }
+  return true
+})
+
+// ─── 生命周期 ───
+
+onMounted(async () => {
+  const id = scriptId.value
+  if (id > 0) {
+    const ok = await store.load(id)
+    if (!ok) {
+      toast.warning('加载脚本失败，已创建空白脚本')
+      await createBlankScript()
+    }
+  } else {
+    await createBlankScript()
+  }
+  startAutoSave()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+  unmounted = true
+  stopAutoSave()
+  if (debounceTimer) clearTimeout(debounceTimer)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  if (store.hasUnsavedChanges && store.isReady) store.save()
+})
 </script>
 
 <style scoped>
@@ -323,6 +339,11 @@ onUnmounted(() => { unmounted = true; if (saveTimer) clearTimeout(saveTimer) })
 .ratio-fill { height: 100%; background: #4a6cf7; border-radius: 3px; }
 .oral-ratio-bar span { position: absolute; right: -30px; top: -2px; font-size: 11px; color: #666; }
 .duration { font-size: 13px; font-weight: 500; color: #333; }
+.save-indicator { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+.save-indicator.saved { color: #16a34a; }
+.save-indicator.saving { color: #999; }
+.save-indicator.unsaved { color: #d97706; background: #fffbeb; }
+.save-indicator.error { color: #e53935; background: #fef2f2; }
 .btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
 .btn-sm { padding: 4px 12px; border-radius: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 12px; }
 .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -355,14 +376,19 @@ onUnmounted(() => { unmounted = true; if (saveTimer) clearTimeout(saveTimer) })
 .segments-list { flex: 1; overflow-y: auto; padding: 12px; }
 .empty-segments { text-align: center; padding: 40px; color: #999; }
 .empty-segments p { margin-bottom: 12px; }
-.segment-card { background: #fff; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+.segment-card { background: #fff; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; overflow: hidden; cursor: grab; }
+.segment-card:active { cursor: grabbing; }
 .segment-card.oral { border-left: 3px solid #4a6cf7; }
 .segment-card.visual { border-left: 3px solid #22c55e; }
 .segment-card.transition { border-left: 3px solid #f59e0b; }
+.segment-card.dragging { opacity: 0.4; }
+.segment-card.drag-over { border-top: 3px solid #4a6cf7; }
 .segment-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
 .seg-index { font-size: 12px; font-weight: 600; color: #999; }
 .seg-type-select { padding: 2px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
 .seg-duration { font-size: 12px; color: #999; margin-left: auto; }
+.seg-action { background: none; border: none; cursor: pointer; font-size: 14px; color: #999; padding: 0 4px; }
+.seg-action:hover { color: #4a6cf7; }
 .seg-del { background: none; border: none; font-size: 16px; cursor: pointer; color: #ccc; padding: 0 4px; }
 .seg-del:hover { color: #e53935; }
 .segment-body { padding: 0; }
