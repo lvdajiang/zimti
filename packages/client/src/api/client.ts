@@ -11,7 +11,7 @@ const axiosInstance: AxiosInstance = axios.create({
 axiosInstance.interceptors.response.use(
   (response) => {
     if (response.headers['x-stub'] === 'true') {
-      const desc = response.headers['x-stub-description'] || '该功能尚在开发中'
+      const desc = decodeURIComponent(response.headers['x-stub-description'] || '该功能尚在开发中')
       toast.warning(desc)
     }
     return response.data

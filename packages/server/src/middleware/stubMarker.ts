@@ -17,7 +17,7 @@ export function stubHeaderMiddleware(_req: Request, res: Response, next: NextFun
   res.json = (body: unknown) => {
     if (res.locals.__stub) {
       res.setHeader('X-Stub', 'true')
-      res.setHeader('X-Stub-Description', res.locals.__stub)
+      res.setHeader('X-Stub-Description', encodeURIComponent(res.locals.__stub))
     }
     return originalJson(body)
   }
