@@ -92,6 +92,17 @@
 - 发现违规 → 必须先更新 schema 再提交
 - git pre-commit hook 已配置，自动执行此检查
 
+### 10 测试驱动质量保障（强制门禁，全自动）
+
+**每个编码任务完成后，必须运行测试确认功能正确。**
+
+- 后端 API 任务 → 自动生成集成测试（vitest + supertest），覆盖正常+校验+错误+边界
+- Store/Service 任务 → 自动生成单元测试，覆盖状态流转+计算逻辑
+- 纯展示组件 → 类型检查 + /check-page 替代测试
+- 每个阶段完成后 → `pnpm vitest run` 全量通过才可提交
+- 测试失败 → 自动修复（最多3次），修复实现代码而非修改测试
+- 回归检测 → 已有测试变红必须修复，不允许跳过
+
 ---
 
 ## LLM 编码行为准则
@@ -169,8 +180,11 @@
 完整链路（含审查门禁）：
 `/init-project` → **审查** → `/refine` → **审查** → `/init-schema` → `/design-spec` → **审查** → `/design-detail` → **审查** → `/design-page` → **审查** → `/data-flow` → **审查** → `/tech-spec` → **审查** → `/align` → `/plan-first`(施工图+自动施工) → `/check-page` → 部署
 
+全自动流水线（需求完善时，一键出结果）：
+`/wf-full [页面名]` — 自动串联 design-spec → design-detail → design-page → data-flow → tech-spec → plan-first → check-page → 部署，每步自动审查，失败才暂停
+
 ---
 
 ## 项目状态
 
-- **版本**: v1.0 | **分支**: main | **阶段**: 阶段二三完成（CRUD+AI架构），待外部服务接入（TTS/Remotion/Pexels）
+- **版本**: v1.0 | **分支**: main | **阶段**: 全量功能完成（GLM/即梦AI/Pexels/TTS/Remotion/Stub清零），待前端优化+上线部署
