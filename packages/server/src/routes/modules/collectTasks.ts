@@ -1,21 +1,22 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID } from '../../constants.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
 
-const router = Router()
+const router: Router = Router()
 
 // GET /api/v1/collect-tasks — 列表
 router.get('/collect-tasks', async (req: Request, res: Response) => {
   try {
-    const { status: statusFilter, task_type: typeFilter, page = '1', page_size = '20' } = req.query
-    const p = Number(page)
-    const ps = Math.min(Number(page_size), 100)
+    const statusFilter = str(req.query.status)
+    const typeFilter = str(req.query.task_type)
+    const p = toInt(req.query.page, 1)
+    const ps = Math.min(toInt(req.query.page_size, 20), 100)
     const skip = (p - 1) * ps
 
     const where: Record<string, unknown>[] = [{ userId: DEMO_USER_ID }]
-    if (statusFilter && statusFilter !== 'all') where.push({ status: String(statusFilter) })
-    if (typeFilter && typeFilter !== 'all') where.push({ taskType: String(typeFilter) })
+    if (statusFilter && statusFilter !== 'all') where.push({ status: statusFilter })
+    if (typeFilter && typeFilter !== 'all') where.push({ taskType: typeFilter })
 
     const [items, total] = await Promise.all([
       prisma.collectTask.findMany({
@@ -97,7 +98,7 @@ router.post('/collect-tasks', async (req: Request, res: Response) => {
 router.put('/collect-tasks/:id', async (req: Request, res: Response) => {
   try {
     const task = await prisma.collectTask.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: { status: req.body.status },
     })
     res.json({ id: task.id, status: task.status })
@@ -110,7 +111,7 @@ router.put('/collect-tasks/:id', async (req: Request, res: Response) => {
 // DELETE /api/v1/collect-tasks/:id — 删除
 router.delete('/collect-tasks/:id', async (req: Request, res: Response) => {
   try {
-    await prisma.collectTask.delete({ where: { id: req.params.id, userId: DEMO_USER_ID } })
+    await prisma.collectTask.delete({ where: { id: str(req.params.id), userId: DEMO_USER_ID } })
     res.json({ success: true })
   } catch (error) {
     console.error('[DELETE /collect-tasks/:id]', error)
@@ -138,7 +139,7 @@ router.delete('/collect-tasks/batch', async (req: Request, res: Response) => {
 router.post('/collect-tasks/:id/execute', async (req: Request, res: Response) => {
   try {
     const task = await prisma.collectTask.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: { status: 'running' },
     })
     res.json({ id: task.id, status: task.status })
@@ -152,7 +153,7 @@ router.post('/collect-tasks/:id/execute', async (req: Request, res: Response) =>
 router.post('/collect-tasks/:id/pause', async (req: Request, res: Response) => {
   try {
     const task = await prisma.collectTask.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: { status: 'paused' },
     })
     res.json({ id: task.id, status: task.status })
@@ -166,7 +167,7 @@ router.post('/collect-tasks/:id/pause', async (req: Request, res: Response) => {
 router.post('/collect-tasks/:id/retry', async (req: Request, res: Response) => {
   try {
     const task = await prisma.collectTask.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID, status: 'failed' },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID, status: 'failed' },
       data: { status: 'pending' },
     })
     if (!task) {
@@ -184,7 +185,7 @@ router.post('/collect-tasks/:id/retry', async (req: Request, res: Response) => {
 router.post('/collect-tasks/:id/rerun', async (req: Request, res: Response) => {
   try {
     const task = await prisma.collectTask.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: { status: 'pending', collectedCount: 0 },
     })
     res.json({ id: task.id, status: task.status })
@@ -198,7 +199,7 @@ router.post('/collect-tasks/:id/rerun', async (req: Request, res: Response) => {
 router.get('/collect-tasks/:id/logs', async (req: Request, res: Response) => {
   try {
     const logs = await prisma.collectTaskLog.findMany({
-      where: { taskId: req.params.id },
+      where: { taskId: str(req.params.id) },
       orderBy: { createdAt: 'asc' },
     })
     res.json({ items: logs.map(l => ({
@@ -213,7 +214,7 @@ router.get('/collect-tasks/:id/logs', async (req: Request, res: Response) => {
 })
 
 // PUT /api/v1/collect-tasks/schedule — 定时配置（桩）
-router.put('/collect-tasks/schedule', async (req: Request, res: Response) => {
+router.put('/collect-tasks/schedule', async (_req: Request, res: Response) => {
   try {
     // TODO: 接入定时调度服务
     res.json({ success: true, message: 'Schedule config saved (stub)' })

@@ -16,7 +16,7 @@ origin: project
 /wf bug [问题描述]       # 修bug完整流程
 /wf algo [服务名]        # 修改算法完整流程
 /wf deploy               # 部署完整流程
-/wf new                  # 新功能开发全流程（需求→计划→开发→检查→部署）
+/wf new                  # 新功能开发全流程（需求→施工图→自动施工→检查→部署）
 /wf day                  # 一天工作结束流程
 /wf regression [改动文件] # 修复后回归检查流程
 ```
@@ -30,16 +30,18 @@ origin: project
 **触发**: `/wf new <需求描述>`
 
 ```
-步骤1: [需求对齐]      → 自动判断是否执行 /align（明确需求跳过）
-步骤2: [制定计划]      → 自动生成结构化实施计划，用户确认
-步骤3: [自动执行]      → 逐个任务执行（引擎: /wf-batch）
-步骤4: /check-page    → 对照设计稿检查（有前端页面时）
-步骤5: /perf-check    → 性能预算检查（列表页自动）
+步骤1: /align          → 需求对齐（7问确认）
+步骤2: /plan-first     → 生成施工图（分阶段任务+依赖+完成标准），用户确认 [Approved]
+步骤3: [自动施工]      → 逐任务执行+验证循环（引擎: /plan-first Phase 2）
+步骤4: /check-page     → 对照设计稿检查（有前端页面时）
+步骤5: /perf-check     → 性能预算检查（列表页自动）
 步骤6: /component-check → 组件统一性检查
-步骤7: /deploy-check  → 部署前检查
-步骤8: /bushu         → 部署到服务器
-步骤9: /save-ctx      → 保存上下文到记忆文件
+步骤7: /deploy-check   → 部署前检查
+步骤8: /bushu          → 部署到服务器
+步骤9: /save-ctx       → 保存上下文到记忆文件
 ```
+
+**说明**: 步骤2-3 使用 `/plan-first` 的施工图模式——Tech Spec 自动翻译为分阶段执行计划，批准后全程自动推进，仅在决策点和失败处暂停。详见 `/wf-new` 技能文件。
 
 **详细说明**: 见 `/wf-new` 技能文件
 
@@ -174,7 +176,7 @@ origin: project
 /wf review:     双扫描 → code-fix → regression → 再扫描 → deploy-check → bushu
 /wf deploy:     deploy-check → bushu → 生产验证
 /wf day:        save-ctx → 今日汇报 → 下次待办
-/wf new:        align → plan → 自动执行 → check-page → perf-check → component-check → deploy-check → bushu
+/wf new:        align → plan-first(施工图+自动施工) → check-page → perf-check → component-check → deploy-check → bushu
 /wf regression: regression → 汇报影响范围
 ```
 

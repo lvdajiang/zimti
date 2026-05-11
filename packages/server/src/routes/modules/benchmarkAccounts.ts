@@ -1,21 +1,22 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID } from '../../constants.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
 
-const router = Router()
+const router: Router = Router()
 
 // GET /api/v1/benchmark-accounts — 列表（支持筛选、搜索、分页）
 router.get('/benchmark-accounts', async (req: Request, res: Response) => {
   try {
-    const { platform, keyword, page = '1', page_size = '20' } = req.query
-    const p = Number(page)
-    const ps = Math.min(Number(page_size), 100)
+    const platform = str(req.query.platform)
+    const keyword = str(req.query.keyword)
+    const p = toInt(req.query.page, 1)
+    const ps = Math.min(toInt(req.query.page_size, 20), 100)
     const skip = (p - 1) * ps
 
     const where: Record<string, unknown>[] = [{ userId: DEMO_USER_ID }]
-    if (platform && platform !== 'all') where.push({ platform: String(platform) })
-    if (keyword) where.push({ accountName: { contains: String(keyword), mode: 'insensitive' } })
+    if (platform && platform !== 'all') where.push({ platform })
+    if (keyword) where.push({ accountName: { contains: keyword, mode: 'insensitive' } })
 
     const [items, total] = await Promise.all([
       prisma.benchmarkAccount.findMany({
@@ -102,7 +103,7 @@ router.put('/benchmark-accounts/:id', async (req: Request, res: Response) => {
   try {
     const { account_name, homepage_url, follower_count, content_direction } = req.body
     const account = await prisma.benchmarkAccount.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: {
         ...(account_name !== undefined && { accountName: account_name }),
         ...(homepage_url !== undefined && { homepageUrl: homepage_url }),
@@ -129,7 +130,7 @@ router.put('/benchmark-accounts/:id', async (req: Request, res: Response) => {
 router.delete('/benchmark-accounts/:id', async (req: Request, res: Response) => {
   try {
     await prisma.benchmarkAccount.delete({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
     })
     res.json({ success: true })
   } catch (error) {
@@ -147,7 +148,7 @@ router.put('/benchmark-accounts/:id/monitor', async (req: Request, res: Response
       return
     }
     const account = await prisma.benchmarkAccount.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: { monitorStatus: monitor_status },
     })
     res.json({ id: account.id, monitor_status: account.monitorStatus })

@@ -2,9 +2,8 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { toInt } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
 
-const router = Router()
+const router: Router = Router()
 
 // GET /api/v1/keyword-monitors — 关键词监控列表
 router.get('/keyword-monitors', async (req: Request, res: Response) => {
@@ -34,10 +33,37 @@ router.get('/keyword-monitors', async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/v1/keyword-monitors/trends — 趋势数据（桩）
-router.get('/keyword-monitors/trends', async (_req: Request, res: Response) => {
-  markStub(res, '趋势数据未接入')
-  res.json({ points: [] })
+// GET /api/v1/keyword-monitors/trends — 趋势数据
+router.get('/keyword-monitors/trends', async (req: Request, res: Response) => {
+  try {
+    const keywordId = req.query.keyword_id ? toInt(String(req.query.keyword_id)) : null
+    const days = Math.min(toInt(String(req.query.days), 7), 90)
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+
+    const where = keywordId
+      ? { keywordId, date: { gte: startDate } }
+      : { date: { gte: startDate } }
+
+    const trends = await prisma.keywordTrend.findMany({
+      where,
+      orderBy: { date: 'asc' },
+      include: { keywordMonitor: { select: { keyword: true } } },
+    })
+
+    const points = trends.map(t => ({
+      date: t.date.toISOString().slice(0, 10),
+      keyword_id: t.keywordId,
+      keyword: t.keywordMonitor.keyword,
+      hot_value: t.hotValue,
+      platform_rank: t.platformRank,
+    }))
+
+    res.json({ points })
+  } catch (error) {
+    console.error('[GET /keyword-monitors/trends]', error)
+    res.status(500).json({ error: 'Failed to load keyword trends' })
+  }
 })
 
 // POST /api/v1/keyword-monitors — 添加监控

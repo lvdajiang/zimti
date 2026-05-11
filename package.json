@@ -12,10 +12,18 @@
     "db:migrate": "pnpm --filter @zimti/server prisma migrate dev",
     "db:push": "pnpm --filter @zimti/server prisma db push",
     "lint": "pnpm --parallel --filter ./packages/* run lint",
-    "typecheck": "pnpm --parallel --filter ./packages/* run typecheck"
+    "typecheck": "pnpm --parallel --filter ./packages/* run typecheck",
+    "test": "pnpm --parallel --filter ./packages/* run test",
+    "test:server": "pnpm --filter @zimti/server run test",
+    "test:client": "pnpm --filter @zimti/client run test"
   },
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "^4.0.459",
+    "@remotion/cli": "^4.0.459",
+    "remotion": "^4.0.459"
   }
 }

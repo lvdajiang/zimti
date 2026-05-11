@@ -1,23 +1,23 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
 
-const router = Router()
+const router: Router = Router()
 
 // GET /api/v1/tasks — 任务列表
 router.get('/tasks', async (req: Request, res: Response) => {
   try {
-    const { task_ids, status, page = '1', page_size = '20' } = req.query
-    const p = Number(page)
-    const ps = Math.min(Number(page_size), 100)
+    const task_ids = str(req.query.task_ids)
+    const status = str(req.query.status)
+    const p = toInt(req.query.page, 1)
+    const ps = Math.min(toInt(req.query.page_size, 20), 100)
     const skip = (p - 1) * ps
 
     const where: Record<string, unknown>[] = [{ userId: DEMO_USER_ID }]
-    if (status && status !== 'all') where.push({ status: String(status) })
+    if (status && status !== 'all') where.push({ status })
     if (task_ids) {
-      const ids = String(task_ids).split(',').filter(Boolean)
+      const ids = task_ids.split(',').filter(Boolean)
       if (ids.length > 0) where.push({ id: { in: ids } })
     }
 
@@ -92,7 +92,7 @@ router.post('/tasks', async (req: Request, res: Response) => {
 // PUT /api/v1/tasks/:taskId — 更新任务
 router.put('/tasks/:taskId', async (req: Request, res: Response) => {
   try {
-    const { taskId } = req.params
+    const taskId = str(req.params.taskId)
     const { title, description, status, current_step } = req.body
     const task = await prisma.task.update({
       where: { id: taskId, userId: DEMO_USER_ID },
@@ -118,22 +118,83 @@ router.put('/tasks/:taskId', async (req: Request, res: Response) => {
   }
 })
 
-// PUT /api/v1/tasks/:taskId/conversion-goal — 设置转化目标（桩）
-router.put('/tasks/:taskId/conversion-goal', (_req: Request, res: Response) => {
-  markStub(res, '转化目标未实现')
-  res.json({ message: 'tasks/conversion-goal — TODO' })
+// PUT /api/v1/tasks/:taskId/conversion-goal — 设置转化目标
+router.put('/tasks/:taskId/conversion-goal', async (req: Request, res: Response) => {
+  try {
+    const { goal } = req.body
+    if (!goal) {
+      res.status(400).json({ error: 'goal is required' })
+      return
+    }
+    const task = await prisma.task.findFirst({ where: { id: str(req.params.taskId), userId: DEMO_USER_ID } })
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    const updated = await prisma.task.update({
+      where: { id: str(req.params.taskId) },
+      data: { description: goal },
+    })
+    res.json({ success: true, goal: updated.description })
+  } catch (error) {
+    console.error('[PUT conversion-goal]', error)
+    res.status(500).json({ error: 'Failed to set conversion goal' })
+  }
 })
 
-// POST /api/v1/tasks/:taskId/import-instructions — 导入说明（桩）
-router.post('/tasks/:taskId/import-instructions', (_req: Request, res: Response) => {
-  markStub(res, '导入说明未实现')
-  res.json({ message: 'tasks/import-instructions — TODO' })
+// POST /api/v1/tasks/:taskId/import-instructions — 导入说明
+router.post('/tasks/:taskId/import-instructions', async (req: Request, res: Response) => {
+  try {
+    const { instructions } = req.body
+    if (!instructions) {
+      res.status(400).json({ error: 'instructions is required' })
+      return
+    }
+    const task = await prisma.task.findFirst({ where: { id: str(req.params.taskId), userId: DEMO_USER_ID } })
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    const updated = await prisma.task.update({
+      where: { id: str(req.params.taskId) },
+      data: { description: [task.description, instructions].filter(Boolean).join('\n\n') },
+    })
+    res.json({ success: true, description: updated.description })
+  } catch (error) {
+    console.error('[POST import-instructions]', error)
+    res.status(500).json({ error: 'Failed to import instructions' })
+  }
 })
 
-// POST /api/v1/tasks/:taskId/import-experience — 导入经验（桩）
-router.post('/tasks/:taskId/import-experience', (_req: Request, res: Response) => {
-  markStub(res, '导入经验未实现')
-  res.json({ message: 'tasks/import-experience — TODO' })
+// POST /api/v1/tasks/:taskId/import-experience — 导入经验
+router.post('/tasks/:taskId/import-experience', async (req: Request, res: Response) => {
+  try {
+    const { biggest_surprise, biggest_mistake, next_hypothesis, week_number, tags } = req.body
+    if (!biggest_surprise || !biggest_mistake || !next_hypothesis) {
+      res.status(400).json({ error: 'biggest_surprise, biggest_mistake, next_hypothesis are required' })
+      return
+    }
+    const task = await prisma.task.findFirst({ where: { id: str(req.params.taskId), userId: DEMO_USER_ID } })
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    const log = await prisma.experienceLog.create({
+      data: {
+        userId: DEMO_USER_ID,
+        taskId: str(req.params.taskId),
+        weekNumber: toInt(week_number, 1),
+        biggestSurprise: biggest_surprise,
+        biggestMistake: biggest_mistake,
+        nextHypothesis: next_hypothesis,
+        tags: Array.isArray(tags) ? tags : [],
+      },
+    })
+    res.json({ success: true, id: log.id })
+  } catch (error) {
+    console.error('[POST import-experience]', error)
+    res.status(500).json({ error: 'Failed to import experience' })
+  }
 })
 
 export default router

@@ -1,12 +1,20 @@
 import { Router } from 'express'
-import { markStub } from '../../middleware/stubMarker.js'
+import { prisma } from '../../db.js'
+import type { Request, Response } from 'express'
+import { DEMO_USER_ID } from '../../constants.js'
 
-const router = Router()
+const router: Router = Router()
 
-// GET /api/v1/notifications/unread-count
-router.get('/notifications/unread-count', (_req, res) => {
-  markStub(res, '通知系统未接入')
-  res.json({ count: 0 })
+router.get('/notifications/unread-count', async (_req: Request, res: Response) => {
+  try {
+    const count = await prisma.notification.count({
+      where: { userId: DEMO_USER_ID, isRead: false },
+    })
+    res.json({ count })
+  } catch (error) {
+    console.error('[GET /notifications/unread-count]', error)
+    res.status(500).json({ error: 'Failed to get unread count' })
+  }
 })
 
 export default router

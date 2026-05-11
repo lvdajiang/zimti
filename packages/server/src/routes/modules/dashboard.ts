@@ -2,9 +2,10 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { DEMO_USER_ID } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { runTask, getTask } from '../../services/ai/index.js'
+import { dashboardAnalysis } from '../../services/ai/generators/copyGenerate.js'
 
-const router = Router()
+const router: Router = Router()
 
 // GET /api/v1/dashboard/workflow — 任务工作流状态
 router.get('/dashboard/workflow', async (_req: Request, res: Response) => {
@@ -247,22 +248,34 @@ router.get('/dashboard/snapshots', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/dashboard/ai-analysis — AI 分析（桩）
-router.post('/dashboard/ai-analysis', async (_req: Request, res: Response) => {
+// POST /api/v1/dashboard/ai-analysis — AI 分析
+router.post('/dashboard/ai-analysis', async (req: Request, res: Response) => {
   try {
-    const taskId = crypto.randomUUID()
-    markStub(res, 'AI 分析服务未接入')
-    res.json({ task_id: taskId, status: 'pending' })
+    const { period } = req.body
+    const task = await runTask(
+      { type: 'dashboard_analysis', input: { period } },
+      () => dashboardAnalysis({ period }),
+    )
+    res.json({ task_id: task.id, status: task.status })
   } catch (error) {
     console.error('[POST /dashboard/ai-analysis]', error)
     res.status(500).json({ error: 'Failed to start AI analysis' })
   }
 })
 
-// GET /api/v1/dashboard/ai-analysis/:taskId/status — AI 分析状态（桩）
-router.get('/dashboard/ai-analysis/:taskId/status', async (_req: Request, res: Response) => {
-  markStub(res, 'AI 分析状态查询为桩')
-  res.json({ status: 'pending', progress: 0 })
+// GET /api/v1/dashboard/ai-analysis/:taskId/status — AI 分析状态
+router.get('/dashboard/ai-analysis/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET ai-analysis/status]', error)
+    res.status(500).json({ error: 'Failed to get analysis status' })
+  }
 })
 
 export default router

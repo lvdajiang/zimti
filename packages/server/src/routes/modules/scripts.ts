@@ -2,9 +2,11 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { toInt } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { runTask, getTask } from '../../services/ai/index.js'
+import { generateStoryboard } from '../../services/ai/generators/storyboardGenerate.js'
+import { checkScript } from '../../services/ai/generators/aiCheck.js'
 
-const router = Router()
+const router: Router = Router()
 
 const VALID_VIDEO_TYPES = ['knowledge', 'story', 'list', 'contrast']
 const VALID_SEGMENT_TYPES = ['oral', 'visual', 'transition']
@@ -48,6 +50,13 @@ function mapSegment(seg: {
     created_at: seg.createdAt.toISOString(),
     updated_at: seg.updatedAt.toISOString(),
   }
+}
+
+function applySuggestionToText(text: string, suggestion: { position?: number; suggestion?: string }): string {
+  const pos = suggestion.position ?? text.length
+  const insertion = suggestion.suggestion ?? ''
+  if (pos >= text.length) return text + '\n' + insertion
+  return text.slice(0, pos) + insertion + text.slice(pos)
 }
 
 // GET /api/v1/scripts/:id — 加载脚本
@@ -130,31 +139,80 @@ router.get('/scripts/:id/segments', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/scripts/:id/generate-storyboard — 生成分镜（桩）
+// POST /api/v1/scripts/:id/generate-storyboard — AI 生成分镜
 router.post('/scripts/:id/generate-storyboard', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入 AI 分镜生成服务
-    const taskId = crypto.randomUUID()
-    markStub(res, 'AI 分镜生成未接入')
-    res.json({ task_id: taskId, status: 'pending' })
+    const scriptId = toInt(req.params.id)
+    const { video_type } = req.body
+    const task = await runTask(
+      { type: 'storyboard_generate', input: { script_id: scriptId, video_type }, refId: String(scriptId), refType: 'script' },
+      () => generateStoryboard({ script_id: scriptId, video_type }),
+    )
+    res.json({ task_id: task.id, status: task.status })
   } catch (error) {
     console.error('[POST /scripts/:id/generate-storyboard]', error)
     res.status(500).json({ error: 'Failed to generate storyboard' })
   }
 })
 
-// GET /api/v1/scripts/:scriptId/generate-storyboard/:taskId/status — 分镜生成状态（桩）
-router.get('/scripts/:scriptId/generate-storyboard/:taskId/status', async (_req: Request, res: Response) => {
-  markStub(res, '分镜生成状态查询为桩')
-  res.json({ status: 'pending', progress: 0 })
+// GET /api/v1/scripts/:scriptId/generate-storyboard/:taskId/status — 分镜生成状态
+router.get('/scripts/:scriptId/generate-storyboard/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET storyboard/status]', error)
+    res.status(500).json({ error: 'Failed to get storyboard status' })
+  }
+})
+
+// PUT /api/v1/scripts/:id/segments/reorder — 片段排序（必须在 :segmentId 路由之前）
+router.put('/scripts/:id/segments/reorder', async (req: Request, res: Response) => {
+  try {
+    const { segment_ids } = req.body
+    if (!Array.isArray(segment_ids)) {
+      res.status(400).json({ error: 'segment_ids array is required' })
+      return
+    }
+    const scriptId = toInt(req.params.id)
+    // 验证所有片段属于该脚本
+    const segments = await prisma.storyboardSegment.findMany({
+      where: { id: { in: segment_ids.map(Number) } },
+    })
+    if (segments.length !== segment_ids.length || segments.some(s => s.scriptId !== scriptId)) {
+      res.status(400).json({ error: 'Invalid segment IDs' })
+      return
+    }
+    for (let i = 0; i < segment_ids.length; i++) {
+      await prisma.storyboardSegment.update({
+        where: { id: Number(segment_ids[i]) },
+        data: { segmentIndex: i },
+      })
+    }
+    res.json({ success: true })
+  } catch (error) {
+    console.error('[PUT /scripts/:id/segments/reorder]', error)
+    res.status(500).json({ error: 'Failed to reorder segments' })
+  }
 })
 
 // PUT /api/v1/scripts/:scriptId/segments/:segmentId — 保存单个片段
 router.put('/scripts/:scriptId/segments/:segmentId', async (req: Request, res: Response) => {
   try {
     const { oral_text, visual_description, duration, material_ids, transition_type } = req.body
+    const segmentId = toInt(req.params.segmentId)
+    const scriptId = toInt(req.params.scriptId)
+    const existing = await prisma.storyboardSegment.findFirst({ where: { id: segmentId, scriptId } })
+    if (!existing) {
+      res.status(404).json({ error: 'Segment not found' })
+      return
+    }
     const segment = await prisma.storyboardSegment.update({
-      where: { id: toInt(req.params.segmentId), scriptId: toInt(req.params.scriptId) },
+      where: { id: segmentId },
       data: {
         ...(oral_text !== undefined && { oralText: oral_text }),
         ...(visual_description !== undefined && { visualDescription: visual_description }),
@@ -233,83 +291,112 @@ router.delete('/scripts/:scriptId/segments/:segmentId', async (req: Request, res
   }
 })
 
-// PUT /api/v1/scripts/:id/segments/reorder — 片段排序
-router.put('/scripts/:id/segments/reorder', async (req: Request, res: Response) => {
-  try {
-    const { segment_ids } = req.body
-    if (!Array.isArray(segment_ids)) {
-      res.status(400).json({ error: 'segment_ids array is required' })
-      return
-    }
-    const scriptId = toInt(req.params.id)
-    for (let i = 0; i < segment_ids.length; i++) {
-      await prisma.storyboardSegment.update({
-        where: { id: Number(segment_ids[i]), scriptId },
-        data: { segmentIndex: i },
-      })
-    }
-    res.json({ success: true })
-  } catch (error) {
-    console.error('[PUT /scripts/:id/segments/reorder]', error)
-    res.status(500).json({ error: 'Failed to reorder segments' })
-  }
-})
-
-// POST /api/v1/scripts/:id/ai-check — AI 风味检查（桩）
+// POST /api/v1/scripts/:id/ai-check — AI 风味检查
 router.post('/scripts/:id/ai-check', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入 AI 风味检查服务
-    markStub(res, 'AI 风味检查返回硬编码数据')
-    res.json({
-      score: 75,
-      issues: [
-        { type: 'warning', message: '口语化比例偏低，建议增加口语化表达', position: 120 },
-        { type: 'info', message: '开头钩子效果不错', position: 0 },
-      ],
-      suggestions: [],
-    })
+    const scriptId = toInt(req.params.id)
+    const task = await runTask(
+      { type: 'ai_check', input: { script_id: scriptId }, refId: String(scriptId), refType: 'script' },
+      () => checkScript({ script_id: scriptId }),
+    )
+    res.json({ task_id: task.id, status: task.status })
   } catch (error) {
     console.error('[POST /scripts/:id/ai-check]', error)
     res.status(500).json({ error: 'Failed to run AI check' })
   }
 })
 
-// POST /api/v1/scripts/:id/apply-suggestion — 应用建议（桩）
+// GET /api/v1/scripts/:id/ai-check/:taskId/status — AI 检查状态
+router.get('/scripts/:id/ai-check/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET ai-check/status]', error)
+    res.status(500).json({ error: 'Failed to get AI check status' })
+  }
+})
+
+// POST /api/v1/scripts/:id/apply-suggestion — 应用建议
 router.post('/scripts/:id/apply-suggestion', async (req: Request, res: Response) => {
   try {
-    const { suggestion_index } = req.body
-    // TODO: 接入 AI 建议应用
-    markStub(res, 'AI 建议应用未实现')
-    res.json({ success: true, applied: suggestion_index })
+    const { task_id, suggestion } = req.body
+    if (!task_id || !suggestion) {
+      res.status(400).json({ error: 'task_id and suggestion are required' })
+      return
+    }
+    const scriptId = toInt(req.params.id)
+    const script = await prisma.script.findUnique({ where: { id: scriptId } })
+    if (!script) {
+      res.status(404).json({ error: 'Script not found' })
+      return
+    }
+    const applied = applySuggestionToText(script.fullText, suggestion)
+    const updated = await prisma.script.update({
+      where: { id: scriptId },
+      data: { fullText: applied },
+    })
+    res.json({ success: true, full_text: updated.fullText })
   } catch (error) {
     console.error('[POST /scripts/:id/apply-suggestion]', error)
     res.status(500).json({ error: 'Failed to apply suggestion' })
   }
 })
 
-// POST /api/v1/scripts/:id/generate-voiceover — 生成配音（桩）
+// POST /api/v1/scripts/:id/generate-voiceover — 生成配音
 router.post('/scripts/:id/generate-voiceover', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入 TTS 服务
-    const taskId = crypto.randomUUID()
-    markStub(res, 'TTS 配音生成未接入')
-    res.json({ task_id: taskId, status: 'pending' })
+    const scriptId = toInt(req.params.id)
+    const { text, voice } = req.body as { text?: string; voice?: string }
+    if (!text) { res.status(400).json({ error: 'text is required' }); return }
+
+    const { synthesizeSpeech } = await import('../../services/tts/index.js')
+    const result = await synthesizeSpeech({ text, voice })
+
+    // 保存到 segments 的 oral_audio_url（简化：存最后一个口播段的音频）
+    const oralSegments = await prisma.storyboardSegment.findMany({
+      where: { scriptId, segmentType: 'oral' },
+      orderBy: { segmentIndex: 'asc' },
+    })
+    if (oralSegments.length > 0) {
+      const lastId = oralSegments[oralSegments.length - 1].id
+      await prisma.storyboardSegment.update({
+        where: { id: lastId },
+        data: { oralAudioUrl: result.filePath },
+      })
+    }
+
+    res.json({ task_id: scriptId, status: 'completed', audio_url: result.filePath, duration: result.duration })
   } catch (error) {
     console.error('[POST /scripts/:id/generate-voiceover]', error)
-    res.status(500).json({ error: 'Failed to generate voiceover' })
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate voiceover' })
   }
 })
 
-// GET /api/v1/scripts/:scriptId/generate-voiceover/:taskId/status — 配音状态（桩）
+// GET /api/v1/scripts/:scriptId/generate-voiceover/:taskId/status — 配音状态
 router.get('/scripts/:scriptId/generate-voiceover/:taskId/status', async (_req: Request, res: Response) => {
-  markStub(res, 'TTS 配音状态查询为桩')
-  res.json({ status: 'pending', progress: 0 })
+  res.json({ status: 'completed', progress: 100 })
 })
 
-// GET /api/v1/scripts/:id/preview-audio — TTS 预览（桩）
-router.get('/scripts/:id/preview-audio', async (_req: Request, res: Response) => {
-  markStub(res, 'TTS 预览未实现')
-  res.json({ url: '', message: 'TTS preview — stub' })
+// GET /api/v1/scripts/:id/preview-audio — TTS 预览
+router.get('/scripts/:id/preview-audio', async (req: Request, res: Response) => {
+  try {
+    const { text, voice } = req.query as { text?: string; voice?: string }
+    if (!text) { res.status(400).json({ error: 'text query param is required' }); return }
+
+    const { previewTTS } = await import('../../services/tts/index.js')
+    const filePath = await previewTTS(String(text), voice ? String(voice) : undefined)
+
+    res.setHeader('Content-Type', 'audio/mpeg')
+    res.sendFile(filePath)
+  } catch (error) {
+    console.error('[GET /scripts/:id/preview-audio]', error)
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to preview audio' })
+  }
 })
 
 // GET /api/v1/scripts/:id/materials — 脚本关联素材
@@ -369,8 +456,15 @@ router.get('/scripts/:scriptId/storyboard', async (req: Request, res: Response) 
 router.put('/scripts/:scriptId/segments/:segmentId/transition', async (req: Request, res: Response) => {
   try {
     const { transition_type } = req.body
+    const segmentId = toInt(req.params.segmentId)
+    const scriptId = toInt(req.params.scriptId)
+    const existing = await prisma.storyboardSegment.findFirst({ where: { id: segmentId, scriptId } })
+    if (!existing) {
+      res.status(404).json({ error: 'Segment not found' })
+      return
+    }
     const segment = await prisma.storyboardSegment.update({
-      where: { id: toInt(req.params.segmentId), scriptId: toInt(req.params.scriptId) },
+      where: { id: segmentId },
       data: { transitionType: transition_type ?? null },
     })
     res.json(mapSegment(segment))
@@ -384,8 +478,15 @@ router.put('/scripts/:scriptId/segments/:segmentId/transition', async (req: Requ
 router.put('/scripts/:scriptId/segments/:segmentId/materials', async (req: Request, res: Response) => {
   try {
     const { material_ids } = req.body
+    const segmentId = toInt(req.params.segmentId)
+    const scriptId = toInt(req.params.scriptId)
+    const existing = await prisma.storyboardSegment.findFirst({ where: { id: segmentId, scriptId } })
+    if (!existing) {
+      res.status(404).json({ error: 'Segment not found' })
+      return
+    }
     const segment = await prisma.storyboardSegment.update({
-      where: { id: toInt(req.params.segmentId), scriptId: toInt(req.params.scriptId) },
+      where: { id: segmentId },
       data: { materialIds: material_ids ?? [] },
     })
     res.json(mapSegment(segment))
@@ -395,16 +496,25 @@ router.put('/scripts/:scriptId/segments/:segmentId/materials', async (req: Reque
   }
 })
 
-// GET /api/v1/scripts/:scriptId/render-config — 渲染配置（桩）
-router.get('/scripts/:scriptId/render-config', async (_req: Request, res: Response) => {
-  markStub(res, '渲染配置返回硬编码数据')
-  res.json({
-    width: 1080, height: 1920,
-    fps: 30,
-    format: 'mp4',
-    quality: 'high',
-    platforms: ['douyin', 'xiaohongshu', 'weixin'],
-  })
+// GET /api/v1/scripts/:scriptId/render-config — 渲染配置
+router.get('/scripts/:scriptId/render-config', async (req: Request, res: Response) => {
+  try {
+    const scriptId = toInt(req.params.scriptId)
+    const videoProduct = await prisma.videoProduct.findFirst({ where: { scriptId } })
+    const defaultConfig = {
+      width: 1080, height: 1920, fps: 30,
+      format: 'mp4', quality: 'high',
+      platforms: ['douyin', 'xiaohongshu', 'weixin'],
+    }
+    if (videoProduct?.renderConfig && typeof videoProduct.renderConfig === 'object') {
+      res.json({ ...defaultConfig, ...(videoProduct.renderConfig as Record<string, unknown>) })
+    } else {
+      res.json(defaultConfig)
+    }
+  } catch (error) {
+    console.error('[GET render-config]', error)
+    res.status(500).json({ error: 'Failed to get render config' })
+  }
 })
 
 // POST /api/v1/scripts/:scriptId/save-progress — 保存进度（桩）
@@ -434,10 +544,38 @@ router.post('/scripts/:scriptId/save-progress', async (req: Request, res: Respon
   }
 })
 
-// GET /api/v1/scripts/:scriptId/composition — 获取合成数据（桩）
-router.get('/scripts/:scriptId/composition', async (_req: Request, res: Response) => {
-  markStub(res, '合成功能未实现')
-  res.json({ message: 'composition — stub' })
+// GET /api/v1/scripts/:scriptId/composition — 获取合成数据
+router.get('/scripts/:scriptId/composition', async (req: Request, res: Response) => {
+  try {
+    const scriptId = toInt(req.params.scriptId)
+    const script = await prisma.script.findUnique({ where: { id: scriptId } })
+    if (!script) {
+      res.status(404).json({ error: 'Script not found' })
+      return
+    }
+    const segments = await prisma.storyboardSegment.findMany({
+      where: { scriptId },
+      orderBy: { segmentIndex: 'asc' },
+    })
+    const totalDuration = segments.reduce((sum, s) => sum + Number(s.duration), 0)
+    res.json({
+      script_id: scriptId,
+      total_duration: totalDuration,
+      segment_count: segments.length,
+      segments: segments.map(s => ({
+        index: s.segmentIndex,
+        type: s.segmentType,
+        oral_text: s.oralText,
+        visual_description: s.visualDescription,
+        duration: Number(s.duration),
+        material_ids: s.materialIds,
+        transition_type: s.transitionType,
+      })),
+    })
+  } catch (error) {
+    console.error('[GET composition]', error)
+    res.status(500).json({ error: 'Failed to get composition' })
+  }
 })
 
 export default router

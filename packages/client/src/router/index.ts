@@ -92,6 +92,18 @@ const router = createRouter({
       component: () => import('@/views/ContentAssetsView.vue'),
       meta: { title: '内容资产库' },
     },
+    {
+      path: ROUTES.AI_STUDIO,
+      name: 'AiStudio',
+      component: () => import('@/views/AiStudioView.vue'),
+      meta: { title: 'AI工作室' },
+    },
+    {
+      path: ROUTES.AI_STUDIO_PROJECT,
+      name: 'AiStudioProject',
+      component: () => import('@/views/AiStudioProjectView.vue'),
+      meta: { title: 'AI工作室' },
+    },
   ],
 })
 

@@ -2,9 +2,10 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { toInt } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { runTask } from '../../services/ai/taskManager.js'
+import { analyzeViralVideo } from '../../services/ai/generators/videoAnalyze.js'
 
-const router = Router()
+const router: Router = Router()
 
 const PLATFORM_LABELS: Record<string, string> = { xiaohongshu: '小红书', douyin: '抖音', weixin: '视频号' }
 
@@ -112,7 +113,7 @@ router.get('/viral-videos/:id', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/viral-videos/analyze-batch — 批量分析（桩）
+// POST /api/v1/viral-videos/analyze-batch — 批量分析
 router.post('/viral-videos/analyze-batch', async (req: Request, res: Response) => {
   try {
     const { video_ids, ids } = req.body
@@ -121,40 +122,124 @@ router.post('/viral-videos/analyze-batch', async (req: Request, res: Response) =
       res.status(400).json({ error: 'video_ids array is required' })
       return
     }
-    // TODO: 接入 AI 视频分析服务
-    markStub(res, '批量分析未接入 AI 服务')
-    res.json({ success: true, count: videoIds.length, message: 'Batch analysis queued (stub)' })
+
+    const taskIds: string[] = []
+    const results = await Promise.allSettled(
+      videoIds.map(async (videoId: number) => {
+        const video = await prisma.viralVideo.findUnique({ where: { id: videoId } })
+        if (!video) throw new Error(`Video ${videoId} not found`)
+
+        const task = await runTask(
+          { type: 'video_analyze_batch', input: { video_id: videoId }, refId: String(videoId), refType: 'viral_video' },
+          () => analyzeViralVideo({ video_id: videoId }),
+        )
+        taskIds.push(task.id)
+      }),
+    )
+
+    const failed = results.filter(r => r.status === 'rejected').length
+    res.json({
+      success: true,
+      count: videoIds.length,
+      task_ids: taskIds,
+      failed_count: failed,
+    })
   } catch (error) {
     console.error('[POST /viral-videos/analyze-batch]', error)
     res.status(500).json({ error: 'Failed to start batch analysis' })
   }
 })
 
-// GET /api/v1/viral-videos/export — 导出（桩）
-router.get('/viral-videos/export', async (_req: Request, res: Response) => {
-  markStub(res, '导出功能未实现')
-  res.json({ url: '', message: 'Export — stub' })
+// GET /api/v1/viral-videos/export — 导出 CSV
+router.get('/viral-videos/export', async (req: Request, res: Response) => {
+  try {
+    const {
+      platform, account_id, keyword, time_range = 'all',
+    } = req.query as Record<string, string>
+    const where: Record<string, unknown>[] = []
+    if (platform && platform !== 'all') where.push({ platform })
+    if (account_id) where.push({ accountId: account_id })
+    if (keyword) where.push({ title: { contains: keyword, mode: 'insensitive' } })
+    if (time_range && time_range !== 'all') {
+      const days = toInt(time_range, 30)
+      const since = new Date()
+      since.setDate(since.getDate() - days)
+      where.push({ createdAt: { gte: since } })
+    }
+    const whereClause = where.length > 0 ? { AND: where } : undefined
+    const videos = await prisma.viralVideo.findMany({
+      where: whereClause,
+      orderBy: { playCount: 'desc' },
+      take: 1000,
+    })
+    const header = '平台,标题,播放量,点赞数,评论数,收藏数,分享数,互动率,发布时间,收集时间\n'
+    const rows = videos.map(v =>
+      [
+        v.platform, `"${(v.title ?? '').replace(/"/g, '""')}"`,
+        v.playCount, v.likeCount, v.commentCount, v.collectCount, v.shareCount,
+        v.interactionRate ? Number(v.interactionRate).toFixed(4) : '0',
+        v.publishedAt.toISOString().slice(0, 10), v.collectedAt.toISOString().slice(0, 10),
+      ].join(',')
+    ).join('\n')
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename=viral-videos-${Date.now()}.csv`)
+    res.send('﻿' + header + rows)
+  } catch (error) {
+    console.error('[GET /viral-videos/export]', error)
+    res.status(500).json({ error: 'Failed to export' })
+  }
 })
 
-// POST /api/v1/viral-videos/:id/transcript/extract — 提取文案（桩）
+// POST /api/v1/viral-videos/:id/transcript/extract — 提取文案
 router.post('/viral-videos/:id/transcript/extract', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入语音转文字服务
-    markStub(res, '文案提取未接入语音转文字服务')
-    const taskId = crypto.randomUUID()
-    res.json({ task_id: taskId, status: 'pending' })
+    const videoId = toInt(req.params.id)
+    const video = await prisma.viralVideo.findUnique({ where: { id: videoId } })
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+    if (!video.videoUrl) {
+      res.status(400).json({ error: '视频无 URL，无法提取文案' })
+      return
+    }
+
+    const task = await runTask(
+      { type: 'transcript_extract', input: { video_id: videoId, video_url: video.videoUrl }, refId: String(videoId), refType: 'viral_video' },
+      async () => {
+        const { extractTranscript } = await import('../../services/stt/index.js')
+        const transcript = await extractTranscript({ video_url: video.videoUrl!, video_id: videoId })
+        await prisma.viralVideo.update({
+          where: { id: videoId },
+          data: { transcript },
+        })
+        return { transcript }
+      },
+    )
+
+    res.json({ task_id: task.id, status: 'pending' })
   } catch (error) {
     console.error('[POST transcript/extract]', error)
     res.status(500).json({ error: 'Failed to extract transcript' })
   }
 })
 
-// POST /api/v1/viral-videos/:id/analyze — 分析视频（桩）
+// POST /api/v1/viral-videos/:id/analyze — 分析视频
 router.post('/viral-videos/:id/analyze', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入 AI 分析服务
-    markStub(res, '视频分析未接入 AI 服务')
-    res.json({ success: true, message: 'Analysis queued (stub)' })
+    const videoId = toInt(req.params.id)
+    const video = await prisma.viralVideo.findUnique({ where: { id: videoId } })
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    const task = await runTask(
+      { type: 'video_analyze', input: { video_id: videoId }, refId: String(videoId), refType: 'viral_video' },
+      () => analyzeViralVideo({ video_id: videoId }),
+    )
+
+    res.json({ task_id: task.id, status: 'pending' })
   } catch (error) {
     console.error('[POST viral-videos/:id/analyze]', error)
     res.status(500).json({ error: 'Failed to analyze video' })
@@ -177,7 +262,7 @@ router.put('/viral-videos/:id/transcript', async (req: Request, res: Response) =
   }
 })
 
-// GET /api/v1/viral-videos/:id/download — 下载（桩）
+// GET /api/v1/viral-videos/:id/download — 下载
 router.get('/viral-videos/:id/download', async (req: Request, res: Response) => {
   try {
     const video = await prisma.viralVideo.findUnique({ where: { id: toInt(req.params.id) } })

@@ -71,7 +71,7 @@ function extractFromSchema(schemaContent: string): SchemaValues {
   // 提取前端路由: '/dashboard', '/viral-videos/:id'
   const routePathRegex = /['"`](\/[a-z][-a-z0-9_/:]+)['"`]/g
   while ((match = routePathRegex.exec(schemaContent)) !== null) {
-    const p = match[1].slice(1, -1)
+    const p = match[1] // 捕获组已不含引号
     if (p.startsWith('/') && p !== '/api') {
       routePaths.add(p)
     }
@@ -158,6 +158,8 @@ function checkFile(filePath: string, schema: SchemaValues): Violation[] {
       if (val.length < 3) continue
       if (['true', 'false', 'null', 'undefined', 'string', 'number', 'boolean'].includes(val)) continue
       if (val === val.toLowerCase() && (val.includes('_') || ['active', 'paused', 'pending', 'running', 'completed', 'failed', 'draft', 'published', 'unpublished', 'main', 'image', 'video', 'music', 'text', 'audio', 'admin', 'user', 'guest'].includes(val))) {
+        // 跳过排序参数
+        if (val.endsWith('_asc') || val.endsWith('_desc') || val.endsWith('_score')) continue
         if (!schema.enumValues.has(val)) {
           violations.push({
             file: relativePath,
@@ -170,9 +172,14 @@ function checkFile(filePath: string, schema: SchemaValues): Violation[] {
       }
     }
 
-    // 检查 API 路径
+    // 文件级别判断
+    const isTestFile = filePath.includes('.test.ts')
+    const isServerRouteFile = filePath.includes('packages\\server\\src\\routes') || filePath.includes('packages/server/src/routes')
+    const isApiFile = filePath.includes('packages\\client\\src\\api') || filePath.includes('packages/client/src/api')
+
+    // 检查 API 路径（排除测试文件中的硬编码路径）
     const apiMatch = line.match(/['"`](\/api\/v1\/[a-z][-a-z0-9_/]*)['"`]/)
-    if (apiMatch) {
+    if (apiMatch && !isTestFile) {
       const p = apiMatch[1]
       if (!schema.apiPaths.has(p)) {
         violations.push({
@@ -185,18 +192,20 @@ function checkFile(filePath: string, schema: SchemaValues): Violation[] {
       }
     }
 
-    // 检查前端路由
-    const routeMatch = line.match(/['"`](\/[a-z][-a-z0-9_/]*)['"`]/)
-    if (routeMatch && !line.includes('api/v1')) {
-      const p = routeMatch[1]
-      if (p.length > 3 && !schema.routePaths.has(p) && !p.startsWith('/assets') && !p.startsWith('/static')) {
-        violations.push({
-          file: relativePath,
-          line: i + 1,
-          type: 'route_path',
-          value: p,
-          context: line.trim().slice(0, 100),
-        })
+    // 检查前端路由（仅检查前端非 API 文件中的路径引用）
+    if (!isServerRouteFile && !isTestFile && !isApiFile) {
+      const routeMatch = line.match(/['"`](\/[a-z][-a-z0-9_/]*)['"`]/)
+      if (routeMatch && !line.includes('api/v1') && !/\bapi\.(get|post|put|delete|del|patch)/.test(line)) {
+        const p = routeMatch[1]
+        if (p.length > 3 && !schema.routePaths.has(p) && !p.startsWith('/assets') && !p.startsWith('/static') && !p.startsWith('/uploads')) {
+          violations.push({
+            file: relativePath,
+            line: i + 1,
+            type: 'route_path',
+            value: p,
+            context: line.trim().slice(0, 100),
+          })
+        }
       }
     }
 

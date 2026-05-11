@@ -45,6 +45,7 @@ model User {
   notifications        Notification[]
   pendingItems         PendingItem[]
   personaConfig        PersonaConfig?
+  aiStudioProjects     AiStudioProject[]
 
   @@map("users")
 }
@@ -328,6 +329,7 @@ model PublishRecord {
   publishUrl       String?  @map("publish_url") @db.VarChar(500)
   status           String   @default("unpublished") @db.VarChar(20)
   aigcConfirmed    Boolean  @default(false) @map("aigc_confirmed")
+  geoInfo          Json?    @map("geo_info") @db.JsonB
   publishedAt      DateTime? @map("published_at") @db.Timestamptz()
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -531,4 +533,70 @@ model RenderTask {
 
   @@index([videoProductId])
   @@map("render_tasks")
+}
+
+// --- 6.3 ai_tasks — AI 异步任务 ---
+model AITask {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String    @db.VarChar(50)
+  status      String    @default("pending") @db.VarChar(20)
+  progress    Int       @default(0)
+  input       Json
+  output      Json?
+  error       String?   @db.Text
+  refId       String?   @map("ref_id") @db.VarChar(100)
+  refType     String?   @map("ref_type") @db.VarChar(50)
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([type])
+  @@index([status])
+  @@index([refId, refType])
+  @@map("ai_tasks")
+}
+
+// --- 6.4 ai_studio_projects — AI工作室项目 ---
+model AiStudioProject {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  title       String    @db.VarChar(200)
+  description String?   @db.Text
+  status      String    @default("draft") @db.VarChar(20)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  assets      AiStudioAsset[]
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("ai_studio_projects")
+}
+
+// --- 6.5 ai_studio_assets — AI工作室生成素材 ---
+model AiStudioAsset {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  type        String    @db.VarChar(20)
+  taskType    String    @map("task_type") @db.VarChar(50)
+  status      String    @default("pending") @db.VarChar(20)
+  inputParams Json      @map("input_params")
+  fileUrl     String?   @map("file_url") @db.VarChar(500)
+  thumbnailUrl String?  @map("thumbnail_url") @db.VarChar(500)
+  width       Int?
+  height      Int?
+  duration    Int?      // 秒
+  fileSize    BigInt?   @map("file_size")
+  error       String?   @db.Text
+  jimengTaskId String?  @map("jimeng_task_id") @db.VarChar(100)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  project     AiStudioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+  @@index([taskType])
+  @@map("ai_studio_assets")
 }

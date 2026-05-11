@@ -2,9 +2,10 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { toInt } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { runTask, getTask } from '../../services/ai/index.js'
+import { generateTopics, mergeTopics } from '../../services/ai/generators/topicGenerate.js'
 
-const router = Router()
+const router: Router = Router()
 
 function mapProposal(p: {
   id: number; taskId: string; title: string; contentSkeleton: unknown;
@@ -136,28 +137,38 @@ router.post('/topic-proposals', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/topic-proposals/generate — AI 生成选题（桩）
+// POST /api/v1/topic-proposals/generate — AI 生成选题
 router.post('/topic-proposals/generate', async (req: Request, res: Response) => {
   try {
-    const { task_id } = req.body
+    const { task_id, count } = req.body
     if (!task_id) {
       res.status(400).json({ error: 'task_id is required' })
       return
     }
-    // TODO: 接入 AI 选题生成服务
-    const taskId = crypto.randomUUID()
-    markStub(res, 'AI 选题生成未接入')
-    res.json({ task_id: taskId, status: 'pending' })
+    const task = await runTask(
+      { type: 'topic_generate', input: { task_id, count: count ?? 5 } },
+      () => generateTopics({ task_id, count }),
+    )
+    res.json({ task_id: task.id, status: task.status })
   } catch (error) {
     console.error('[POST /topic-proposals/generate]', error)
     res.status(500).json({ error: 'Failed to generate topics' })
   }
 })
 
-// GET /api/v1/topic-proposals/generate/:taskId/status — 生成状态（桩）
-router.get('/topic-proposals/generate/:taskId/status', async (_req: Request, res: Response) => {
-  markStub(res, '选题生成状态查询为桩')
-  res.json({ status: 'pending', progress: 0 })
+// GET /api/v1/topic-proposals/generate/:taskId/status — 生成状态
+router.get('/topic-proposals/generate/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const task = await getTask(req.params.taskId as string)
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: task.id, status: task.status, progress: task.progress, output: task.output })
+  } catch (error) {
+    console.error('[GET generate/status]', error)
+    res.status(500).json({ error: 'Failed to get generation status' })
+  }
 })
 
 // POST /api/v1/topic-proposals/:topicId/select — 选择选题
@@ -174,7 +185,7 @@ router.post('/topic-proposals/:topicId/select', async (req: Request, res: Respon
   }
 })
 
-// POST /api/v1/topic-proposals/merge — 合并选题（桩）
+// POST /api/v1/topic-proposals/merge — 合并选题
 router.post('/topic-proposals/merge', async (req: Request, res: Response) => {
   try {
     const { ids } = req.body
@@ -182,9 +193,8 @@ router.post('/topic-proposals/merge', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'At least 2 topic IDs required' })
       return
     }
-    // TODO: AI 合并逻辑
-    markStub(res, 'AI 合并选题未接入')
-    res.json({ success: true, merged_count: ids.length })
+    const result = await mergeTopics(ids.map(Number))
+    res.json({ success: true, merged: result })
   } catch (error) {
     console.error('[POST /topic-proposals/merge]', error)
     res.status(500).json({ error: 'Failed to merge topics' })

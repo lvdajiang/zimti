@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.log
+.git
+.gitignore
+.claude
+开发文档
+.vscode
+*.md

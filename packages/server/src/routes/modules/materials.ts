@@ -1,14 +1,17 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import { runTask, getTask } from '../../services/ai/taskManager.js'
+import { JimengClient } from '../../services/ai/jimengClient.js'
+import type { JimengReqKey } from '../../services/ai/jimengClient.js'
 
-const router = Router()
+const router: Router = Router()
 
 const VALID_TYPES = ['image', 'video', 'music', 'sfx', 'map_animation'] as const
 const VALID_SOURCES = ['pexels', 'ai_generated', 'self_shot', 'purchased', 'external_import'] as const
 const VALID_COPYRIGHT = ['free_commercial', 'purchased', 'ai_generated', 'pending'] as const
+const GENERATE_TYPES = ['image', 'video'] as const
 
 const TYPE_LABELS: Record<string, string> = {
   image: '图片', video: '视频', music: '音乐', sfx: '音效', map_animation: '地图动画',
@@ -18,6 +21,11 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 const COPYRIGHT_LABELS: Record<string, string> = {
   free_commercial: '免费商用', purchased: '已购买', ai_generated: 'AI生成', pending: '待确认',
+}
+
+const REQ_KEY_MAP: Record<string, JimengReqKey> = {
+  image: 'seedream_4_0_t2i_250514',
+  video: 'seaweed_t2v_25s_250514',
 }
 
 function mapMaterial(m: {
@@ -55,23 +63,25 @@ function formatFileSize(bytes: number): string {
 // GET /api/v1/materials — 列表
 router.get('/materials', async (req: Request, res: Response) => {
   try {
-    const { type, source, keyword, sort_by = 'created_at', page = '1', page_size = '20' } = req.query
-    const p = Number(page)
-    const ps = Math.min(Number(page_size), 100)
+    const type = str(req.query.type)
+    const source = str(req.query.source)
+    const keyword = str(req.query.keyword)
+    const sortBy = str(req.query.sort_by, 'created_at')
+    const p = toInt(req.query.page, 1)
+    const ps = Math.min(toInt(req.query.page_size, 20), 100)
     const skip = (p - 1) * ps
 
     const where: Record<string, unknown>[] = [{ userId: DEMO_USER_ID }]
-    if (type && type !== 'all') where.push({ type: String(type) })
-    if (source && source !== 'all') where.push({ source: String(source) })
+    if (type && type !== 'all') where.push({ type })
+    if (source && source !== 'all') where.push({ source })
     if (keyword) where.push({
       OR: [
-        { name: { contains: String(keyword), mode: 'insensitive' } },
-        { tags: { has: String(keyword) } },
+        { name: { contains: keyword, mode: 'insensitive' } },
+        { tags: { has: keyword } },
       ],
     })
 
     const orderBy: Record<string, string> = {}
-    const sortBy = String(sort_by)
     if (sortBy === 'use_count') orderBy.useCount = 'desc'
     else if (sortBy === 'name') orderBy.name = 'asc'
     else if (sortBy === 'file_size') orderBy.fileSize = 'desc'
@@ -115,7 +125,7 @@ router.get('/materials/stats', async (_req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/materials — 上传（桩，multipart 需要额外配置）
+// POST /api/v1/materials — 上传
 router.post('/materials', async (req: Request, res: Response) => {
   try {
     const { name, type, source, copyright_status, file_url, thumbnail_url, file_size, tags } = req.body
@@ -147,7 +157,7 @@ router.post('/materials', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/materials/generate — AI 生成（桩）
+// POST /api/v1/materials/generate — AI 生成
 router.post('/materials/generate', async (req: Request, res: Response) => {
   try {
     const { type, description } = req.body
@@ -155,50 +165,173 @@ router.post('/materials/generate', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'type and description are required' })
       return
     }
-    markStub(res, 'AI 生成服务未接入')
-    const taskId = crypto.randomUUID()
-    res.json({ task_id: taskId, status: 'pending' })
+    if (!GENERATE_TYPES.includes(type as typeof GENERATE_TYPES[number])) {
+      res.status(400).json({ error: `仅支持 ${GENERATE_TYPES.join('/')} 类型生成` })
+      return
+    }
+
+    const { JimengClient: JimengClientCheck } = await import('../../services/ai/jimengClient.js')
+    const client = JimengClientCheck.createFromEnv()
+    if (!client) {
+      res.status(503).json({ error: '即梦 AI 服务未配置，请设置 JIMENG 环境变量' })
+      return
+    }
+
+    const reqKey = REQ_KEY_MAP[type]
+    if (!reqKey) {
+      res.status(400).json({ error: `不支持的生成类型: ${type}` })
+      return
+    }
+
+    const task = await runTask(
+      { type: 'material_generate', input: { type, description } },
+      async () => {
+        const jimengClient = JimengClient.createFromEnv()
+        if (!jimengClient) throw new Error('即梦 AI 服务未配置')
+
+        const jimengTaskId = await jimengClient.submitTask({
+          req_key: reqKey,
+          prompt: description,
+        })
+
+        for (let i = 0; i < 60; i++) {
+          await new Promise(resolve => setTimeout(resolve, 5000))
+          const result = await jimengClient.pollResult(jimengTaskId)
+
+          if (result.status === 'success' && result.output) {
+            const outputUrl = result.output.image_urls?.[0] ?? result.output.video_url
+            if (!outputUrl) throw new Error('即梦返回结果中无文件 URL')
+            return { file_url: outputUrl, type }
+          }
+
+          if (result.status === 'failed') {
+            throw new Error(result.error ?? 'Jimeng task failed')
+          }
+        }
+
+        throw new Error('即梦生成超时（5分钟）')
+      },
+    )
+
+    res.json({ task_id: task.id, status: 'pending' })
   } catch (error) {
     console.error('[POST /materials/generate]', error)
     res.status(500).json({ error: 'Failed to start generation' })
   }
 })
 
-// GET /api/v1/materials/generate/:taskId/status — AI 生成状态（桩）
-router.get('/materials/generate/:taskId/status', async (_req: Request, res: Response) => {
-  markStub(res, 'AI 生成状态查询为桩')
-  res.json({ status: 'pending', progress: 0 })
+// GET /api/v1/materials/generate/:taskId/status — AI 生成状态
+router.get('/materials/generate/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const task = await getTask(str(req.params.taskId))
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ status: task.status, progress: task.progress, output: task.output })
+  } catch (error) {
+    console.error('[GET /materials/generate/:taskId/status]', error)
+    res.status(500).json({ error: 'Failed to get generation status' })
+  }
 })
 
-// POST /api/v1/materials/generate/:taskId/confirm — AI 生成确认（桩）
-router.post('/materials/generate/:taskId/confirm', async (_req: Request, res: Response) => {
-  markStub(res, 'AI 生成确认为桩')
-  res.json({ message: 'Generate confirm — stub' })
+// POST /api/v1/materials/generate/:taskId/confirm — AI 生成确认
+router.post('/materials/generate/:taskId/confirm', async (req: Request, res: Response) => {
+  try {
+    const taskId = str(req.params.id)
+    const task = await getTask(taskId)
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    if (task.status !== 'success') {
+      res.status(400).json({ error: `任务尚未完成，当前状态: ${task.status}` })
+      return
+    }
+
+    const output = task.output as Record<string, unknown> | null
+    if (!output?.file_url) {
+      res.status(500).json({ error: '任务结果中无文件 URL' })
+      return
+    }
+
+    const input = task.input as Record<string, unknown> | null
+    const material = await prisma.material.create({
+      data: {
+        userId: DEMO_USER_ID,
+        name: (input?.description as string) ?? `AI 生成 ${Date.now()}`,
+        type: (output.type as string) ?? 'image',
+        source: 'ai_generated',
+        copyrightStatus: 'ai_generated',
+        fileUrl: output.file_url as string,
+        fileSize: BigInt(0),
+        tags: [],
+        metadata: { ai_task_id: taskId },
+      },
+    })
+
+    res.json({ material_id: material.id })
+  } catch (error) {
+    console.error('[POST /materials/generate/:taskId/confirm]', error)
+    res.status(500).json({ error: 'Failed to confirm generation' })
+  }
 })
 
-// GET /api/v1/materials/pexels-search — Pexels 搜索（桩）
+// GET /api/v1/materials/pexels-search — Pexels 搜索
 router.get('/materials/pexels-search', async (req: Request, res: Response) => {
   try {
-    const { keyword, type = 'image', page = '1', page_size = '6' } = req.query
+    const keyword = str(req.query.keyword)
+    const type = str(req.query.type, 'image')
+    const page = toInt(req.query.page, 1)
+    const perPage = toInt(req.query.per_page, 20)
     if (!keyword) {
       res.status(400).json({ error: 'keyword is required' })
       return
     }
-    markStub(res, 'Pexels API 未接入')
-    res.json({
-      items: [],
-      total: 0,
-      keyword,
-      type,
-      page: Number(page),
+    const apiKey = process.env.PEXELS_API_KEY
+    if (!apiKey) { res.status(503).json({ error: 'PEXELS_API_KEY 未配置', items: [], total: 0 }); return }
+
+    const params = new URLSearchParams({ query: keyword, page: String(page), per_page: String(Math.min(perPage, 80)) })
+    if (type === 'video') params.set('video', 'true')
+
+    const resp = await fetch(`https://api.pexels.com/v1/search?${params}`, { headers: { Authorization: apiKey } })
+    if (!resp.ok) { res.status(502).json({ error: 'Pexels API error' }); return }
+    const data = await resp.json() as { total_results: number; photos?: any[]; videos?: any[] }
+    const results = data.photos ?? data.videos ?? []
+
+    const items = results.map((item: any) => {
+      if (type === 'video') {
+        const v = item.video_files?.sort((a: any, b: any) => a.width - b.width)[0] ?? {}
+        return {
+          id: String(item.id), type: 'video',
+          preview_url: item.image,
+          file_url: v.link ?? '',
+          thumbnail_url: item.image,
+          width: item.width, height: item.height,
+          duration: Math.round(item.duration ?? 0),
+          photographer: item.user?.name ?? '',
+          source_url: item.url,
+        }
+      }
+      return {
+        id: String(item.id), type: 'image',
+        preview_url: item.src?.large ?? item.src?.medium,
+        file_url: item.src?.original2x ?? item.src?.large ?? item.src?.medium,
+        thumbnail_url: item.src?.small ?? item.src?.tiny,
+        width: item.width, height: item.height,
+        photographer: item.photographer ?? '',
+        source_url: item.url,
+        alt: item.alt ?? '',
+      }
     })
+    res.json({ items, total: data.total_results, keyword, type, page, per_page: results.length })
   } catch (error) {
     console.error('[GET /materials/pexels-search]', error)
     res.status(500).json({ error: 'Failed to search Pexels' })
   }
 })
 
-// POST /api/v1/materials/pexels-import — Pexels 导入（桩）
+// POST /api/v1/materials/pexels-import — Pexels 导入
 router.post('/materials/pexels-import', async (req: Request, res: Response) => {
   try {
     const { pexels_id, type, source_url } = req.body
@@ -206,7 +339,6 @@ router.post('/materials/pexels-import', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'pexels_id and source_url are required' })
       return
     }
-    // TODO: 实际下载并存储文件
     const material = await prisma.material.create({
       data: {
         userId: DEMO_USER_ID,
@@ -243,7 +375,7 @@ router.put('/materials/:id', async (req: Request, res: Response) => {
     }
 
     const material = await prisma.material.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: updateData,
     })
     res.json({ material: mapMaterial(material) })
@@ -256,15 +388,15 @@ router.put('/materials/:id', async (req: Request, res: Response) => {
 // DELETE /api/v1/materials/:id — 删除
 router.delete('/materials/:id', async (req: Request, res: Response) => {
   try {
-    // 检查引用
+    const id = str(req.params.id)
     const refCount = await prisma.videoMaterial.count({
-      where: { materialId: req.params.id },
+      where: { materialId: id },
     })
     if (refCount > 0) {
       res.status(400).json({ error: 'Material is referenced by videos', ref_count: refCount })
       return
     }
-    await prisma.material.delete({ where: { id: req.params.id, userId: DEMO_USER_ID } })
+    await prisma.material.delete({ where: { id, userId: DEMO_USER_ID } })
     res.json({ success: true })
   } catch (error) {
     console.error('[DELETE /materials/:id]', error)
@@ -276,7 +408,7 @@ router.delete('/materials/:id', async (req: Request, res: Response) => {
 router.get('/materials/:id/references', async (req: Request, res: Response) => {
   try {
     const refs = await prisma.videoMaterial.findMany({
-      where: { materialId: req.params.id },
+      where: { materialId: str(req.params.id) },
       include: { videoProduct: { select: { id: true, title: true } } },
     })
     res.json({
@@ -289,18 +421,26 @@ router.get('/materials/:id/references', async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/v1/materials/:id/download — 下载（桩）
+// GET /api/v1/materials/:id/download — 下载
 router.get('/materials/:id/download', async (req: Request, res: Response) => {
   try {
     const material = await prisma.material.findUnique({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
     })
     if (!material) {
       res.status(404).json({ error: 'Material not found' })
       return
     }
-    markStub(res, '文件流下载未实现')
-    res.json({ url: material.fileUrl, name: material.name })
+    if (!material.fileUrl) {
+      res.status(400).json({ error: 'Material has no file URL' })
+      return
+    }
+    if (material.fileUrl.startsWith('http://') || material.fileUrl.startsWith('https://')) {
+      res.redirect(material.fileUrl)
+      return
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="${material.name}"`)
+    res.sendFile(material.fileUrl, { root: '/' })
   } catch (error) {
     console.error('[GET /materials/:id/download]', error)
     res.status(500).json({ error: 'Failed to download material' })

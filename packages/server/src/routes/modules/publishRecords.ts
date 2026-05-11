@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import { runTask, getTask, getAIProvider } from '../../services/ai/index.js'
+import { generateCopy } from '../../services/ai/generators/copyGenerate.js'
 
-const router = Router()
+const router: Router = Router()
 
 function mapRecord(r: {
   id: string; videoProductId: string; platform: string; conversionType: string;
@@ -35,12 +36,14 @@ function mapRecord(r: {
 // GET /api/v1/publish-records — 列表
 router.get('/publish-records', async (req: Request, res: Response) => {
   try {
-    const { status, platform, page = '1', page_size = '20' } = req.query
-    const ps = Math.min(Number(page_size), 100)
-    const skip = (Number(page) - 1) * ps
+    const status = str(req.query.status)
+    const platform = str(req.query.platform)
+    const p = toInt(req.query.page, 1)
+    const ps = Math.min(toInt(req.query.page_size, 20), 100)
+    const skip = (p - 1) * ps
     const where: Record<string, unknown>[] = [{ videoProduct: { task: { userId: DEMO_USER_ID } } }]
-    if (status && status !== 'all') where.push({ status: String(status) })
-    if (platform && platform !== 'all') where.push({ platform: String(platform) })
+    if (status && status !== 'all') where.push({ status })
+    if (platform && platform !== 'all') where.push({ platform })
 
     const [items, total] = await Promise.all([
       prisma.publishRecord.findMany({
@@ -62,16 +65,39 @@ router.get('/publish-records', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/publish-records/:id/generate-copy — AI 生成文案（桩）
+// POST /api/v1/publish-records/:id/generate-copy — AI 生成文案
 router.post('/publish-records/:id/generate-copy', async (req: Request, res: Response) => {
   try {
-    markStub(res, 'AI 文案生成未接入实际服务')
+    const id = str(req.params.id)
     const { platform } = req.body
-    // TODO: 接入 AI 文案生成服务
-    res.json({ success: true, message: 'Copy generation queued (stub)' })
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+    const task = await runTask(
+      { type: 'copy_generate', input: { record_id: id, platform }, refId: id, refType: 'publish_record' },
+      () => generateCopy({ record_id: id, platform }),
+    )
+    res.json({ task_id: task.id, status: task.status })
   } catch (error) {
     console.error('[POST generate-copy]', error)
     res.status(500).json({ error: 'Failed to generate copy' })
+  }
+})
+
+// GET /api/v1/publish-records/:id/generate-copy/:taskId/status — 文案生成状态
+router.get('/publish-records/:id/generate-copy/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET generate-copy/status]', error)
+    res.status(500).json({ error: 'Failed to get copy generation status' })
   }
 })
 
@@ -87,7 +113,7 @@ router.put('/publish-records/:id/content', async (req: Request, res: Response) =
     if (reply_templates !== undefined) updateData.replyTemplates = reply_templates
 
     const record = await prisma.publishRecord.update({
-      where: { id: req.params.id },
+      where: { id: str(req.params.id) },
       data: updateData,
     })
     res.json(mapRecord(record))
@@ -97,18 +123,62 @@ router.put('/publish-records/:id/content', async (req: Request, res: Response) =
   }
 })
 
-// GET/POST /api/v1/publish-records/:id/seo-check — SEO 检查（桩）
-async function seoCheckHandler(req: Request, res: Response): Promise<void> {
-  markStub(res, 'SEO 检查返回硬编码数据')
-  // POST 时可接收 body 参数（title, description, tags 等），暂未使用
-  const _body = req.body
-  res.json({
-    score: 72,
-    issues: [
-      { field: 'title', message: '标题缺少关键词', severity: 'warning' },
-      { field: 'tags', message: '标签数量不足', severity: 'info' },
-    ],
-  })
+// GET/POST /api/v1/publish-records/:id/seo-check — SEO 检查（规则引擎）
+async function seoCheckHandler(_req: Request, res: Response): Promise<void> {
+  try {
+    const id = str(_req.params.id)
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+    const issues: { field: string; message: string; severity: string }[] = []
+    let score = 100
+
+    if (!record.title || record.title.length === 0) {
+      issues.push({ field: 'title', message: '标题为空，必须填写', severity: 'error' })
+      score -= 30
+    } else if (record.title.length < 5) {
+      issues.push({ field: 'title', message: `标题过短(${record.title.length}字)，建议10-25字`, severity: 'warning' })
+      score -= 10
+    } else if (record.title.length > 30) {
+      issues.push({ field: 'title', message: `标题过长(${record.title.length}字)，建议10-25字`, severity: 'warning' })
+      score -= 5
+    }
+
+    if (!record.description || record.description.length === 0) {
+      issues.push({ field: 'description', message: '描述为空，建议填写50-200字描述', severity: 'warning' })
+      score -= 15
+    } else if (record.description.length < 50) {
+      issues.push({ field: 'description', message: `描述过短(${record.description.length}字)，建议50-200字`, severity: 'info' })
+      score -= 5
+    }
+
+    if (!record.tags || record.tags.length === 0) {
+      issues.push({ field: 'tags', message: '未设置标签，建议添加3-5个标签', severity: 'warning' })
+      score -= 15
+    } else if (record.tags.length < 3) {
+      issues.push({ field: 'tags', message: `标签数量偏少(${record.tags.length}个)，建议3-5个`, severity: 'info' })
+      score -= 5
+    }
+
+    if (!record.commentGuide || record.commentGuide.length === 0) {
+      issues.push({ field: 'comment_guide', message: '未设置评论区引导，有助于提升互动率', severity: 'info' })
+      score -= 5
+    }
+
+    if (!record.aigcConfirmed) {
+      issues.push({ field: 'aigc', message: 'AIGC 内容声明未确认，发布前请确认', severity: 'warning' })
+      score -= 10
+    }
+
+    score = Math.max(0, Math.min(100, score))
+    await prisma.publishRecord.update({ where: { id }, data: { seoScore: score } })
+    res.json({ score, issues })
+  } catch (error) {
+    console.error('[SEO check]', error)
+    res.status(500).json({ error: 'Failed to run SEO check' })
+  }
 }
 router.get('/publish-records/:id/seo-check', seoCheckHandler)
 router.post('/publish-records/:id/seo-check', seoCheckHandler)
@@ -117,7 +187,7 @@ router.post('/publish-records/:id/seo-check', seoCheckHandler)
 router.post('/publish-records/:id/auto-save', async (req: Request, res: Response) => {
   try {
     await prisma.publishRecord.update({
-      where: { id: req.params.id },
+      where: { id: str(req.params.id) },
       data: { title: req.body.title, description: req.body.description, tags: req.body.tags ?? [] },
     })
     res.json({ success: true })
@@ -135,13 +205,13 @@ router.post('/publish-records/:id/tags', async (req: Request, res: Response) => 
       res.status(400).json({ error: 'tag is required' })
       return
     }
-    const record = await prisma.publishRecord.findUnique({ where: { id: req.params.id } })
+    const record = await prisma.publishRecord.findUnique({ where: { id: str(req.params.id) } })
     if (!record) {
       res.status(404).json({ error: 'Record not found' })
       return
     }
     const updated = await prisma.publishRecord.update({
-      where: { id: req.params.id },
+      where: { id: str(req.params.id) },
       data: { tags: [...new Set([...record.tags, tag])] },
     })
     res.json(mapRecord(updated))
@@ -154,14 +224,14 @@ router.post('/publish-records/:id/tags', async (req: Request, res: Response) => 
 // DELETE /api/v1/publish-records/:recordId/tags/:tag — 删除标签
 router.delete('/publish-records/:recordId/tags/:tag', async (req: Request, res: Response) => {
   try {
-    const record = await prisma.publishRecord.findUnique({ where: { id: req.params.recordId } })
+    const record = await prisma.publishRecord.findUnique({ where: { id: str(req.params.recordId) } })
     if (!record) {
       res.status(404).json({ error: 'Record not found' })
       return
     }
     const updated = await prisma.publishRecord.update({
-      where: { id: req.params.recordId },
-      data: { tags: record.tags.filter(t => t !== req.params.tag) },
+      where: { id: str(req.params.recordId) },
+      data: { tags: record.tags.filter(t => t !== str(req.params.tag)) },
     })
     res.json(mapRecord(updated))
   } catch (error) {
@@ -170,21 +240,70 @@ router.delete('/publish-records/:recordId/tags/:tag', async (req: Request, res: 
   }
 })
 
-// POST /api/v1/publish-records/:id/generate-geo — 生成地理位置信息（桩）
-router.post('/publish-records/:id/generate-geo', async (_req: Request, res: Response) => {
-  markStub(res, 'Geo 生成未实现')
-  res.json({ message: 'Geo generation — stub' })
+// POST /api/v1/publish-records/:id/generate-geo — 生成地理位置信息
+router.post('/publish-records/:id/generate-geo', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+
+    const task = await runTask(
+      { type: 'geo_generate', input: { record_id: id }, refId: id, refType: 'publish_record' },
+      async () => {
+        const provider = getAIProvider()
+        const prompt = `从以下短视频内容中提取地理信息。
+标题：${record.title ?? '无'}
+描述：${record.description ?? '无'}
+标签：${(record.tags ?? []).join('、')}
+
+返回 JSON 对象：{ location_name, latitude, longitude, city, province, country }
+如果无法确定位置，所有字段返回 null。`
+
+        const result = await provider.generate(prompt)
+        let geoInfo: Record<string, unknown>
+        try {
+          geoInfo = JSON.parse(result) as Record<string, unknown>
+        } catch {
+          geoInfo = { location_name: null, latitude: null, longitude: null, city: null, province: null, country: null }
+        }
+
+        await prisma.publishRecord.update({
+          where: { id },
+          data: { geoInfo: geoInfo as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+        })
+
+        return geoInfo
+      },
+    )
+
+    res.json({ task_id: task.id, status: 'pending' })
+  } catch (error) {
+    console.error('[POST /publish-records/:id/generate-geo]', error)
+    res.status(500).json({ error: 'Failed to generate geo info' })
+  }
 })
 
-// POST /api/v1/publish-records/:id/publish — 发布（桩，仅更新数据库状态）
+// POST /api/v1/publish-records/:id/publish — 发布（更新数据库状态，平台对接待接入）
 router.post('/publish-records/:id/publish', async (req: Request, res: Response) => {
   try {
-    markStub(res, '发布仅更新数据库状态，未对接实际平台')
-    const record = await prisma.publishRecord.update({
-      where: { id: req.params.id },
+    const id = str(req.params.id)
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+    if (record.status === 'published') {
+      res.status(400).json({ error: 'Already published' })
+      return
+    }
+    const updated = await prisma.publishRecord.update({
+      where: { id },
       data: { status: 'published', publishedAt: new Date() },
     })
-    res.json(mapRecord(record))
+    res.json(mapRecord(updated))
   } catch (error) {
     console.error('[POST publish]', error)
     res.status(500).json({ error: 'Failed to publish' })
@@ -195,7 +314,7 @@ router.post('/publish-records/:id/publish', async (req: Request, res: Response) 
 router.post('/publish-records/:id/aigc-confirm', async (req: Request, res: Response) => {
   try {
     const record = await prisma.publishRecord.update({
-      where: { id: req.params.id },
+      where: { id: str(req.params.id) },
       data: { aigcConfirmed: true },
     })
     res.json(mapRecord(record))
@@ -210,7 +329,7 @@ router.put('/publish-records/:id/conversion-type', async (req: Request, res: Res
   try {
     const { conversion_type } = req.body
     const record = await prisma.publishRecord.update({
-      where: { id: req.params.id },
+      where: { id: str(req.params.id) },
       data: { conversionType: conversion_type },
     })
     res.json(mapRecord(record))

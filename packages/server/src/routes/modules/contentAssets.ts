@@ -1,10 +1,9 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
 
-const router = Router()
+const router: Router = Router()
 
 const VALID_TYPES = ['script', 'video', 'image_text']
 
@@ -42,15 +41,17 @@ function mapAsset(a: {
 // GET /api/v1/content-assets — 列表
 router.get('/content-assets', async (req: Request, res: Response) => {
   try {
-    const { type, status, keyword, page = '1', page_size = '20' } = req.query
-    const p = Number(page)
-    const ps = Math.min(Number(page_size), 100)
+    const type = str(req.query.type)
+    const status = str(req.query.status)
+    const keyword = str(req.query.keyword)
+    const p = toInt(req.query.page, 1)
+    const ps = Math.min(toInt(req.query.page_size, 20), 100)
     const skip = (p - 1) * ps
 
     const where: Record<string, unknown>[] = [{ userId: DEMO_USER_ID }]
-    if (type && type !== 'all') where.push({ type: String(type) })
-    if (status && status !== 'all') where.push({ status: String(status) })
-    if (keyword) where.push({ title: { contains: String(keyword), mode: 'insensitive' } })
+    if (type && type !== 'all') where.push({ type })
+    if (status && status !== 'all') where.push({ status })
+    if (keyword) where.push({ title: { contains: keyword, mode: 'insensitive' } })
 
     const [items, total] = await Promise.all([
       prisma.contentAsset.findMany({
@@ -73,7 +74,7 @@ router.get('/content-assets', async (req: Request, res: Response) => {
 router.get('/content-assets/:id', async (req: Request, res: Response) => {
   try {
     const asset = await prisma.contentAsset.findFirst({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
     })
     if (!asset) {
       res.status(404).json({ error: 'Content asset not found' })
@@ -89,21 +90,21 @@ router.get('/content-assets/:id', async (req: Request, res: Response) => {
 // GET /api/v1/content-assets/:id/materials — 关联素材
 router.get('/content-assets/:id/materials', async (req: Request, res: Response) => {
   try {
+    const id = str(req.params.id)
     const asset = await prisma.contentAsset.findFirst({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
-      include: { videoProduct: { include: { videoMaterials: { include: { material: true } } } } },
+      where: { id, userId: DEMO_USER_ID },
     })
-    const vp = asset?.videoProduct
-    if (!vp || !('videoMaterials' in vp)) {
+    if (!asset?.videoProductId) {
       res.json({ items: [] })
       return
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vMaterials = (vp as any).videoMaterials ?? []
-    const materials = vMaterials.map((vm: any) => vm.material)
+    const vMaterials = await prisma.videoMaterial.findMany({
+      where: { videoProductId: asset.videoProductId },
+      include: { material: true },
+    })
     res.json({
-      items: materials.map((m: any) => ({
-        id: m.id, name: m.name, type: m.type, thumbnail_url: m.thumbnailUrl,
+      items: vMaterials.map(vm => ({
+        id: vm.material.id, name: vm.material.name, type: vm.material.type, thumbnail_url: vm.material.thumbnailUrl,
       })),
     })
   } catch (error) {
@@ -112,13 +113,39 @@ router.get('/content-assets/:id/materials', async (req: Request, res: Response) 
   }
 })
 
-// GET /api/v1/content-assets/:id/trends — 趋势数据（桩）
-router.get('/content-assets/:id/trends', async (_req: Request, res: Response) => {
-  res.json({
-    points: [],
-    total_play_count: 0,
-    avg_interaction_rate: 0,
-  })
+// GET /api/v1/content-assets/:id/trends — 趋势数据
+router.get('/content-assets/:id/trends', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const asset = await prisma.contentAsset.findFirst({ where: { id, userId: DEMO_USER_ID } })
+    if (!asset?.videoProductId) {
+      res.json({ points: [], total_play_count: 0, avg_interaction_rate: 0 })
+      return
+    }
+    const days = Math.min(toInt(req.query.days, 30), 90)
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+    const metrics = await prisma.videoMetric.findMany({
+      where: { userId: DEMO_USER_ID, videoId: asset.videoProductId, date: { gte: since } },
+      orderBy: { date: 'asc' },
+    })
+    const points = metrics.map(m => ({
+      date: m.date.toISOString().slice(0, 10),
+      play_count: m.playCount,
+      like_count: m.likeCount,
+      comment_count: m.commentCount,
+      collect_count: m.collectCount,
+      interaction_rate: m.interactionRate ? Number(m.interactionRate) : 0,
+    }))
+    const totalPlayCount = metrics.reduce((sum, m) => sum + m.playCount, 0)
+    const avgRate = metrics.length > 0
+      ? metrics.reduce((sum, m) => sum + (m.interactionRate ? Number(m.interactionRate) : 0), 0) / metrics.length
+      : 0
+    res.json({ points, total_play_count: totalPlayCount, avg_interaction_rate: Number(avgRate.toFixed(4)) })
+  } catch (error) {
+    console.error('[GET /content-assets/:id/trends]', error)
+    res.status(500).json({ error: 'Failed to load trends' })
+  }
 })
 
 // POST /api/v1/content-assets/:id/highlights — 创建亮点
@@ -130,7 +157,7 @@ router.post('/content-assets/:id/highlights', async (req: Request, res: Response
       return
     }
     const asset = await prisma.contentAsset.update({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
       data: { elementHighlights: highlights },
     })
     res.json(mapAsset(asset))
@@ -155,18 +182,48 @@ router.post('/content-assets/:id/reuse-materials', async (req: Request, res: Res
   }
 })
 
-// POST /api/v1/content-assets/:id/reuse-script — 复用脚本结构（桩）
+// POST /api/v1/content-assets/:id/reuse-script — 复用脚本结构
 router.post('/content-assets/:id/reuse-script', async (req: Request, res: Response) => {
   try {
-    const asset = await prisma.contentAsset.findFirst({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
-    })
-    if (!asset) {
-      res.status(404).json({ error: 'Asset not found' })
+    const { target_task_id, target_topic_id } = req.body
+    if (!target_task_id || !target_topic_id) {
+      res.status(400).json({ error: 'target_task_id and target_topic_id are required' })
       return
     }
-    // TODO: 实际复用脚本结构逻辑
-    res.json({ success: true, source_asset_id: asset.id })
+    const asset = await prisma.contentAsset.findFirst({
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
+      include: { videoProduct: { include: { script: { include: { storyboardSegments: { orderBy: { segmentIndex: 'asc' } } } } } } },
+    })
+    if (!asset?.videoProduct?.script) {
+      res.status(404).json({ error: 'Source script not found' })
+      return
+    }
+    const source = asset.videoProduct.script
+    const newScript = await prisma.script.create({
+      data: {
+        taskId: target_task_id,
+        topicId: target_topic_id,
+        fullText: source.fullText,
+        videoType: source.videoType,
+        oralRatio: Number(source.oralRatio),
+        status: 'draft',
+      },
+    })
+    if (source.storyboardSegments.length > 0) {
+      await prisma.storyboardSegment.createMany({
+        data: source.storyboardSegments.map(seg => ({
+          scriptId: newScript.id,
+          segmentIndex: seg.segmentIndex,
+          segmentType: seg.segmentType,
+          oralText: seg.oralText,
+          visualDescription: seg.visualDescription,
+          duration: seg.duration,
+          materialIds: seg.materialIds,
+          transitionType: seg.transitionType,
+        })),
+      })
+    }
+    res.json({ success: true, new_script_id: newScript.id, source_asset_id: asset.id })
   } catch (error) {
     console.error('[POST /content-assets/:id/reuse-script]', error)
     res.status(500).json({ error: 'Failed to reuse script' })
@@ -177,7 +234,7 @@ router.post('/content-assets/:id/reuse-script', async (req: Request, res: Respon
 router.delete('/content-assets/:id', async (req: Request, res: Response) => {
   try {
     const asset = await prisma.contentAsset.findFirst({
-      where: { id: req.params.id, userId: DEMO_USER_ID },
+      where: { id: str(req.params.id), userId: DEMO_USER_ID },
     })
     if (!asset) {
       res.status(404).json({ error: 'Asset not found' })
@@ -187,7 +244,7 @@ router.delete('/content-assets/:id', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Only draft assets can be deleted' })
       return
     }
-    await prisma.contentAsset.delete({ where: { id: req.params.id } })
+    await prisma.contentAsset.delete({ where: { id: str(req.params.id) } })
     res.json({ success: true })
   } catch (error) {
     console.error('[DELETE /content-assets/:id]', error)
@@ -195,10 +252,55 @@ router.delete('/content-assets/:id', async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/v1/content-assets/:id/export — 导出（桩）
-router.get('/content-assets/:id/export', async (_req: Request, res: Response) => {
-  markStub(res, '导出功能未实现')
-  res.json({ url: '', message: 'Export — stub' })
+// GET /api/v1/content-assets/:id/export — 导出 JSON
+router.get('/content-assets/:id/export', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const asset = await prisma.contentAsset.findFirst({
+      where: { id, userId: DEMO_USER_ID },
+      include: { videoProduct: { include: { script: true } } },
+    })
+    if (!asset) {
+      res.status(404).json({ error: 'Asset not found' })
+      return
+    }
+    const exportData = {
+      title: asset.title,
+      type: asset.type,
+      status: asset.status,
+      platforms: asset.platforms,
+      core_metrics: asset.coreMetrics,
+      element_highlights: asset.elementHighlights,
+      custom_tags: asset.customTags,
+      performance_tags: asset.performanceTags,
+      script: asset.videoProduct?.script ? {
+        full_text: asset.videoProduct.script.fullText,
+        video_type: asset.videoProduct.script.videoType,
+        oral_ratio: Number(asset.videoProduct.script.oralRatio),
+      } : null,
+      exported_at: new Date().toISOString(),
+    }
+    const fmt = str(req.query.format, 'json')
+    if (fmt === 'csv') {
+      const header = '标题,类型,状态,平台,自定义标签,导出时间\n'
+      const row = [
+        `"${asset.title}"`, asset.type, asset.status,
+        asset.platforms.join(';'),
+        asset.customTags.join(';'),
+        new Date().toISOString().slice(0, 10),
+      ].join(',')
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=asset-${Date.now()}.csv`)
+      res.send('﻿' + header + row)
+    } else {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=asset-${Date.now()}.json`)
+      res.json(exportData)
+    }
+  } catch (error) {
+    console.error('[GET /content-assets/:id/export]', error)
+    res.status(500).json({ error: 'Failed to export' })
+  }
 })
 
 // POST /api/v1/content-assets/auto-create — 自动创建（桩）

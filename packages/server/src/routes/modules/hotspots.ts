@@ -2,9 +2,9 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { toInt } from '../../constants.js'
-import { markStub } from '../../middleware/stubMarker.js'
+import { runTask } from '../../services/ai/taskManager.js'
 
-const router = Router()
+const router: Router = Router()
 
 const PLATFORM_LABELS: Record<string, string> = { xiaohongshu: '小红书', douyin: '抖音', weixin: '视频号', weibo: '微博' }
 
@@ -87,17 +87,21 @@ router.get('/hotspots', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/hotspots/refresh — 刷新热点（桩）
+// POST /api/v1/hotspots/refresh — 刷新热点
 router.post('/hotspots/refresh', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入热点爬取服务，支持按平台刷新
-    const { source_platform } = req.query
-    if (source_platform) {
-      markStub(res, `热点刷新未接入爬取服务 (platform=${source_platform})`)
-    } else {
-      markStub(res, '热点刷新未接入爬取服务')
-    }
-    res.json({ success: true, message: 'Refresh queued (stub)' })
+    const sourcePlatform = req.query.source_platform as string | undefined
+
+    const task = await runTask(
+      { type: 'hotspot_refresh', input: { platform: sourcePlatform } },
+      async () => {
+        const { refreshHotspots } = await import('../../services/hotspot/index.js')
+        const result = await refreshHotspots(sourcePlatform)
+        return result
+      },
+    )
+
+    res.json({ success: true, task_id: task.id, message: '热点刷新已启动' })
   } catch (error) {
     console.error('[POST /hotspots/refresh]', error)
     res.status(500).json({ error: 'Failed to refresh hotspots' })

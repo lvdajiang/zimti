@@ -5,7 +5,7 @@
  * 前端/后端代码直接 import 使用，不允许在业务代码中硬编码。
  *
  * 生成日期: 2026-05-10
- * 覆盖: 14个页面 / 33个枚举 / 26张表 / 126个API端点
+ * 覆盖: 15个页面 / 37个枚举 / 28张表 / 134个API端点
  */
 
 // ============================================================
@@ -186,6 +186,34 @@ export type VideoSortField = 'published_at' | 'play_count' | 'like_count' | 'int
 
 // --- 1.33 素材排序字段 ---
 export type MaterialSortField = 'created_at' | 'use_count' | 'name' | 'file_size'
+
+// --- 1.34 AI工作室项目状态 ---
+export type AiStudioProjectStatus = 'draft' | 'active' | 'archived'
+export const AI_STUDIO_PROJECT_STATUS_LABELS: Record<AiStudioProjectStatus, string> = {
+  draft: '草稿', active: '进行中', archived: '已归档',
+}
+
+// --- 1.35 AI工作室素材类型 ---
+export type AiStudioAssetType = 'image' | 'video'
+
+// --- 1.36 AI工作室素材状态 ---
+export type AiStudioAssetStatus = 'pending' | 'generating' | 'completed' | 'failed' | 'expired'
+export const AI_STUDIO_ASSET_STATUS_LABELS: Record<AiStudioAssetStatus, string> = {
+  pending: '等待中', generating: '生成中', completed: '已完成', failed: '失败', expired: '已过期',
+}
+
+// --- 1.37 即梦任务类型 ---
+export type JimengTaskType = 'jimeng_t2i' | 'jimeng_i2v' | 'jimeng_t2v' | 'jimeng_edit' | 'jimeng_digital_human'
+export const JIMENG_TASK_TYPE_LABELS: Record<JimengTaskType, string> = {
+  jimeng_t2i: '文生图', jimeng_i2v: '图生视频', jimeng_t2v: '文生视频',
+  jimeng_edit: '图片编辑', jimeng_digital_human: '数字人',
+}
+
+// --- 1.38 渲染任务状态 ---
+export type RenderStatus = 'idle' | 'rendering' | 'completed' | 'failed' | 'cancelled'
+export const RENDER_STATUS_LABELS: Record<RenderStatus, string> = {
+  idle: '空闲', rendering: '渲染中', completed: '已完成', failed: '失败', cancelled: '已取消',
+}
 
 
 // ============================================================
@@ -416,6 +444,7 @@ export interface PublishRecord {
   publish_url: string | null        // VARCHAR(500)
   status: PublishStatus             // VARCHAR(20) DEFAULT 'unpublished'
   aigc_confirmed: boolean           // BOOLEAN DEFAULT false
+  geo_info: Record<string, unknown> | null // JSONB 地理位置
   published_at: string | null       // TIMESTAMPTZ
   created_at: string
   updated_at: string
@@ -562,6 +591,50 @@ export interface RenderTaskRecord {
   created_at: string
 }
 
+// --- 3.27 ai_studio_projects ---
+export interface AiStudioProjectRecord {
+  id: string                        // UUID PK
+  user_id: string                   // UUID FK→users NOT NULL
+  title: string                     // VARCHAR(200) NOT NULL
+  description: string | null        // TEXT
+  status: AiStudioProjectStatus     // VARCHAR(20) NOT NULL DEFAULT 'draft'
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.28 ai_studio_assets ---
+export interface AiStudioAssetRecord {
+  id: string                        // UUID PK
+  project_id: string                // UUID FK→ai_studio_projects NOT NULL
+  type: AiStudioAssetType           // VARCHAR(20) NOT NULL
+  task_type: JimengTaskType         // VARCHAR(50) NOT NULL
+  status: AiStudioAssetStatus       // VARCHAR(20) NOT NULL DEFAULT 'pending'
+  input_params: Record<string, unknown> // JSONB NOT NULL
+  file_url: string | null           // VARCHAR(500)
+  thumbnail_url: string | null      // VARCHAR(500)
+  width: number | null              // INTEGER
+  height: number | null             // INTEGER
+  duration: number | null           // INTEGER 秒
+  file_size: number | null          // BIGINT
+  error: string | null              // TEXT
+  jimeng_task_id: string | null     // VARCHAR(100)
+  created_at: string
+  updated_at: string
+}
+
+// --- 2.X 渲染配置（VideoProduct.render_config） ---
+export interface RenderConfig {
+  subtitle_style?: {
+    font_size?: number      // 默认 48
+    color?: string          // 默认 '#FFFFFF'
+    position?: 'top' | 'center' | 'bottom'
+    bg_color?: string       // 默认 '#000000'
+    bg_opacity?: number     // 0-1，默认 0.6
+  }
+  bgm_volume?: number       // 0-1，默认 0.3
+  voice_volume?: number     // 0-1，默认 1.0
+}
+
 
 // ============================================================
 // §4 API 端点常量
@@ -642,6 +715,7 @@ export const API = {
     LIST: '/api/v1/hotspots',
     REFRESH: '/api/v1/hotspots/refresh',
     CREATE: '/api/v1/hotspots',
+    UPDATE: (id: number) => `/api/v1/hotspots/${id}`,
     EXPIRE: (id: number) => `/api/v1/hotspots/${id}/expire`,
     RECOMMENDED: '/api/v1/hotspots/recommended',
   },
@@ -770,6 +844,18 @@ export const API = {
   REPORTS: {
     WEEKLY: '/api/v1/reports/weekly',
   },
+
+  // --- AI工作室 ---
+  AI_STUDIO: {
+    PROJECTS: '/api/v1/ai-studio/projects',
+    PROJECT: (id: string) => `/api/v1/ai-studio/projects/${id}`,
+    PROJECT_ASSETS: (projectId: string) => `/api/v1/ai-studio/projects/${projectId}/assets`,
+    ASSET: (id: string) => `/api/v1/ai-studio/assets/${id}`,
+    GENERATE: '/api/v1/ai-studio/generate',
+    TASK_STATUS: (id: string) => `/api/v1/ai-studio/tasks/${id}/status`,
+    PUSH_TO_MATERIALS: (id: string) => `/api/v1/ai-studio/assets/${id}/push-to-materials`,
+    PUSH_TO_SEGMENT: (id: string) => `/api/v1/ai-studio/assets/${id}/push-to-segment`,
+  },
 } as const
 
 
@@ -792,6 +878,8 @@ export const ROUTES = {
   PUBLISH: '/publish/:videoProductId',
   MONITORING: '/monitoring',
   CONTENT_ASSETS: '/content-assets',
+  AI_STUDIO: '/ai-studio',
+  AI_STUDIO_PROJECT: '/ai-studio/:projectId',
 } as const
 
 

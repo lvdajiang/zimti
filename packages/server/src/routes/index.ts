@@ -17,8 +17,9 @@ import publishRecords from './modules/publishRecords.js'
 import contentAssets from './modules/contentAssets.js'
 import experienceLogs from './modules/experienceLogs.js'
 import reports from './modules/reports.js'
+import aiStudio from './modules/aiStudio.js'
 
-export const router = Router()
+export const router: Router = Router()
 
 router.use(users)
 router.use(notifications)
@@ -38,3 +39,4 @@ router.use(publishRecords)
 router.use(contentAssets)
 router.use(experienceLogs)
 router.use(reports)
+router.use('/ai-studio', aiStudio)
