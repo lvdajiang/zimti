@@ -279,7 +279,16 @@ async function saveEdit(): Promise<void> {
   } catch (e) { console.error(e); toast.error('保存失败') }
 }
 
-function goToScript(p: Proposal): void { router.push(`/scripts/${p.id}`) }
+async function goToScript(p: Proposal): Promise<void> {
+  try {
+    const { createScript } = await import('@/api/script')
+    const res = await createScript({ task_id: p.task_id, topic_id: p.id, full_text: '' })
+    router.push(`/scripts/${res.id}`)
+  } catch (e) {
+    console.error(e)
+    toast.error('创建脚本失败')
+  }
+}
 
 onMounted(loadProposals)
 onUnmounted(() => { if (searchTimer) clearTimeout(searchTimer) })
