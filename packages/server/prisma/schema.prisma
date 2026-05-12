@@ -600,3 +600,20 @@ model AiStudioAsset {
   @@index([taskType])
   @@map("ai_studio_assets")
 }
+
+// --- 知识库 ---
+model KnowledgeItem {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String   @db.VarChar(200)
+  content   String   @db.Text
+  source    String   @db.VarChar(50)
+  category  String   @db.VarChar(50)
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+  @@map("knowledge_items")
+}

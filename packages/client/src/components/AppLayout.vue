@@ -49,6 +49,7 @@ const navItems = [
   { label: '素材库', route: '/materials' },
   { label: 'AI工作室', route: '/ai-studio' },
   { label: 'AI工具箱', route: '/ai-toolbox' },
+  { label: '知识库', route: '/knowledge' },
   { label: '数据监控', route: '/monitoring' },
   { label: '内容资产', route: '/content-assets' },
 ]

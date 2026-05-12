@@ -18,6 +18,7 @@ import contentAssets from './modules/contentAssets.js'
 import experienceLogs from './modules/experienceLogs.js'
 import reports from './modules/reports.js'
 import aiStudio from './modules/aiStudio.js'
+import knowledge from './modules/knowledge.js'
 
 export const router: Router = Router()
 
@@ -40,3 +41,4 @@ router.use(contentAssets)
 router.use(experienceLogs)
 router.use(reports)
 router.use('/ai-studio', aiStudio)
+router.use(knowledge)
