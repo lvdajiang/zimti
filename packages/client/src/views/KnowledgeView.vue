@@ -1,7 +1,12 @@
 <template>
   <div class="knowledge">
     <div class="toolbar">
-      <h2 class="page-title">知识库</h2>
+      <h2 class="page-title">知识库 <HelpTip title="知识库使用指引" :steps="[
+        '收藏有价值的创作经验、行业知识、竞品分析等内容',
+        '支持按分类和标签组织内容，方便查找',
+        'AI 生成脚本时会参考知识库中的相关内容',
+        '搜索框支持标题和正文内容检索',
+      ]" /></h2>
       <button class="btn-primary" @click="openModal()">+ 收藏内容</button>
     </div>
 
@@ -101,6 +106,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import { formatDate } from '@/utils/format'
 import { toast } from '@/utils/toast'
 import { fetchKnowledge, createKnowledge, updateKnowledge, deleteKnowledge, type KnowledgeItem } from '@/api/knowledge'

@@ -2,6 +2,12 @@
   <div class="viral-page">
     <div class="title-bar">
       <h2>爆款视频库</h2>
+      <HelpTip title="爆款视频库使用指引" :steps="[
+        '视频来源：数据采集任务自动抓取或手动添加',
+        '勾选视频后点击「批量分析」提取文案和分析爆款因素',
+        '点击视频卡片查看详情：文案提取、AI 分析、数据表现',
+        '分析结果可用于选题灵感，也可转为选题进入创作流程',
+      ]" />
       <div class="title-actions">
         <button class="btn btn-sm" @click="analyzeSelected" :disabled="selected.length === 0">
           批量分析 ({{ selected.length }})
@@ -91,6 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatNumber, formatDate } from '@/utils/format'

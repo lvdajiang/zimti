@@ -2,6 +2,12 @@
   <div class="collect-page">
     <div class="title-bar">
       <h2>数据采集任务</h2>
+      <HelpTip title="数据采集使用指引" :steps="[
+        '新建任务选择采集平台和关键词，系统会自动抓取相关内容',
+        '任务状态：等待 → 采集中 → 完成/失败',
+        '采集结果自动进入爆款视频库，用于后续选题分析',
+        '支持定时采集，设置后每天自动执行',
+      ]" />
       <button class="btn btn-primary" @click="openCreate">+ 新建任务</button>
     </div>
 
@@ -149,6 +155,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatDate, platformLabel } from '@/utils/format'

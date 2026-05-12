@@ -3,6 +3,12 @@
     <!-- 页面标题 + 时间筛选 -->
     <div class="title-bar">
       <h2>数据监控</h2>
+      <HelpTip title="数据监控使用指引" :steps="[
+        '选择时间范围查看对应周期内的数据表现',
+        '视频指标表格展示每个视频的播放量、互动率、完播率等核心数据',
+        '关键词监控可追踪特定话题的热度变化趋势',
+        '周报自动汇总本周内容表现和改进建议',
+      ]" />
       <div class="time-tabs">
         <button
           v-for="tab in timeTabs"
@@ -173,6 +179,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatNumber, formatDate, platformLabel } from '@/utils/format'

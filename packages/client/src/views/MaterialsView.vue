@@ -3,6 +3,12 @@
     <div class="title-bar">
       <div class="title-left">
         <h2>素材库</h2>
+        <HelpTip title="素材库使用指引" :steps="[
+          '「上传素材」支持图片、视频、音乐、音效等格式',
+          '「AI 生成」根据文字描述自动生成图片素材',
+          '「外部导入」从 Pexels 图库搜索并导入免费素材',
+          '素材会关联到脚本分段，用于最终视频合成',
+        ]" />
         <span v-if="stats" class="stats-text">
           共 {{ stats.total }} 条素材 ·
           图片 {{ stats.image }} / 视频 {{ stats.video }} / 音乐 {{ stats.music }} / 音效 {{ stats.sfx }} / 地图动画 {{ stats.map_animation }}
@@ -245,6 +251,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 

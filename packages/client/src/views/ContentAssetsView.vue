@@ -2,6 +2,12 @@
   <div class="assets-page">
     <div class="title-bar">
       <h2>内容资产库</h2>
+      <HelpTip title="内容资产库使用指引" :steps="[
+        '资产库汇聚所有已创作的视频、脚本、图文内容',
+        '支持按状态（草稿/已发布/已归档）、类型、平台、时间筛选',
+        '点击资产卡片查看详情，包括数据指标和表现标签',
+        '「复用素材」可将已验证的素材快速应用到新项目',
+      ]" />
       <button class="btn btn-primary" @click="showCreate = true">+ 新建资产</button>
     </div>
 
@@ -161,6 +167,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatNumber, formatDate } from '@/utils/format'

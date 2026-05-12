@@ -2,6 +2,12 @@
   <div class="benchmark-page">
     <div class="title-bar">
       <h2>对标账号管理</h2>
+      <HelpTip title="对标账号使用指引" :steps="[
+        '添加竞品或行业标杆账号，填写平台和主页链接',
+        '开启「监控」后系统会定期采集该账号的最新内容',
+        '采集的内容自动进入爆款视频库，用于分析和学习',
+        '支持按平台筛选和查看采集统计数据',
+      ]" />
       <button class="btn btn-primary" @click="showForm = true; editingAccount = null">
         + 添加账号
       </button>
@@ -137,6 +143,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatNumber, platformLabel } from '@/utils/format'

@@ -2,6 +2,12 @@
   <div class="persona-page">
     <div class="title-bar">
       <h2>人设配置</h2>
+      <HelpTip title="人设配置使用指引" :steps="[
+        '填写基本身份信息（名称、简介、标签），这是 AI 生成内容的风格基础',
+        '「风格标签」决定内容语气，「口头禅」会让 AI 生成的脚本更有个人特色',
+        '上传参考样本（文章/视频文案），AI 会学习你的表达习惯',
+        '保存后点击「预览效果」查看 AI 根据当前人设生成的示例文案',
+      ]" />
       <div class="title-actions">
         <button class="btn btn-preview" :disabled="previewGenerating" @click="handlePreview">
           {{ previewGenerating ? '生成中...' : '预览效果' }}
@@ -198,6 +204,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import { usePersonaStore } from '@/stores/persona'
 import type { CatchphraseItem, SampleFile } from '@/api/persona'
 import { previewPersonaEffect, uploadSampleFile, deleteSampleFile } from '@/api/persona'

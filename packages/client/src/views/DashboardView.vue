@@ -1,6 +1,11 @@
 <template>
   <div class="dashboard-page">
-    <h2>数据看板</h2>
+    <h2>数据看板 <HelpTip title="数据看板使用指引" :steps="[
+    '概览卡片展示近7天发布量、选题数、素材数等关键指标',
+    '工作流区域显示当前进行中的任务进度',
+    '视频记录表展示最近创作的内容和状态',
+    '趋势图表帮助分析内容表现的变化趋势',
+  ]" /></h2>
 
     <!-- 概览卡片 -->
     <div class="overview-cards" v-if="overview">
@@ -147,6 +152,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatDate, platformLabel } from '@/utils/format'

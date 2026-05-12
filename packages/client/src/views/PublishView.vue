@@ -2,6 +2,12 @@
   <div class="publish-page">
     <div class="title-bar">
       <h2>发布工作台</h2>
+      <HelpTip title="发布工作台使用指引" :steps="[
+        '从视频产品进入发布工作区，每个平台生成一条发布记录',
+        '点击「生成文案」AI 会根据视频内容自动撰写平台适配文案',
+        '文案编辑区支持 SEO 检查、AIGC 声明确认',
+        '内容自动保存，确认无误后点击「发布」推送到对应平台',
+      ]" />
       <span v-if="autoSaveHint" class="auto-save-hint">{{ autoSaveHint }}</span>
     </div>
     <div class="filter-bar">
@@ -69,6 +75,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatDate, platformLabel } from '@/utils/format'

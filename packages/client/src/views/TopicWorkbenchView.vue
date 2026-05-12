@@ -2,6 +2,12 @@
   <div class="topic-page">
     <div class="title-bar">
       <h2>选题工作台</h2>
+      <HelpTip title="选题工作台使用指引" :steps="[
+        '点击「+ 新建选题」手动创建，或通过热点追踪页推荐自动生成',
+        '每个选题可关联热点和爆款视频，用于后续分析',
+        '点击选题卡片上的「编辑脚本」进入脚本编辑器，开始写视频脚本',
+        '脚本确认后会自动生成视频产品，可在视频预览页查看',
+      ]" />
       <button class="btn btn-primary" @click="showCreate = true">+ 新建选题</button>
     </div>
 
@@ -109,6 +115,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'

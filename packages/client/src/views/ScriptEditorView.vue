@@ -5,6 +5,13 @@
         <button class="btn btn-sm" @click="$router.push('/')">&larr; 返回</button>
         <span class="script-title">{{ store.fullText?.slice(0, 30) ?? '新脚本' }}...</span>
         <span class="script-status" :class="store.status">{{ store.status === 'confirmed' ? '已确认' : '草稿' }}</span>
+        <HelpTip title="脚本编辑器使用指引" :steps="[
+          '顶部选择视频类型和口语比例，系统自动估算时长',
+          '分段区域可拖拽排序，每段可设置类型（口语/画面/转场）和时长',
+          '「AI 检查」自动分析脚本质量并给出优化建议',
+          '「生成分镜」根据脚本内容自动生成视觉描述',
+          '脚本确认后可在视频预览页生成和渲染视频',
+        ]" />
       </div>
       <div class="toolbar-center">
         <div class="toolbar-field">
@@ -116,6 +123,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useScriptStore } from '@/stores/script'
 import { runAiCheck as apiAiCheck, generateStoryboard as apiGenStoryboard } from '@/api/script'

@@ -1,6 +1,14 @@
 <template>
   <div class="workspace">
     <div class="workspace-sidebar">
+      <div class="sidebar-section sidebar-help">
+        <HelpTip title="AI 工作室使用指引" :steps="[
+          '左侧选择生成类型：文生图、图生视频、文生视频等',
+          '填写描述后点击生成，AI 会异步处理并在任务队列显示进度',
+          '生成完成后素材自动添加到项目素材区',
+          '可对素材执行「推送到素材库」或「应用到脚本分段」',
+        ]" />
+      </div>
       <div class="sidebar-section">
         <h4>项目素材</h4>
         <div class="sidebar-stats">
@@ -53,6 +61,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAiStudioStore } from '@/stores/aiStudio'
 import { toast } from '@/utils/toast'

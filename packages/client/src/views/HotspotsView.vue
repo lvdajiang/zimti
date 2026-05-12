@@ -2,6 +2,12 @@
   <div class="hotspots-page">
     <div class="title-bar">
       <h2>热点追踪</h2>
+      <HelpTip title="热点追踪使用指引" :steps="[
+        '点击「刷新热点」从各平台抓取最新热门话题',
+        '每个热点显示热度趋势和关联平台，可按平台筛选',
+        '点击「转为选题」将热点导入选题工作台开始创作',
+        '「手动添加」可录入自己发现的热点话题',
+      ]" />
       <div class="title-actions">
         <button class="btn btn-sm" @click="refreshHotspots" :disabled="refreshing">{{ refreshing ? '刷新中...' : '刷新热点' }}</button>
         <button class="btn btn-primary" @click="showCreate = true">+ 手动添加</button>
@@ -152,6 +158,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import HelpTip from '@/components/HelpTip.vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatDate } from '@/utils/format'
