@@ -874,7 +874,7 @@ export const ROUTES = {
   PERSONA: '/persona',
   SCRIPT_EDITOR: '/scripts/:id',
   MATERIALS: '/materials',
-  VIDEO_PREVIEW: '/video-preview/:scriptId',
+  VIDEO_PREVIEW: '/video-preview/:scriptId?',
   PUBLISH: '/publish/:videoProductId',
   MONITORING: '/monitoring',
   CONTENT_ASSETS: '/content-assets',

@@ -69,7 +69,7 @@ const router = createRouter({
       meta: { title: '素材库' },
     },
     {
-      path: ROUTES.VIDEO_PREVIEW,
+      path: '/video-preview/:scriptId?',
       name: 'VideoPreview',
       component: () => import('@/views/VideoPreviewView.vue'),
       meta: { title: '视频预览与渲染' },
