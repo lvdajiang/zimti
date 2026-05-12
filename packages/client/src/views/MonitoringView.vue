@@ -75,7 +75,7 @@
                 <td>{{ formatNumber(r.latest_metrics?.play_count ?? 0) }}</td>
                 <td>{{ r.latest_metrics ? r.latest_metrics.completion_rate + '%' : '--' }}</td>
                 <td>{{ r.latest_metrics?.comment_count ?? 0 }}</td>
-                <td>{{ formatDate(r.published_at) }}</td>
+                <td>{{ formatDate(r.published_at, true) }}</td>
               </tr>
             </tbody>
           </table>
@@ -175,6 +175,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatNumber, formatDate, platformLabel } from '@/utils/format'
 
 // ─── 类型定义 ───
 
@@ -383,34 +384,6 @@ async function deleteMonitor(id: number): Promise<void> {
     console.error(e)
     toast.error('删除监控失败')
   }
-}
-
-// ─── 工具函数 ───
-
-function formatNumber(value: number): string {
-  if (value >= 10000) {
-    return (value / 10000).toFixed(1) + '万'
-  }
-  return value.toLocaleString()
-}
-
-function platformLabel(platform: string): string {
-  const map: Record<string, string> = {
-    xiaohongshu: '小红书',
-    douyin: '抖音',
-    weixin: '微信',
-  }
-  return map[platform] || platform
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '--'
-  const d = new Date(dateStr)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mi = String(d.getMinutes()).padStart(2, '0')
-  return `${mm}-${dd} ${hh}:${mi}`
 }
 
 // ─── 初始化 ───

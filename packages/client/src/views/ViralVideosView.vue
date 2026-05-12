@@ -93,6 +93,7 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatNumber, formatDate } from '@/utils/format'
 
 interface ViralVideo {
   id: number; account_id: string; platform: string; platform_label: string
@@ -132,15 +133,6 @@ function toggleSelect(id: number): void {
 function toggleAll(): void {
   if (allSelected.value) selected.value = []
   else selected.value = videos.value.map(v => v.id)
-}
-
-function formatNumber(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
-  return String(n)
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 function debouncedLoad(): void {

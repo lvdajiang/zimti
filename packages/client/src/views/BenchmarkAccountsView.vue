@@ -139,6 +139,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatNumber, platformLabel } from '@/utils/format'
 
 interface BenchmarkAccount {
   id: string
@@ -176,21 +177,6 @@ const platformTabs = [
   { value: 'douyin', label: '抖音' },
   { value: 'weixin', label: '视频号' },
 ]
-
-const platformLabels: Record<string, string> = {
-  xiaohongshu: '小红书',
-  douyin: '抖音',
-  weixin: '视频号',
-}
-
-function platformLabel(p: string): string {
-  return platformLabels[p] ?? p
-}
-
-function formatNumber(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
-  return String(n)
-}
 
 async function loadData(): Promise<void> {
   loading.value = true

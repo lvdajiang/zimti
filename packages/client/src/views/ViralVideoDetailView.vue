@@ -75,7 +75,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api/client'
-import { toast } from '../utils/toast.js'
+import { toast } from '@/utils/toast'
+import { formatNumber, formatDate } from '@/utils/format'
 
 const route = useRoute()
 const videoId = computed(() => route.params.id as string)
@@ -145,15 +146,6 @@ async function reExtractTranscript(): Promise<void> {
 
 function markAsBenchmark(): void {
   toast.info('已标记为对标视频')
-}
-
-function formatNumber(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
-  return String(n)
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 watch(videoId, loadVideo)

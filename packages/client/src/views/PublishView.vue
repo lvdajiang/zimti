@@ -71,6 +71,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatDate, platformLabel } from '@/utils/format'
 
 interface SeoIssue { field: string; message: string; severity: string }
 interface SeoResult { score: number; issues: SeoIssue[] }
@@ -98,13 +99,10 @@ const statusTabs = [
   { value: 'published', label: '已发布' },
 ]
 
-const platformLabels: Record<string, string> = { xiaohongshu: '小红书', douyin: '抖音', weixin: '视频号' }
 const statusLabels: Record<string, string> = { unpublished: '未发布', published: '已发布', failed: '失败' }
 
-function platformLabel(p: string): string { return platformLabels[p] ?? p }
 function statusLabel(s: string): string { return statusLabels[s] ?? s }
 function conversionLabel(t: string): string { return conversionLabels[t] ?? t }
-function formatDate(iso: string): string { return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) }
 function severityIcon(s: string): string { return s === 'warning' ? '⚠' : s === 'error' ? '✕' : 'ℹ' }
 function isPublishable(r: PublishRecord): boolean { return aigcChecked[r.id] === true }
 

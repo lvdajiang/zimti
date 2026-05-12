@@ -149,6 +149,7 @@
 import { ref, onMounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatDate, platformLabel } from '@/utils/format'
 
 const activeTab = ref('workflow')
 const videoPlatformFilter = ref('all')
@@ -158,7 +159,6 @@ const workflowItems = ref<{ id: string; title: string; status: string; current_s
 const videoRecords = ref<{ id: string; video_title: string; platform: string; status: string; published_at: string | null; latest_metrics: { play_count: number; completion_rate: number; comment_count: number } | null }[]>([])
 const trendPoints = ref<{ date: string; play_count: number; completion_rate: number; comment_count: number }[]>([])
 
-const platformLabels: Record<string, string> = { xiaohongshu: '小红书', douyin: '抖音', weixin: '视频号' }
 const publishStatusLabels: Record<string, string> = { unpublished: '未发布', published: '已发布', failed: '失败' }
 
 const videoPlatformTabs = [
@@ -168,9 +168,7 @@ const videoPlatformTabs = [
   { value: 'weixin', label: '视频号' },
 ]
 
-function platformLabel(p: string): string { return platformLabels[p] ?? p }
 function publishStatusLabel(s: string): string { return publishStatusLabels[s] ?? s }
-function formatDate(iso: string): string { return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) }
 
 function barHeight(count: number): number {
   const max = Math.max(...trendPoints.value.map(p => p.play_count), 1)

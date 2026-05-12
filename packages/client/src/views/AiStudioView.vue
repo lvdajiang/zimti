@@ -24,7 +24,7 @@
           <div class="card-meta">
             <span class="meta-tag">{{ statusLabel(p.status) }}</span>
             <span>{{ p.asset_count }} 个素材</span>
-            <span>{{ formatDate(p.updated_at) }}</span>
+            <span>{{ formatDate(p.updated_at, true) }}</span>
           </div>
         </div>
         <button class="card-delete" @click.stop="handleDelete(p.id)" title="删除项目">&times;</button>
@@ -62,6 +62,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAiStudioStore } from '@/stores/aiStudio'
 import { toast } from '@/utils/toast'
+import { formatDate } from '@/utils/format'
 
 const store = useAiStudioStore()
 const router = useRouter()
@@ -75,11 +76,6 @@ const { projects, loading } = store
 onMounted(() => { store.loadProjects() })
 
 const statusLabel = (s: string) => ({ draft: '草稿', active: '进行中', archived: '已归档' }[s] ?? s)
-
-const formatDate = (iso: string) => {
-  const d = new Date(iso)
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-}
 
 function goToProject(id: string) { router.push(`/ai-studio/${id}`) }
 

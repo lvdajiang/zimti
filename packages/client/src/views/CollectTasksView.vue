@@ -151,6 +151,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatDate, platformLabel } from '@/utils/format'
 
 interface CollectTask {
   id: string
@@ -237,11 +238,9 @@ const typeTabs = [
 const statusLabels: Record<string, string> = {
   pending: '等待中', running: '采集中', paused: '已暂停', completed: '已完成', failed: '采集失败',
 }
-const platformLabels: Record<string, string> = { xiaohongshu: '小红书', douyin: '抖音', weixin: '视频号' }
 const taskTypeLabels: Record<string, string> = { video: '视频采集', transcript: '文案提取', hotspot: '热点采集' }
 
 function statusLabel(s: string): string { return statusLabels[s] ?? s }
-function platformLabel(p: string): string { return platformLabels[p] ?? p }
 function taskTypeLabel(t: string): string { return taskTypeLabels[t] ?? t }
 
 function tabCount(value: string): number {
@@ -258,10 +257,6 @@ function progressColor(task: CollectTask): string {
   if (task.status === 'failed') return '#e53935'
   if (task.status === 'completed') return '#4caf50'
   return '#4fc3f7'
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 function formatLogLine(log: TaskLog): string {

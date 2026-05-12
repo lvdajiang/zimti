@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { StoryboardSegment } from '@zimti/shared'
 import type { AiCheckResult } from '@/api/script'
+import { toast } from '@/utils/toast'
 import {
   fetchScript,
   saveScript as apiSaveScript,
@@ -55,6 +56,7 @@ export const useScriptStore = defineStore('script', () => {
       return true
     } catch (e) {
       console.error('Failed to load script:', e)
+      toast.error('加载脚本失败')
       return false
     } finally {
       loading.value = false
@@ -74,6 +76,7 @@ export const useScriptStore = defineStore('script', () => {
     } catch (e) {
       console.error(e)
       saveStatus.value = 'error'
+      toast.error('保存脚本失败')
     }
   }
 
@@ -86,6 +89,7 @@ export const useScriptStore = defineStore('script', () => {
     } catch (e) {
       console.error(e)
       saveStatus.value = 'error'
+      toast.error('保存分段失败')
     }
   }
 
@@ -100,6 +104,7 @@ export const useScriptStore = defineStore('script', () => {
       })
     } catch (e) {
       console.error(e)
+      toast.error('更新分段失败')
     }
   }
 
@@ -116,6 +121,7 @@ export const useScriptStore = defineStore('script', () => {
       return seg
     } catch (e) {
       console.error(e)
+      toast.error('添加分段失败')
       return null
     }
   }
@@ -128,6 +134,7 @@ export const useScriptStore = defineStore('script', () => {
       markUnsaved()
     } catch (e) {
       console.error(e)
+      toast.error('删除分段失败')
     }
   }
 
@@ -144,6 +151,7 @@ export const useScriptStore = defineStore('script', () => {
       markUnsaved()
     } catch (e) {
       console.error(e)
+      toast.error('排序失败，已重新加载')
       await load(scriptId.value)
     }
   }
@@ -157,6 +165,7 @@ export const useScriptStore = defineStore('script', () => {
       return seg
     } catch (e) {
       console.error(e)
+      toast.error('复制分段失败')
       return null
     }
   }

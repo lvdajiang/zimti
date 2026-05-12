@@ -39,7 +39,7 @@
           <span class="heat-value" :class="h.heat_trend">{{ formatHeat(h.heat_value) }} <span class="trend-icon">{{ trendIcon(h.heat_trend) }}</span></span>
           <span class="usage-badge" :class="h.usage_status">{{ usageLabel(h.usage_status) }}</span>
           <span v-if="h.is_expired" class="expired-badge">已过期</span>
-          <span v-else-if="h.valid_until" class="valid-badge">有效至 {{ formatDate(h.valid_until) }}</span>
+          <span v-else-if="h.valid_until" class="valid-badge">有效至 {{ formatDate(h.valid_until, true) }}</span>
           <div class="hotspot-actions">
             <button class="btn-sm" @click="openEdit(h)">编辑</button>
             <button class="btn-sm" @click="expireHotspot(h.id)" :disabled="h.is_expired">标记过期</button>
@@ -49,7 +49,7 @@
         <div class="hotspot-meta">
           <span>来源: {{ h.source }}</span>
           <span>相关度: {{ (h.relevance_score * 100).toFixed(0) }}%</span>
-          <span>{{ formatDate(h.created_at) }}</span>
+          <span>{{ formatDate(h.created_at, true) }}</span>
         </div>
         <div v-if="h.keywords && h.keywords.length" class="keyword-tags">
           <span v-for="kw in h.keywords" :key="kw" class="keyword-tag">{{ kw }}</span>
@@ -154,6 +154,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatDate } from '@/utils/format'
 
 interface Hotspot {
   id: number; title: string; source_platform: string; source_platform_label: string
@@ -182,10 +183,6 @@ const platformTabs = [
   { value: 'douyin', label: '抖音' },
   { value: 'weibo', label: '微博' },
 ]
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 
 // 格式化热度值：>=10000 显示 "X.X万"，>1000000 显示 "100万+"，否则直接显示
 function formatHeat(n: number): string {

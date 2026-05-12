@@ -163,6 +163,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import api from '@/api/client'
 import { toast } from '@/utils/toast'
+import { formatNumber, formatDate } from '@/utils/format'
 
 interface ContentAsset {
   id: string; title: string; type: string; type_label: string; video_product_id: string | null
@@ -228,8 +229,6 @@ const perfLabels: Record<string, string> = {
 }
 
 function perfLabel(tag: string): string { return perfLabels[tag] ?? tag }
-function formatDate(iso: string): string { return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) }
-function formatNumber(n: number): string { return n >= 10000 ? (n / 10000).toFixed(1) + '万' : n.toLocaleString() }
 
 function debouncedLoad(): void {
   if (debounceTimer) clearTimeout(debounceTimer)
