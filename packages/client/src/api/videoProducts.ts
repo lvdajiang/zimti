@@ -20,7 +20,7 @@ export function createVideoProduct(data: { script_id: number; title: string; pla
 }
 
 export function renderVideo(videoProductId: string, config?: Record<string, unknown>) {
-  return api.post<{ task_id: string; status: string }>(`/video-products/${videoProductId}/render`, config) as Promise<{ task_id: string; status: string }>
+  return api.post<{ task_id: string; render_job_id: string; status: string }>('/video-products/render', { video_product_id: videoProductId, ...config }) as Promise<{ task_id: string; render_job_id: string; status: string }>
 }
 
 export function getRenderStatus(videoProductId: string) {
