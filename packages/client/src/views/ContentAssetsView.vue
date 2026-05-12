@@ -265,12 +265,27 @@ async function createAsset(): Promise<void> {
 
 function openDetail(asset: ContentAsset): void { detailAsset.value = asset }
 
-async function reuseMaterials(_asset: ContentAsset): Promise<void> {
-  toast.info('素材选择功能开发中，暂不可用')
+async function reuseMaterials(asset: ContentAsset): Promise<void> {
+  if (!confirm(`确认复用「${asset.title}」的素材？`)) return
+  try {
+    const materialIds = (asset as any).video_product?.materials?.map((m: any) => m.id) ?? []
+    if (materialIds.length === 0) { toast.warning('该资产无可用素材'); return }
+    await api.post(`/content-assets/${asset.id}/reuse-materials`, { material_ids: materialIds })
+    toast.success('素材复用成功')
+    await loadData()
+  } catch (e) { console.error(e); toast.error('素材复用失败') }
 }
 
-async function reuseScript(_asset: ContentAsset): Promise<void> {
-  toast.info('脚本复用功能开发中，暂不可用')
+async function reuseScript(asset: ContentAsset): Promise<void> {
+  if (!confirm(`确认复用「${asset.title}」的脚本结构？`)) return
+  try {
+    const taskId = (asset as any).video_product?.taskId
+    const topicId = (asset as any).video_product?.topicId
+    if (!taskId || !topicId) { toast.warning('该资产无关联任务/选题'); return }
+    await api.post(`/content-assets/${asset.id}/reuse-script`, { target_task_id: taskId, target_topic_id: topicId })
+    toast.success('脚本复用成功')
+    await loadData()
+  } catch (e) { console.error(e); toast.error('脚本复用失败') }
 }
 
 async function deleteAsset(asset: ContentAsset): Promise<void> {
