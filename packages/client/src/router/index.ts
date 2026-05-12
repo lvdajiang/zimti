@@ -104,6 +104,12 @@ const router = createRouter({
       component: () => import('@/views/AiStudioProjectView.vue'),
       meta: { title: 'AI工作室' },
     },
+    {
+      path: '/ai-toolbox',
+      name: 'AiToolbox',
+      component: () => import('@/views/AiToolboxView.vue'),
+      meta: { title: 'AI工具箱' },
+    },
   ],
 })
 
