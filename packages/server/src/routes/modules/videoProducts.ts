@@ -80,9 +80,12 @@ router.post('/video-products/:id/generate-copy/batch', async (req: Request, res:
 router.get('/video-products/:id/preview', async (req: Request, res: Response) => {
   try {
     const id = str(req.params.id)
-    const video = await prisma.videoProduct.findFirst({
-      where: { id, task: { userId: DEMO_USER_ID } },
-    })
+    // 支持 UUID（VideoProduct.id）和整数（Script.id）两种查询方式
+    const isUuid = id.length === 36 && id.includes('-')
+    const where = isUuid
+      ? { id, task: { userId: DEMO_USER_ID } }
+      : { scriptId: parseInt(id, 10), task: { userId: DEMO_USER_ID } }
+    const video = await prisma.videoProduct.findFirst({ where })
     if (!video) {
       res.status(404).json({ error: 'Video not found' })
       return
@@ -91,14 +94,18 @@ router.get('/video-products/:id/preview', async (req: Request, res: Response) =>
       video.scriptId
         ? prisma.storyboardSegment.findMany({ where: { scriptId: video.scriptId }, orderBy: { segmentIndex: 'asc' } })
         : [],
-      prisma.videoMaterial.findMany({ where: { videoProductId: id }, include: { material: true } }),
+      prisma.videoMaterial.findMany({ where: { videoProductId: video.id }, include: { material: true } }),
     ])
     res.json({
-      id: video.id,
+      video_product: {
+        id: video.id,
+        status: video.status,
+        platform: video.platform,
+        resolution: video.resolution,
+        video_url: video.videoUrl,
+        duration: video.duration ? Number(video.duration) : null,
+      },
       title: video.title,
-      video_url: video.videoUrl,
-      duration: video.duration ? Number(video.duration) : null,
-      resolution: video.resolution,
       segments: storyboardSegments.map(s => ({
         id: s.id, segment_type: s.segmentType, oral_text: s.oralText,
         visual_description: s.visualDescription, duration: Number(s.duration),
