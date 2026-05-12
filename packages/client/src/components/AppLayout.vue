@@ -47,7 +47,7 @@ const navItems = [
   { label: '选题工作台', route: '/topic-workbench' },
   { label: '人设配置', route: '/persona' },
   { label: '素材库', route: '/materials' },
-  { label: '视频预览', route: '/video-preview/1' },
+  { label: '视频预览', route: '/video-preview' },
   { label: 'AI工作室', route: '/ai-studio' },
   { label: 'AI工具箱', route: '/ai-toolbox' },
   { label: '知识库', route: '/knowledge' },
