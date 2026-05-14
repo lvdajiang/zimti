@@ -112,6 +112,12 @@ if [ -f "$CODE" ]; then
     "ghmeier.wt-color"
     "highagency.pencildev"
     "0x0bke.pencil-zh-patch"
+    "Prisma.prisma"
+    "usernamehw.errorlens"
+    "yoavbls.pretty-ts-errors"
+    "dbaeumer.vscode-eslint"
+    "esbenp.prettier-vscode"
+    "EditorConfig.EditorConfig"
   )
 
   for ext in "${extensions[@]}"; do
