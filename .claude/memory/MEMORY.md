@@ -9,6 +9,9 @@
 - [开发体系全貌](dev_system_overview.md) — 97个技能卡分类、Subagent模式、工作流、计划系统
 - [完整链路](full_pipeline.md) — 13个开发环节详解（输入→输出→规则→快捷路径）
 - [上下文重建记录](context_rebuild.md) — 2026-05-14 C盘重装后的恢复情况
+- [会话进度](session_progress.md) — 每次会话完成/进行中/待处理
+- [技术决策](decisions.md) — 重要决策及原因
+- [已知问题](known_issues.md) — 未修复的 bug 和待改进项
 
 ## 参考
 - [Git 分支状态](git_branches.md) — 远程仓库URL、所有分支、未提交变更
