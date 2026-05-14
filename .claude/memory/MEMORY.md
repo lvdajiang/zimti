@@ -12,3 +12,4 @@
 
 ## 参考
 - [Git 分支状态](git_branches.md) — 远程仓库URL、所有分支、未提交变更
+- [系统恢复指南](recovery-guide.md) — C 盘重装后的 3 分钟恢复步骤（Junction 链接）
