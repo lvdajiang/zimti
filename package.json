@@ -11,7 +11,9 @@
     "db:generate": "pnpm --filter @zimti/server prisma generate",
     "db:migrate": "pnpm --filter @zimti/server prisma migrate dev",
     "db:push": "pnpm --filter @zimti/server prisma db push",
-    "lint": "pnpm --parallel --filter ./packages/* run lint",
+    "lint": "eslint packages/",
+    "format": "prettier --write \"packages/**/*.{ts,vue,json,css}\"",
+    "lint:check": "eslint packages/ && prettier --check \"packages/**/*.{ts,vue,json,css}\"",
     "typecheck": "pnpm --parallel --filter ./packages/* run typecheck",
     "test": "pnpm --parallel --filter ./packages/* run test",
     "test:server": "pnpm --filter @zimti/server run test",
@@ -22,8 +24,15 @@
     "pnpm": ">=9"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@remotion/bundler": "^4.0.459",
     "@remotion/cli": "^4.0.459",
-    "remotion": "^4.0.459"
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-vue": "^10.9.1",
+    "prettier": "^3.8.3",
+    "remotion": "^4.0.459",
+    "typescript-eslint": "^8.59.3"
   }
 }
