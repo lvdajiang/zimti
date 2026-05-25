@@ -65,7 +65,7 @@ ${context || '（品牌画像尚未建立）'}
       })),
     })
     const created = await prisma.momentsContent.findMany({
-      where: { userId, createdAt: { gte: new Date() } },
+      where: { userId, createdAt: { gte: today } },
       orderBy: { createdAt: 'asc' },
     })
     res.json({ items: created })

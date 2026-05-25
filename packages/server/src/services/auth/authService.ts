@@ -301,18 +301,17 @@ export function createAuthRouter(): Router {
     }
 
     const newSub = await prisma.$transaction(async (tx) => {
-      // 将当前订阅标记过期
       const currentSub = await tx.subscription.findFirst({
         where: { userId: authReq.user!.userId, status: 'active' },
       })
       if (currentSub) {
-        await tx.subscription.update({
+        // 已有订阅：直接更新 plan/quota
+        return tx.subscription.update({
           where: { id: currentSub.id },
-          data: { status: 'expired' },
+          data: { plan, quotaUsed: 0, quotaLimit: PLAN_QUOTAS[plan], startDate: new Date() },
         })
       }
-
-      // 创建新订阅
+      // 无订阅：创建新记录
       return tx.subscription.create({
         data: {
           userId: authReq.user!.userId,
