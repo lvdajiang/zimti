@@ -32,3 +32,14 @@ metadata:
 - **恢复脚本**: scripts/setup-dev.sh，5 阶段自动恢复开发环境（Node/pnpm/Git/Docker/VS Code 23扩展/Git配置/Claude Code/记忆链接/项目依赖）
 - **VS Code 扩展**: 新增 6 个（Prisma/Error Lens/Pretty TS Errors/ESLint/Prettier/EditorConfig）
 - **GitHub 推送**: 4 个 commit 已推送（a35b478..862d39f）
+
+## 2026-05-25
+### 已完成
+- **记忆系统再次保存**: save-ctx 提交 session_progress/decisions/known_issues，已推送 GitHub
+- **Flova AI 影视流程分析**: 对比 Zimti 与 Flova 1.0 功能差异，重合约 30%，核心方向不同
+### 进行中
+- **AI 视频制作功能讨论**: 用户有意向将 AI 分镜+即梦生视频+Remotion 组装整合到现有流程
+- **GPT Image 2.0 接入**: 用户确认要加入，技术方案已确认（复用 OpenAI API Key，走 Images API），待开始实现
+### 待处理
+- **GPT Image 2.0 接入实现**: 后端 service + 前端入口（素材库/选题工作台），与即梦并列
+- **AI 分镜流程**: GLM 拆分镜 → 即梦/GPT Image 生画面 → Remotion 组装（长期规划）
