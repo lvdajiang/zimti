@@ -116,6 +116,12 @@ const router = createRouter({
       component: () => import('@/views/KnowledgeView.vue'),
       meta: { title: '知识库' },
     },
+    {
+      path: ROUTES.ENTITIES,
+      name: 'Entities',
+      component: () => import('@/views/EntitiesView.vue'),
+      meta: { title: '供应商管理' },
+    },
   ],
 })
 

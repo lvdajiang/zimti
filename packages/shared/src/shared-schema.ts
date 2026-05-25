@@ -215,6 +215,91 @@ export const RENDER_STATUS_LABELS: Record<RenderStatus, string> = {
   idle: '空闲', rendering: '渲染中', completed: '已完成', failed: '失败', cancelled: '已取消',
 }
 
+// --- 1.39 实体类型（供应商分类） ---
+export type EntityType = 'hotel' | 'restaurant' | 'scenic' | 'vehicle' | 'other'
+export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+  hotel: '住宿', restaurant: '餐饮', scenic: '景区/门票', vehicle: '汽车/车辆', other: '其他',
+}
+
+// --- 1.40 高德POI类型编码映射 ---
+export const AMAP_TYPE_MAP: Record<EntityType, string> = {
+  hotel: '190300', restaurant: '050000', scenic: '110100', vehicle: '150000', other: '',
+}
+
+// --- 1.41 资源类型 ---
+export type ResourceType = 'room' | 'meal' | 'ticket' | 'transport' | 'other'
+export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
+  room: '房型', meal: '餐标', ticket: '门票', transport: '用车', other: '其他',
+}
+
+// --- 1.42 品牌记忆分类 ---
+export type BrandMemoryCategory = 'profile' | 'style' | 'preference' | 'skill'
+
+// --- 1.43 进化类型 ---
+export type EvolutionType = 'content' | 'style' | 'skill' | 'rhythm'
+
+// --- 1.44 客户阶段 ---
+export type CustomerStage =
+  | 'new_friend'    // 新加好友
+  | 'chatting'      // 在聊
+  | 'deep_consult'  // 深度咨询
+  | 'hesitating'    // 犹豫对比
+  | 'ordered'       // 成交下单
+  | 'traveling'     // 出行中
+  | 'completed'     // 出行后
+  | 'repurchase'    // 复购/转介绍
+export const CUSTOMER_STAGE_LABELS: Record<CustomerStage, string> = {
+  new_friend: '新加好友', chatting: '在聊', deep_consult: '深度咨询',
+  hesitating: '犹豫对比', ordered: '成交下单', traveling: '出行中',
+  completed: '出行后', repurchase: '复购/转介绍',
+}
+
+// --- 1.45 客户意向等级 ---
+export type IntentLevel = 'high' | 'medium' | 'low'
+export const INTENT_LEVEL_LABELS: Record<IntentLevel, string> = {
+  high: '高', medium: '中', low: '低',
+}
+
+// --- 1.46 客户来源 ---
+export type CustomerSourceType = 'manual' | 'video' | 'referral'
+
+// --- 1.47 朋友圈内容类型 ---
+export type MomentsContentType = 'professional' | 'life' | 'conversion'
+export const MOMENTS_CONTENT_TYPE_LABELS: Record<MomentsContentType, string> = {
+  professional: '专业干货', life: '生活/人味', conversion: '软性转化',
+}
+
+// --- 1.48 群运营类型 ---
+export type GroupType = 'intent' | 'traveling' | 'loyalty'
+export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
+  intent: '意向客户群', traveling: '已出行客户群', loyalty: '老客复购群',
+}
+
+// --- 1.49 流水线模式 ---
+export type PipelineMode = 'viral_remind' | 'daily_auto' | 'hotspot_rush' | 'customer_question'
+export const PIPELINE_MODE_LABELS: Record<PipelineMode, string> = {
+  viral_remind: '爆款翻新', daily_auto: '每日自动', hotspot_rush: '热点紧急', customer_question: '客户问题',
+}
+
+// --- 1.50 流水线任务状态 ---
+export type PipelineJobStatus = 'pending' | 'running' | 'waiting_confirm' | 'completed' | 'failed' | 'cancelled'
+export const PIPELINE_JOB_STATUS_LABELS: Record<PipelineJobStatus, string> = {
+  pending: '等待中', running: '执行中', waiting_confirm: '等待确认',
+  completed: '已完成', failed: '失败', cancelled: '已取消',
+}
+
+// --- 1.51 订阅计划 ---
+export type SubscriptionPlan = 'free' | 'personal' | 'professional' | 'enterprise'
+export const SUBSCRIPTION_PLAN_LABELS: Record<SubscriptionPlan, string> = {
+  free: '体验版', personal: '个人版', professional: '专业版', enterprise: '企业版',
+}
+
+// --- 1.52 话术模板分类 ---
+export type ChatTemplateCategory = 'greeting' | 'probing' | 'closing' | 'objection' | 'general'
+export const CHAT_TEMPLATE_CATEGORY_LABELS: Record<ChatTemplateCategory, string> = {
+  greeting: '破冰', probing: '挖需求', closing: '促成交', objection: '消顾虑', general: '通用',
+}
+
 
 // ============================================================
 // §2 核心数据结构
@@ -635,6 +720,107 @@ export interface RenderConfig {
   voice_volume?: number     // 0-1，默认 1.0
 }
 
+// --- 3.N entities — 供应商/实体 ---
+export interface EntityRecord {
+  id: string
+  user_id: string
+  name: string
+  aliases: string            // 逗号分隔
+  entity_type: EntityType
+  region: string | null
+  city: string | null
+  address: string | null
+  phone: string | null
+  longitude: string | null
+  latitude: string | null
+  remark: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+1 resources — 资源（实体下的产品/服务） ---
+export interface ResourceRecord {
+  id: string
+  user_id: string
+  entity_id: string
+  name: string
+  resource_type: ResourceType
+  unit: string | null
+  unit_price: string | null  // Decimal as string
+  remark: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+2 brand_memories — 品牌记忆 ---
+export interface BrandMemoryRecord {
+  id: string
+  user_id: string
+  category: BrandMemoryCategory
+  key: string
+  value: unknown
+  source: string
+  weight: number
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+3 evolution_logs — 进化日志 ---
+export interface EvolutionLogRecord {
+  id: string
+  user_id: string
+  type: EvolutionType
+  trigger: string
+  detail: { before: unknown; after: unknown; metric?: number; reason?: string }
+  created_at: string
+}
+
+// --- 3.N+4 customers — 客户 ---
+export interface CustomerRecord {
+  id: string
+  user_id: string
+  name: string
+  aliases: string
+  phone: string | null
+  wechat: string | null
+  source_type: CustomerSourceType
+  source_ref_id: string | null
+  intent_level: IntentLevel
+  stage: CustomerStage
+  travel_intent: { people?: number; date?: string; destination?: string; budget?: string } | null
+  notes: string | null
+  last_follow_up_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+5 pipeline_jobs — 流水线任务 ---
+export interface PipelineJobRecord {
+  id: string
+  user_id: string
+  mode: PipelineMode
+  status: PipelineJobStatus
+  input: unknown
+  output: unknown
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+6 subscriptions — 订阅 ---
+export interface SubscriptionRecord {
+  id: string
+  user_id: string
+  plan: SubscriptionPlan
+  status: string
+  start_date: string
+  end_date: string | null
+  quota_used: number
+  quota_limit: number
+  created_at: string
+  updated_at: string
+}
+
 
 // ============================================================
 // §4 API 端点常量
@@ -856,6 +1042,62 @@ export const API = {
     PUSH_TO_MATERIALS: (id: string) => `/ai-studio/assets/${id}/push-to-materials`,
     PUSH_TO_SEGMENT: (id: string) => `/ai-studio/assets/${id}/push-to-segment`,
   },
+
+  // --- 供应商/实体 ---
+  ENTITIES: {
+    LIST: '/entities',
+    CREATE: '/entities',
+    UPDATE: (id: string) => `/entities/${id}`,
+    DELETE: (id: string) => `/entities/${id}`,
+    MERGE: '/entities/merge',
+    AMAP_SEARCH: '/entities/amap-search',
+    FROM_AMAP: '/entities/from-amap',
+    RESOURCES: (entityId: string) => `/entities/${entityId}/resources`,
+    RESOURCE_UPDATE: (id: string) => `/entities/resources/${id}`,
+    RESOURCE_DELETE: (id: string) => `/entities/resources/${id}`,
+  },
+
+  // --- AI 中枢 ---
+  AI_HUB: {
+    BRAND_MEMORY: '/ai-hub/brand-memory',
+    BRAND_MEMORY_UPDATE: '/ai-hub/brand-memory',
+    BRAND_MEMORY_LEARN: '/ai-hub/brand-memory/learn',
+    STRATEGY_RECOMMENDATIONS: '/ai-hub/strategy/recommendations',
+    EVOLUTION_ANALYZE: '/ai-hub/evolution/analyze',
+    EVOLUTION_LOG: '/ai-hub/evolution/log',
+  },
+
+  // --- CRM ---
+  CRM: {
+    CUSTOMERS: '/crm/customers',
+    CUSTOMER: (id: string) => `/crm/customers/${id}`,
+    CUSTOMER_STAGE: (id: string) => `/crm/customers/${id}/stage`,
+    CUSTOMER_TAGS: (id: string) => `/crm/customers/${id}/tags`,
+    CUSTOMER_VOICE_INPUT: '/crm/customers/voice-input',
+    CHAT_TEMPLATES: '/crm/chat-templates',
+    CHAT_TEMPLATE_GENERATE: '/crm/chat-templates/generate',
+    FOLLOW_UP_REMINDERS: '/crm/follow-up-reminders',
+    SILENT_CUSTOMERS: '/crm/silent-customers',
+    FUNNEL_STATS: '/crm/funnel-stats',
+  },
+
+  // --- 私域 ---
+  PRIVATE_DOMAIN: {
+    MOMENTS_DAILY: '/private-domain/moments/daily',
+    MOMENTS_SENT: (id: string) => `/private-domain/moments/${id}/sent`,
+    MOMENTS_ENGAGEMENT: (id: string) => `/private-domain/moments/${id}/engagement`,
+    GROUP_CONTENT: '/private-domain/group-content',
+  },
+
+  // --- 流水线 ---
+  PIPELINE: {
+    VIRAL_REMIND: '/pipeline/viral-remind',
+    DAILY_STATUS: '/pipeline/daily-status',
+    HOTSPOT_RUSH: '/pipeline/hotspot-rush',
+    CUSTOMER_QUESTION: '/pipeline/customer-question',
+    JOBS: '/pipeline/jobs',
+    JOB: (id: string) => `/pipeline/jobs/${id}`,
+  },
 } as const
 
 
@@ -880,6 +1122,9 @@ export const ROUTES = {
   CONTENT_ASSETS: '/content-assets',
   AI_STUDIO: '/ai-studio',
   AI_STUDIO_PROJECT: '/ai-studio/:projectId',
+  ENTITIES: '/entities',
+  CRM: '/crm',
+  PIPELINE: '/pipeline',
 } as const
 
 

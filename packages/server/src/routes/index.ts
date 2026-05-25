@@ -19,6 +19,11 @@ import experienceLogs from './modules/experienceLogs.js'
 import reports from './modules/reports.js'
 import aiStudio from './modules/aiStudio.js'
 import knowledge from './modules/knowledge.js'
+import entities from './modules/entities.js'
+import aiHub from './modules/aiHub.js'
+import crm from './modules/crm.js'
+import privateDomain from './modules/privateDomain.js'
+import pipeline from './modules/pipeline.js'
 
 export const router: Router = Router()
 
@@ -42,3 +47,8 @@ router.use(experienceLogs)
 router.use(reports)
 router.use('/ai-studio', aiStudio)
 router.use(knowledge)
+router.use(entities)
+router.use(aiHub)
+router.use(crm)
+router.use(privateDomain)
+router.use(pipeline)

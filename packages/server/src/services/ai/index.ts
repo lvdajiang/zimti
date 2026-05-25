@@ -3,6 +3,7 @@ export type { AITaskStatus, AITaskType, AITaskCreate, AITaskResult } from './tas
 export { getAIProvider, setAIProvider } from './provider.js'
 export type { AIServiceProvider } from './provider.js'
 export { GLMProvider } from './glmProvider.js'
+export { DeepSeekProvider } from './deepseekProvider.js'
 export { generateTopics, mergeTopics } from './generators/topicGenerate.js'
 export { generateStoryboard } from './generators/storyboardGenerate.js'
 export { checkScript } from './generators/aiCheck.js'
