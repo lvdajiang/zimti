@@ -34,4 +34,5 @@ interface ApiClient {
 
 const api = axiosInstance as unknown as ApiClient
 
+export { axiosInstance }
 export default api

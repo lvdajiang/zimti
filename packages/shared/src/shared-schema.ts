@@ -1098,6 +1098,19 @@ export const API = {
     JOBS: '/pipeline/jobs',
     JOB: (id: string) => `/pipeline/jobs/${id}`,
   },
+
+  // --- 认证 & 订阅 ---
+  AUTH: {
+    REGISTER: '/auth/register',
+    LOGIN: '/auth/login',
+    ME: '/auth/me',
+    DEMO_LOGIN: '/auth/demo-login',
+  },
+  SUBSCRIPTIONS: {
+    CURRENT: '/subscriptions/current',
+    UPGRADE: '/subscriptions/upgrade',
+    PLANS: '/subscriptions/plans',
+  },
 } as const
 
 

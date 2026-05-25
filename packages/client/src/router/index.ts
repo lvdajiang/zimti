@@ -146,12 +146,26 @@ const router = createRouter({
       component: () => import('@/views/InterviewView.vue'),
       meta: { title: 'IP 定位' },
     },
+    {
+      path: '/auth',
+      name: 'Auth',
+      component: () => import('@/views/AuthView.vue'),
+      meta: { title: '登录', public: true },
+    },
   ],
 })
 
 router.beforeEach((to) => {
   const title = (to.meta.title as string) ?? 'Zimti'
   document.title = `${title} — Zimti`
+})
+
+router.beforeEach(async (to) => {
+  if (to.meta.public) return true
+  const token = localStorage.getItem('zimti_token')
+  if (!token && to.path !== '/auth') {
+    return '/auth'
+  }
 })
 
 export default router
