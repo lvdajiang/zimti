@@ -55,6 +55,7 @@ const navItems = [
   { label: '客户管理', route: '/crm' },
   { label: '私域运营', route: '/private-domain' },
   { label: '一键流水线', route: '/pipeline' },
+  { label: 'IP 定位', route: '/interview' },
   { label: '数据监控', route: '/monitoring' },
   { label: '内容资产', route: '/content-assets' },
 ]

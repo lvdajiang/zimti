@@ -1126,6 +1126,7 @@ export const ROUTES = {
   CRM: '/crm',
   PRIVATE_DOMAIN: '/private-domain',
   PIPELINE: '/pipeline',
+  INTERVIEW: '/interview',
 } as const
 
 

@@ -140,6 +140,12 @@ const router = createRouter({
       component: () => import('@/views/PipelineView.vue'),
       meta: { title: '一键流水线' },
     },
+    {
+      path: ROUTES.INTERVIEW,
+      name: 'Interview',
+      component: () => import('@/views/InterviewView.vue'),
+      meta: { title: 'IP 定位' },
+    },
   ],
 })
 

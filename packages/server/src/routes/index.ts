@@ -24,6 +24,7 @@ import aiHub from './modules/aiHub.js'
 import crm from './modules/crm.js'
 import privateDomain from './modules/privateDomain.js'
 import pipeline from './modules/pipeline.js'
+import { createInterviewRouter } from '../services/ai/ipInterview.js'
 
 export const router: Router = Router()
 
@@ -52,3 +53,4 @@ router.use(aiHub)
 router.use(crm)
 router.use(privateDomain)
 router.use(pipeline)
+router.use(createInterviewRouter())
