@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
-import { DEMO_USER_ID, str } from '../../constants.js'
+import { getUserId, str } from '../../constants.js'
+import { optionalAuth } from '../../services/auth/authService.js'
 import { getAIProvider } from '../../services/ai/provider.js'
 import { BrandMemoryService } from '../../services/aiHub/brandMemory.js'
 import type { Request, Response } from 'express'
@@ -9,14 +10,15 @@ import type { GroupType } from '@zimti/shared'
 const VALID_GROUP_TYPES: GroupType[] = ['intent', 'traveling', 'loyalty']
 
 const router: Router = Router()
+router.use(optionalAuth)
 
 // GET /api/v1/private-domain/moments/daily — 获取今日朋友圈
-router.get('/private-domain/moments/daily', async (_req: Request, res: Response) => {
+router.get('/private-domain/moments/daily', async (req: Request, res: Response) => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   const existing = await prisma.momentsContent.findMany({
-    where: { userId: DEMO_USER_ID, createdAt: { gte: today } },
+    where: { userId: getUserId(req as any), createdAt: { gte: today } },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -29,7 +31,7 @@ router.get('/private-domain/moments/daily', async (_req: Request, res: Response)
   const ai = getAIProvider()
   if (!ai) { res.json({ items: [] }); return }
 
-  const brandMemory = new BrandMemoryService(DEMO_USER_ID)
+  const brandMemory = new BrandMemoryService(getUserId(req as any))
   const context = await brandMemory.getContext()
 
   const prompt = `为自媒体账号生成今日 6 条朋友圈内容（3-2-1 节奏）。
@@ -53,19 +55,20 @@ ${context || '（品牌画像尚未建立）'}
 
     if (!Array.isArray(parsed.items)) { res.json({ items: [] }); return }
 
-    const items = []
-    for (const item of parsed.items) {
-      const created = await prisma.momentsContent.create({
-        data: {
-          userId: DEMO_USER_ID,
-          contentType: item.content_type ?? 'professional',
-          content: item.content ?? '',
-          imageSuggestion: item.image_suggestion ?? null,
-        },
-      })
-      items.push(created)
-    }
-    res.json({ items })
+    const userId = getUserId(req as any)
+    await prisma.momentsContent.createMany({
+      data: (parsed.items as Array<{ content_type?: string; content?: string; image_suggestion?: string }>).map((item) => ({
+        userId,
+        contentType: item.content_type ?? 'professional',
+        content: item.content ?? '',
+        imageSuggestion: item.image_suggestion ?? null,
+      })),
+    })
+    const created = await prisma.momentsContent.findMany({
+      where: { userId, createdAt: { gte: new Date() } },
+      orderBy: { createdAt: 'asc' },
+    })
+    res.json({ items: created })
   } catch {
     res.json({ items: [] })
   }
@@ -74,7 +77,7 @@ ${context || '（品牌画像尚未建立）'}
 // POST /api/v1/private-domain/moments/:id/sent — 标记已发送
 router.post('/private-domain/moments/:id/sent', async (req: Request, res: Response) => {
   const item = await prisma.momentsContent.update({
-    where: { id: str(req.params.id), userId: DEMO_USER_ID },
+    where: { id: str(req.params.id), userId: getUserId(req as any) },
     data: { sentAt: new Date() },
   })
   res.json({ id: item.id, sent_at: item.sentAt?.toISOString() })
@@ -84,7 +87,7 @@ router.post('/private-domain/moments/:id/sent', async (req: Request, res: Respon
 router.post('/private-domain/moments/:id/engagement', async (req: Request, res: Response) => {
   const { likes, comments, screenshot } = req.body
   const item = await prisma.momentsContent.update({
-    where: { id: str(req.params.id), userId: DEMO_USER_ID },
+    where: { id: str(req.params.id), userId: getUserId(req as any) },
     data: { engagementData: { likes: likes ?? 0, comments: comments ?? 0, screenshot: screenshot ?? null } },
   })
   res.json({ id: item.id })
@@ -94,7 +97,7 @@ router.post('/private-domain/moments/:id/engagement', async (req: Request, res: 
 router.get('/private-domain/group-content', async (req: Request, res: Response) => {
   const groupType = str(req.query.group_type) as GroupType | ''
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { userId: DEMO_USER_ID }
+  const where: Record<string, any> = { userId: getUserId(req as any) }
   if (groupType && VALID_GROUP_TYPES.includes(groupType)) where.groupType = groupType
 
   const items = await prisma.groupContent.findMany({
@@ -124,7 +127,7 @@ router.post('/private-domain/group-content', async (req: Request, res: Response)
     const parsed = JSON.parse(result)
     const item = await prisma.groupContent.create({
       data: {
-        userId: DEMO_USER_ID,
+        userId: getUserId(req as any),
         groupType: group_type,
         title: parsed.title ?? null,
         content: parsed.content ?? '',

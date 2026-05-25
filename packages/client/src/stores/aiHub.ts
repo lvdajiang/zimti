@@ -21,10 +21,10 @@ export const useAiHubStore = defineStore('aiHub', () => {
 
   const learningLoading = ref(false)
 
-  async function loadBrandMemory(category?: BrandMemoryCategory): Promise<void> {
+  async function loadBrandMemory(): Promise<void> {
     memoriesLoading.value = true
     try {
-      const res = await fetchBrandMemory(category ? { category } : undefined)
+      const res = await fetchBrandMemory()
       brandProfile.value = res.profile
       brandMemories.value = res.items
     } finally {
@@ -32,52 +32,55 @@ export const useAiHubStore = defineStore('aiHub', () => {
     }
   }
 
-  async function saveBrandMemory(items: Array<{
+  async function saveBrandMemory(data: {
     category: BrandMemoryCategory
     key: string
     value: unknown
-  }>): Promise<void> {
-    await upsertBrandMemory(items)
+    source?: string
+    weight?: number
+  }): Promise<void> {
+    await upsertBrandMemory(data)
     await loadBrandMemory()
   }
 
-  async function removeBrandMemory(id: string): Promise<void> {
-    await deleteBrandMemory(id)
+  async function removeBrandMemory(data: {
+    category: BrandMemoryCategory
+    key: string
+  }): Promise<void> {
+    await deleteBrandMemory(data)
     await loadBrandMemory()
   }
 
   async function doLearn(data: {
-    category: BrandMemoryCategory
-    before: string
-    after: string
-  }): Promise<string[]> {
+    original_text: string
+    modified_text: string
+  }): Promise<void> {
     learningLoading.value = true
     try {
-      const res = await learnBrandMemory(data)
-      return res.findings
+      await learnBrandMemory(data)
     } finally {
       learningLoading.value = false
     }
   }
 
-  async function loadRecommendations(context?: string): Promise<void> {
+  async function loadRecommendations(): Promise<void> {
     recommendationsLoading.value = true
     try {
-      const res = await fetchStrategyRecommendations(context ? { context } : undefined)
-      recommendations.value = res.items
+      const res = await fetchStrategyRecommendations()
+      recommendations.value = res.recommendations
     } finally {
       recommendationsLoading.value = false
     }
   }
 
   async function loadEvolutionLogs(params?: {
-    evolution_type?: EvolutionType
+    type?: EvolutionType
     limit?: number
   }): Promise<void> {
     evolutionLoading.value = true
     try {
       const res = await fetchEvolutionLogs(params)
-      evolutionLogs.value = res.items
+      evolutionLogs.value = res.logs
     } finally {
       evolutionLoading.value = false
     }

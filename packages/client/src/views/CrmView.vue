@@ -318,6 +318,7 @@ async function handleGenerate() {
 
 async function handleCreateReminder() {
   if (!reminderForm.value.customer_id || !reminderForm.value.remind_at) return
+  await store.createReminder(reminderForm.value)
   await store.loadReminders()
   showReminderModal.value = false
   reminderForm.value = { customer_id: '', remind_at: '', message: '' }

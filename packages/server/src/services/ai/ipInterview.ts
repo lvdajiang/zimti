@@ -16,6 +16,7 @@ interface InterviewSession {
   topic: string
   currentLayer: number
   answers: Array<{ layer: number; type: string; question: string; answer: string }>
+  currentQuestions?: string[]
 }
 
 // 预设行业模板数据
@@ -97,17 +98,24 @@ export class IpInterviewService {
 
     try {
       const result = await ai.generate(prompt, '你是IP定位访谈师。返回纯 JSON。')
-      JSON.parse(result) // validate JSON
+      const parsed = JSON.parse(result)
+      const questions: string[] = Array.isArray(parsed?.questions) ? parsed.questions : []
       return {
         topic,
         currentLayer: 1,
         answers: [],
+        currentQuestions: questions,
       }
     } catch {
       return {
         topic,
         currentLayer: 1,
         answers: [],
+        currentQuestions: [
+          '请简单介绍一下你自己，你目前从事什么行业？',
+          '你为什么想开始做自媒体？是什么契机让你决定入行的？',
+          '你觉得你和同行相比，最大的不同或优势是什么？',
+        ],
       }
     }
   }

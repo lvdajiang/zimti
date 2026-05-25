@@ -1,9 +1,11 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import { getUserId, str, toInt } from '../../constants.js'
+import { optionalAuth } from '../../services/auth/authService.js'
 
 const router: Router = Router()
+router.use(optionalAuth)
 
 // ============================================================
 // CRUD
@@ -19,7 +21,7 @@ router.get('/entities', async (req: Request, res: Response) => {
   const skip = (p - 1) * ps
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { userId: DEMO_USER_ID }
+  const where: Record<string, any> = { userId: getUserId(req as any) }
   if (entityType && entityType !== 'all') where.entityType = entityType
   if (city) where.city = { contains: city, mode: 'insensitive' }
   if (keyword) {
@@ -72,7 +74,7 @@ router.post('/entities', async (req: Request, res: Response) => {
 
   const entity = await prisma.entity.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       name: String(name).slice(0, 200),
       aliases: String(aliases ?? ''),
       entityType: String(entity_type),
@@ -93,7 +95,7 @@ router.put('/entities/:id', async (req: Request, res: Response) => {
   const { name, aliases, entity_type, region, city, address, phone, longitude, latitude, remark } = req.body
 
   const entity = await prisma.entity.update({
-    where: { id: str(req.params.id), userId: DEMO_USER_ID },
+    where: { id: str(req.params.id), userId: getUserId(req as any) },
     data: {
       ...(name !== undefined && { name: String(name).slice(0, 200) }),
       ...(aliases !== undefined && { aliases: String(aliases) }),
@@ -112,7 +114,7 @@ router.put('/entities/:id', async (req: Request, res: Response) => {
 
 // DELETE /api/v1/entities/:id — 删除（级联删除资源）
 router.delete('/entities/:id', async (req: Request, res: Response) => {
-  await prisma.entity.delete({ where: { id: str(req.params.id), userId: DEMO_USER_ID } })
+  await prisma.entity.delete({ where: { id: str(req.params.id), userId: getUserId(req as any) } })
   res.json({ success: true })
 })
 
@@ -128,14 +130,14 @@ router.post('/entities/merge', async (req: Request, res: Response) => {
     return
   }
 
-  const target = await prisma.entity.findUnique({ where: { id: String(target_id), userId: DEMO_USER_ID } })
+  const target = await prisma.entity.findUnique({ where: { id: String(target_id), userId: getUserId(req as any) } })
   if (!target) {
     res.status(404).json({ error: 'target entity not found' })
     return
   }
 
   const sources = await prisma.entity.findMany({
-    where: { id: { in: source_ids.map(String) }, userId: DEMO_USER_ID },
+    where: { id: { in: source_ids.map(String) }, userId: getUserId(req as any) },
   })
   if (sources.length === 0) {
     res.status(404).json({ error: 'no source entities found' })
@@ -262,7 +264,7 @@ router.post('/entities/from-amap', async (req: Request, res: Response) => {
   // 同名+同地址防重复
   const existing = await prisma.entity.findFirst({
     where: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       name: String(name),
       ...(address && { address: String(address) }),
     },
@@ -274,7 +276,7 @@ router.post('/entities/from-amap', async (req: Request, res: Response) => {
 
   const entity = await prisma.entity.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       name: String(name).slice(0, 200),
       aliases: '',
       entityType: entity_type ? String(entity_type) : guessEntityType(amap_type),
@@ -297,7 +299,7 @@ router.post('/entities/from-amap', async (req: Request, res: Response) => {
 // GET /api/v1/entities/:entityId/resources — 实体下的资源列表
 router.get('/entities/:entityId/resources', async (req: Request, res: Response) => {
   const entityId = str(req.params.entityId)
-  const entity = await prisma.entity.findUnique({ where: { id: entityId, userId: DEMO_USER_ID } })
+  const entity = await prisma.entity.findUnique({ where: { id: entityId, userId: getUserId(req as any) } })
   if (!entity) {
     res.status(404).json({ error: 'entity not found' })
     return
@@ -332,7 +334,7 @@ router.post('/entities/:entityId/resources', async (req: Request, res: Response)
     return
   }
 
-  const entity = await prisma.entity.findUnique({ where: { id: entityId, userId: DEMO_USER_ID } })
+  const entity = await prisma.entity.findUnique({ where: { id: entityId, userId: getUserId(req as any) } })
   if (!entity) {
     res.status(404).json({ error: 'entity not found' })
     return
@@ -340,7 +342,7 @@ router.post('/entities/:entityId/resources', async (req: Request, res: Response)
 
   const resource = await prisma.resource.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       entityId,
       name: String(name).slice(0, 200),
       resourceType: String(resource_type),
@@ -357,7 +359,7 @@ router.put('/entities/resources/:id', async (req: Request, res: Response) => {
   const { name, resource_type, unit, unit_price, remark } = req.body
 
   const resource = await prisma.resource.update({
-    where: { id: str(req.params.id), userId: DEMO_USER_ID },
+    where: { id: str(req.params.id), userId: getUserId(req as any) },
     data: {
       ...(name !== undefined && { name: String(name).slice(0, 200) }),
       ...(resource_type !== undefined && { resourceType: String(resource_type) }),
@@ -371,7 +373,7 @@ router.put('/entities/resources/:id', async (req: Request, res: Response) => {
 
 // DELETE /api/v1/entities/resources/:id — 删除资源
 router.delete('/entities/resources/:id', async (req: Request, res: Response) => {
-  await prisma.resource.delete({ where: { id: str(req.params.id), userId: DEMO_USER_ID } })
+  await prisma.resource.delete({ where: { id: str(req.params.id), userId: getUserId(req as any) } })
   res.json({ success: true })
 })
 

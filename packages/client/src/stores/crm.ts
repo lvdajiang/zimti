@@ -4,7 +4,7 @@ import {
   fetchCustomers, createCustomer, updateCustomer, deleteCustomer,
   updateCustomerStage, addCustomerTags, removeCustomerTag,
   parseVoiceInput, fetchChatTemplates, generateChatTemplates,
-  fetchFollowUpReminders, fetchSilentCustomers, fetchFunnelStats,
+  fetchFollowUpReminders, createFollowUpReminder, fetchSilentCustomers, fetchFunnelStats,
 } from '../api/crm'
 import type { Customer, ChatTemplate, FollowUpReminder, FunnelStats, VoiceInputResult } from '../api/crm'
 import type { CustomerStage, IntentLevel } from '@zimti/shared'
@@ -138,6 +138,11 @@ export const useCrmStore = defineStore('crm', () => {
     }
   }
 
+  async function createReminder(data: { customer_id: string; remind_at: string; message?: string }): Promise<void> {
+    await createFollowUpReminder(data)
+    await loadReminders()
+  }
+
   return {
     customers, total, loading, currentPage, pageSize,
     filterStage, filterIntent, filterKeyword,
@@ -149,6 +154,6 @@ export const useCrmStore = defineStore('crm', () => {
     changeStage, addTags, removeTag, voiceParse,
     loadFunnelStats, loadSilentCustomers,
     loadChatTemplates, generateTemplates,
-    loadReminders,
+    loadReminders, createReminder,
   }
 })

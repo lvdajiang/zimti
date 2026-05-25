@@ -1,15 +1,17 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
-import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import { getUserId, str, toInt } from '../../constants.js'
+import { optionalAuth } from '../../services/auth/authService.js'
 import { CustomerService } from '../../services/crm/customerService.js'
 import type { Request, Response } from 'express'
 import type { IntentLevel, CustomerStage } from '@zimti/shared'
 
 const router: Router = Router()
+router.use(optionalAuth)
 
 // GET /api/v1/crm/customers — 客户列表
 router.get('/crm/customers', async (req: Request, res: Response) => {
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   const result = await service.list({
     stage: str(req.query.stage) as CustomerStage || undefined,
     intentLevel: str(req.query.intent_level) as IntentLevel || undefined,
@@ -25,7 +27,7 @@ router.post('/crm/customers', async (req: Request, res: Response) => {
   const { name, aliases, phone, wechat, source_type, source_ref_id, intent_level, stage, travel_intent, notes, tags } = req.body
   if (!name) { res.status(400).json({ error: 'name is required' }); return }
 
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   const customer = await service.create({
     name, aliases, phone, wechat,
     sourceType: source_type, sourceRefId: source_ref_id,
@@ -37,7 +39,7 @@ router.post('/crm/customers', async (req: Request, res: Response) => {
 // PUT /api/v1/crm/customers/:id — 更新客户
 router.put('/crm/customers/:id', async (req: Request, res: Response) => {
   const { name, aliases, phone, wechat, intent_level, travel_intent, notes } = req.body
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   const customer = await service.update(str(req.params.id), {
     name, aliases, phone, wechat,
     intentLevel: intent_level, travelIntent: travel_intent, notes,
@@ -47,7 +49,7 @@ router.put('/crm/customers/:id', async (req: Request, res: Response) => {
 
 // DELETE /api/v1/crm/customers/:id — 删除客户
 router.delete('/crm/customers/:id', async (req: Request, res: Response) => {
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   await service.delete(str(req.params.id))
   res.json({ success: true })
 })
@@ -56,7 +58,7 @@ router.delete('/crm/customers/:id', async (req: Request, res: Response) => {
 router.put('/crm/customers/:id/stage', async (req: Request, res: Response) => {
   const { stage, note } = req.body
   if (!stage) { res.status(400).json({ error: 'stage is required' }); return }
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   const customer = await service.updateStage(str(req.params.id), stage, note)
   res.json({ id: customer.id, stage: customer.stage })
 })
@@ -65,7 +67,7 @@ router.put('/crm/customers/:id/stage', async (req: Request, res: Response) => {
 router.post('/crm/customers/:id/tags', async (req: Request, res: Response) => {
   const { tags } = req.body
   if (!Array.isArray(tags)) { res.status(400).json({ error: 'tags must be array' }); return }
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   await service.addTags(str(req.params.id), tags)
   res.json({ success: true })
 })
@@ -74,7 +76,7 @@ router.post('/crm/customers/:id/tags', async (req: Request, res: Response) => {
 router.delete('/crm/customers/:id/tags', async (req: Request, res: Response) => {
   const { tag } = req.body
   if (!tag) { res.status(400).json({ error: 'tag is required' }); return }
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   await service.removeTag(str(req.params.id), String(tag))
   res.json({ success: true })
 })
@@ -83,21 +85,21 @@ router.delete('/crm/customers/:id/tags', async (req: Request, res: Response) => 
 router.post('/crm/customers/voice-input', async (req: Request, res: Response) => {
   const { text } = req.body
   if (!text) { res.status(400).json({ error: 'text is required' }); return }
-  const service = new CustomerService(DEMO_USER_ID)
+  const service = new CustomerService(getUserId(req as any))
   const parsed = await service.parseVoiceInput(String(text))
   res.json(parsed)
 })
 
 // GET /api/v1/crm/silent-customers — 沉默客户列表
-router.get('/crm/silent-customers', async (_req: Request, res: Response) => {
-  const service = new CustomerService(DEMO_USER_ID)
+router.get('/crm/silent-customers', async (req: Request, res: Response) => {
+  const service = new CustomerService(getUserId(req as any))
   const customers = await service.getSilentCustomers()
   res.json({ items: customers })
 })
 
 // GET /api/v1/crm/funnel-stats — 漏斗统计
-router.get('/crm/funnel-stats', async (_req: Request, res: Response) => {
-  const service = new CustomerService(DEMO_USER_ID)
+router.get('/crm/funnel-stats', async (req: Request, res: Response) => {
+  const service = new CustomerService(getUserId(req as any))
   const stats = await service.getFunnelStats()
   res.json(stats)
 })
@@ -108,7 +110,7 @@ router.get('/crm/funnel-stats', async (_req: Request, res: Response) => {
 router.get('/crm/chat-templates', async (req: Request, res: Response) => {
   const stage = str(req.query.stage)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { userId: DEMO_USER_ID }
+  const where: Record<string, any> = { userId: getUserId(req as any) }
   if (stage) where.stage = stage
 
   const items = await prisma.chatTemplate.findMany({ where, orderBy: { effectivenessScore: 'desc' } })
@@ -142,7 +144,7 @@ router.post('/crm/chat-templates', async (req: Request, res: Response) => {
   if (!stage || !content) { res.status(400).json({ error: 'stage and content are required' }); return }
 
   const item = await prisma.chatTemplate.create({
-    data: { userId: DEMO_USER_ID, stage, category: category ?? 'general', content },
+    data: { userId: getUserId(req as any), stage, category: category ?? 'general', content },
   })
   res.status(201).json({ id: item.id })
 })
@@ -150,9 +152,9 @@ router.post('/crm/chat-templates', async (req: Request, res: Response) => {
 // --- 跟进提醒 ---
 
 // GET /api/v1/crm/follow-up-reminders — 提醒列表
-router.get('/crm/follow-up-reminders', async (_req: Request, res: Response) => {
+router.get('/crm/follow-up-reminders', async (req: Request, res: Response) => {
   const items = await prisma.followUpReminder.findMany({
-    where: { userId: DEMO_USER_ID, status: 'pending' },
+    where: { userId: getUserId(req as any), status: 'pending' },
     orderBy: { remindAt: 'asc' },
     include: { customer: { select: { name: true } } },
   })
@@ -165,7 +167,7 @@ router.post('/crm/follow-up-reminders', async (req: Request, res: Response) => {
   if (!customer_id || !remind_at) { res.status(400).json({ error: 'customer_id and remind_at are required' }); return }
 
   const item = await prisma.followUpReminder.create({
-    data: { userId: DEMO_USER_ID, customerId: customer_id, remindAt: new Date(remind_at), message },
+    data: { userId: getUserId(req as any), customerId: customer_id, remindAt: new Date(remind_at), message },
   })
   res.status(201).json({ id: item.id })
 })

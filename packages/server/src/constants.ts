@@ -1,5 +1,9 @@
 export const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001'
 
+export function getUserId(req: { user?: { userId: string } }): string {
+  return req.user?.userId ?? DEMO_USER_ID
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type QsValue = any
 

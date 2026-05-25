@@ -97,8 +97,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function loadPlans(): Promise<void> {
-    const res = await fetchPlans()
-    plans.value = res.plans
+    try {
+      const res = await fetchPlans()
+      plans.value = res.plans
+    } catch {
+      plans.value = []
+    }
   }
 
   async function doUpgrade(plan: string): Promise<void> {

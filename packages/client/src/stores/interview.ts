@@ -27,8 +27,12 @@ export const useInterviewStore = defineStore('interview', () => {
   } | null>(null)
 
   async function loadLayers(): Promise<void> {
-    const res = await fetchInterviewLayers()
-    layers.value = res.layers
+    try {
+      const res = await fetchInterviewLayers()
+      layers.value = res.layers
+    } catch {
+      layers.value = []
+    }
   }
 
   async function doStart(topic: string): Promise<void> {
@@ -82,7 +86,11 @@ export const useInterviewStore = defineStore('interview', () => {
   }
 
   async function doApplyTemplate(id: string): Promise<void> {
-    appliedConfig.value = await applyIndustryTemplate(id)
+    try {
+      appliedConfig.value = await applyIndustryTemplate(id)
+    } catch {
+      appliedConfig.value = null
+    }
   }
 
   async function doInitPresets(): Promise<number> {

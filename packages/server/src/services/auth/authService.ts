@@ -1,10 +1,15 @@
 import { Router, Response } from 'express'
 import { prisma } from '../../db.js'
 import { DEMO_USER_ID } from '../../constants.js'
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import type { Request, NextFunction } from 'express'
 
 // JWT 简单实现（生产环境应使用 jsonwebtoken 库）
-const JWT_SECRET = process.env.JWT_SECRET || 'zimti-dev-secret-2026'
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  console.warn('[auth] JWT_SECRET 未设置，请配置环境变量。开发环境可设置任意字符串。')
+}
+const JWT_KEY = JWT_SECRET || 'dev-only-insecure-key'
 const JWT_EXPIRY = 7 * 24 * 60 * 60 * 1000 // 7 天
 
 interface JwtPayload {
@@ -24,12 +29,12 @@ function base64UrlDecode(str: string): string {
 }
 
 // HMAC-SHA256 签名
-async function hmacSha256(message: string): Promise<string> {
-  const { createHmac } = await import('crypto')
-  return createHmac('sha256', JWT_SECRET).update(message).digest('base64url')
+function hmacSha256(message: string): string {
+  const { createHmac } = require('crypto')
+  return createHmac('sha256', JWT_KEY).update(message).digest('base64url')
 }
 
-export async function signJwtReal(payload: Omit<JwtPayload, 'iat' | 'exp'>): Promise<string> {
+export function signJwtReal(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const now = Date.now()
   const body = base64UrlEncode(JSON.stringify({
@@ -37,7 +42,7 @@ export async function signJwtReal(payload: Omit<JwtPayload, 'iat' | 'exp'>): Pro
     iat: Math.floor(now / 1000),
     exp: Math.floor((now + JWT_EXPIRY) / 1000),
   }))
-  const signature = await hmacSha256(`${header}.${body}`)
+  const signature = hmacSha256(`${header}.${body}`)
   return `${header}.${body}.${signature}`
 }
 
@@ -45,8 +50,8 @@ export async function verifyJwtReal(token: string): Promise<JwtPayload | null> {
   try {
     const parts = token.split('.')
     if (parts.length !== 3) return null
-    const expectedSig = await hmacSha256(`${parts[0]}.${parts[1]}`)
-    if (expectedSig !== parts[2]) return null
+    const expectedSig = hmacSha256(`${parts[0]}.${parts[1]}`)
+    if (!timingSafeEqual(Buffer.from(expectedSig), Buffer.from(parts[2]))) return null
     const payload = JSON.parse(base64UrlDecode(parts[1]))
     if (payload.exp < Math.floor(Date.now() / 1000)) return null
     return payload as JwtPayload
@@ -55,10 +60,20 @@ export async function verifyJwtReal(token: string): Promise<JwtPayload | null> {
   }
 }
 
-// 密码哈希
-async function hashPassword(password: string): Promise<string> {
-  const { createHash } = await import('crypto')
-  return createHash('sha256').update(password).digest('hex')
+// 密码哈希（scrypt + salt）
+const SCRYPT_KEYLEN = 64
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex')
+  const derived = scryptSync(password, salt, SCRYPT_KEYLEN).toString('hex')
+  return `${salt}:${derived}`
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, derived] = stored.split(':')
+  if (!salt || !derived) return false
+  const candidate = scryptSync(password, salt, SCRYPT_KEYLEN).toString('hex')
+  return timingSafeEqual(Buffer.from(candidate), Buffer.from(derived))
 }
 
 // 中间件：认证
@@ -135,7 +150,7 @@ export async function incrementQuota(userId: string): Promise<void> {
   if (sub) {
     await prisma.subscription.update({
       where: { id: sub.id },
-      data: { quotaUsed: sub.quotaUsed + 1 },
+      data: { quotaUsed: { increment: 1 } },
     })
   }
 }
@@ -152,6 +167,10 @@ export function createAuthRouter(): Router {
       res.status(400).json({ error: 'username and password are required' })
       return
     }
+    if (password.length < 6) {
+      res.status(400).json({ error: '密码至少 6 位' })
+      return
+    }
 
     const existing = await prisma.user.findFirst({
       where: { OR: [{ username }, ...(email ? [{ email }] : [])] },
@@ -161,12 +180,12 @@ export function createAuthRouter(): Router {
       return
     }
 
-    const pwHash = await hashPassword(password)
+    const pwHash = hashPassword(password)
     const user = await prisma.user.create({
       data: { username, email: email || null, passwordHash: pwHash },
     })
 
-    const token = await signJwtReal({
+    const token = signJwtReal({
       userId: user.id,
       username: user.username,
       email: user.email,
@@ -194,13 +213,12 @@ export function createAuthRouter(): Router {
       return
     }
 
-    const pwHash = await hashPassword(password)
-    if (pwHash !== user.passwordHash) {
+    if (!verifyPassword(password, user.passwordHash)) {
       res.status(401).json({ error: '用户名或密码错误' })
       return
     }
 
-    const token = await signJwtReal({
+    const token = signJwtReal({
       userId: user.id,
       username: user.username,
       email: user.email,
@@ -230,7 +248,7 @@ export function createAuthRouter(): Router {
       return
     }
 
-    const token = await signJwtReal({
+    const token = signJwtReal({
       userId: user.id,
       username: user.username,
       email: user.email,
@@ -259,22 +277,19 @@ export function createAuthRouter(): Router {
       return
     }
 
-    const plan = sub.plan
-    const features = getPlanFeatures(plan)
-
     res.json({
       id: sub.id,
-      plan,
+      plan: sub.plan,
       status: sub.status,
       start_date: sub.startDate,
       end_date: sub.endDate,
       quota_used: sub.quotaUsed,
       quota_limit: sub.quotaLimit,
-      features,
+      features: getPlanFeatures(sub.plan),
     })
   })
 
-  // POST /api/v1/subscriptions/upgrade — 升级计划
+  // POST /api/v1/subscriptions/upgrade — 升级计划（事务保护）
   router.post('/subscriptions/upgrade', async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest
     if (!authReq.user) { res.status(401).json({ error: '未认证' }); return }
@@ -285,26 +300,29 @@ export function createAuthRouter(): Router {
       return
     }
 
-    // 将当前订阅标记过期
-    const currentSub = await prisma.subscription.findFirst({
-      where: { userId: authReq.user.userId, status: 'active' },
-    })
-    if (currentSub) {
-      await prisma.subscription.update({
-        where: { id: currentSub.id },
-        data: { status: 'expired' },
+    const newSub = await prisma.$transaction(async (tx) => {
+      // 将当前订阅标记过期
+      const currentSub = await tx.subscription.findFirst({
+        where: { userId: authReq.user!.userId, status: 'active' },
       })
-    }
+      if (currentSub) {
+        await tx.subscription.update({
+          where: { id: currentSub.id },
+          data: { status: 'expired' },
+        })
+      }
 
-    const newSub = await prisma.subscription.create({
-      data: {
-        userId: authReq.user.userId,
-        plan,
-        status: 'active',
-        startDate: new Date(),
-        quotaUsed: 0,
-        quotaLimit: PLAN_QUOTAS[plan],
-      },
+      // 创建新订阅
+      return tx.subscription.create({
+        data: {
+          userId: authReq.user!.userId,
+          plan,
+          status: 'active',
+          startDate: new Date(),
+          quotaUsed: 0,
+          quotaLimit: PLAN_QUOTAS[plan],
+        },
+      })
     })
 
     res.status(201).json({
@@ -329,15 +347,13 @@ export function createAuthRouter(): Router {
   return router
 }
 
-function getPlanFeatures(plan: string): string[] {
-  const features: Record<string, string[]> = {
-    free: ['基础AI生成', '1条/月', '基础数据'],
-    personal: ['AI 生成', '10条/月', '数据分析', '私域运营'],
-    professional: ['AI 生成', '50条/月', '数据分析', '私域运营', 'AI中枢', '多账号管理'],
-    enterprise: ['无限使用', '数据分析', '私域运营', 'AI中枢', '多账号管理', '优先支持', 'API 接口'],
-  }
-  return features[plan] || features.free
+const PLAN_FEATURES: Record<string, string[]> = {
+  free: ['基础AI生成', '1条/月', '基础数据'],
+  personal: ['AI 生成', '10条/月', '数据分析', '私域运营'],
+  professional: ['AI 生成', '50条/月', '数据分析', '私域运营', 'AI中枢', '多账号管理'],
+  enterprise: ['无限使用', '数据分析', '私域运营', 'AI中枢', '多账号管理', '优先支持', 'API 接口'],
 }
 
-
-
+function getPlanFeatures(plan: string): string[] {
+  return PLAN_FEATURES[plan] || PLAN_FEATURES.free
+}

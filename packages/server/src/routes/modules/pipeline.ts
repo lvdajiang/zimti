@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
-import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import { getUserId, str, toInt } from '../../constants.js'
+import { optionalAuth } from '../../services/auth/authService.js'
 import { getAIProvider } from '../../services/ai/provider.js'
 import { BrandMemoryService } from '../../services/aiHub/brandMemory.js'
 import type { Request, Response } from 'express'
@@ -9,6 +10,7 @@ import type { PipelineMode } from '@zimti/shared'
 const VALID_MODES: PipelineMode[] = ['viral_remind', 'daily_auto', 'hotspot_rush', 'customer_question']
 
 const router: Router = Router()
+router.use(optionalAuth)
 
 // POST /api/v1/pipeline/viral-remind — 爆款翻新
 router.post('/pipeline/viral-remind', async (req: Request, res: Response) => {
@@ -20,7 +22,7 @@ router.post('/pipeline/viral-remind', async (req: Request, res: Response) => {
 
   const job = await prisma.pipelineJob.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       mode: 'viral_remind',
       status: 'pending',
       input: { video_url, video_text },
@@ -28,18 +30,18 @@ router.post('/pipeline/viral-remind', async (req: Request, res: Response) => {
   })
 
   // 异步执行流水线（实际项目中应使用任务队列）
-  runViralRemindPipeline(job.id).catch(() => {})
+  runViralRemindPipeline(job.id, getUserId(req as any)).catch(() => {})
 
   res.status(201).json({ id: job.id, status: 'pending' })
 })
 
 // GET /api/v1/pipeline/daily-status — 每日自动状态
-router.get('/pipeline/daily-status', async (_req: Request, res: Response) => {
+router.get('/pipeline/daily-status', async (req: Request, res: Response) => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   const todayJobs = await prisma.pipelineJob.findMany({
-    where: { userId: DEMO_USER_ID, mode: 'daily_auto', createdAt: { gte: today } },
+    where: { userId: getUserId(req as any), mode: 'daily_auto', createdAt: { gte: today } },
     orderBy: { createdAt: 'desc' },
   })
 
@@ -56,7 +58,7 @@ router.post('/pipeline/hotspot-rush', async (req: Request, res: Response) => {
 
   const job = await prisma.pipelineJob.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       mode: 'hotspot_rush',
       status: 'pending',
       input: { hotspot_title, hotspot_desc },
@@ -76,7 +78,7 @@ router.post('/pipeline/customer-question', async (req: Request, res: Response) =
 
   const job = await prisma.pipelineJob.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: getUserId(req as any),
       mode: 'customer_question',
       status: 'pending',
       input: { question, customer_ids },
@@ -94,7 +96,7 @@ router.get('/pipeline/jobs', async (req: Request, res: Response) => {
   const ps = Math.min(toInt(req.query.page_size, 20), 100)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { userId: DEMO_USER_ID }
+  const where: Record<string, any> = { userId: getUserId(req as any) }
   if (mode && VALID_MODES.includes(mode)) where.mode = mode
   if (status) where.status = status
 
@@ -109,7 +111,7 @@ router.get('/pipeline/jobs', async (req: Request, res: Response) => {
 // GET /api/v1/pipeline/jobs/:id — 任务详情
 router.get('/pipeline/jobs/:id', async (req: Request, res: Response) => {
   const job = await prisma.pipelineJob.findUnique({
-    where: { id: str(req.params.id), userId: DEMO_USER_ID },
+    where: { id: str(req.params.id), userId: getUserId(req as any) },
   })
   if (!job) { res.status(404).json({ error: 'job not found' }); return }
   res.json(job)
@@ -119,12 +121,12 @@ router.get('/pipeline/jobs/:id', async (req: Request, res: Response) => {
 // 流水线执行（简化版，实际应使用任务队列）
 // ============================================================
 
-async function runViralRemindPipeline(jobId: string): Promise<void> {
+async function runViralRemindPipeline(jobId: string, userId: string): Promise<void> {
   try {
-    await prisma.pipelineJob.update({ where: { id: jobId }, data: { status: 'running' } })
-
     const job = await prisma.pipelineJob.findUnique({ where: { id: jobId } })
     if (!job) return
+
+    await prisma.pipelineJob.update({ where: { id: jobId }, data: { status: 'running' } })
 
     const input = job.input as { video_url?: string; video_text?: string }
     const ai = getAIProvider()
@@ -137,7 +139,7 @@ async function runViralRemindPipeline(jobId: string): Promise<void> {
     }
 
     // Step 2: AI 改写（注入品牌记忆 + 去AI味）
-    const brandMemory = new BrandMemoryService(DEMO_USER_ID)
+    const brandMemory = new BrandMemoryService(userId)
     const context = await brandMemory.getContext()
 
     const prompt = `将以下爆款文案改写为自己的版本，注入个人风格。${context ? `\n\n${context}` : ''}

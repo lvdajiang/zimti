@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import { getUserId, str, toInt } from '../../constants.js'
+import { optionalAuth } from '../../services/auth/authService.js'
 import { BrandMemoryService } from '../../services/aiHub/brandMemory.js'
 import { StrategyEngine } from '../../services/aiHub/strategyEngine.js'
 import { EvolutionEngine } from '../../services/aiHub/evolutionEngine.js'
@@ -7,13 +8,14 @@ import type { Request, Response } from 'express'
 import type { BrandMemoryCategory, EvolutionType } from '@zimti/shared'
 
 const router: Router = Router()
+router.use(optionalAuth)
 
 const VALID_CATEGORIES: BrandMemoryCategory[] = ['profile', 'style', 'preference', 'skill']
 const VALID_EVOLUTION_TYPES: EvolutionType[] = ['content', 'style', 'skill', 'rhythm']
 
 // GET /api/v1/ai-hub/brand-memory — 获取品牌画像
-router.get('/ai-hub/brand-memory', async (_req: Request, res: Response) => {
-  const service = new BrandMemoryService(DEMO_USER_ID)
+router.get('/ai-hub/brand-memory', async (req: Request, res: Response) => {
+  const service = new BrandMemoryService(getUserId(req as any))
   const profile = await service.getProfile()
   res.json(profile)
 })
@@ -29,7 +31,7 @@ router.put('/ai-hub/brand-memory', async (req: Request, res: Response) => {
     res.status(400).json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` })
     return
   }
-  const service = new BrandMemoryService(DEMO_USER_ID)
+  const service = new BrandMemoryService(getUserId(req as any))
   await service.upsert(category, key, value, source, weight)
   res.json({ success: true })
 })
@@ -41,7 +43,7 @@ router.post('/ai-hub/brand-memory/learn', async (req: Request, res: Response) =>
     res.status(400).json({ error: 'original_text and modified_text are required' })
     return
   }
-  const service = new BrandMemoryService(DEMO_USER_ID)
+  const service = new BrandMemoryService(getUserId(req as any))
   await service.learnStyle(String(original_text), String(modified_text))
   res.json({ success: true })
 })
@@ -53,14 +55,14 @@ router.delete('/ai-hub/brand-memory', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'category and key are required' })
     return
   }
-  const service = new BrandMemoryService(DEMO_USER_ID)
+  const service = new BrandMemoryService(getUserId(req as any))
   await service.delete(category as BrandMemoryCategory, key)
   res.json({ success: true })
 })
 
 // GET /api/v1/ai-hub/strategy/recommendations — 获取策略推荐
-router.get('/ai-hub/strategy/recommendations', async (_req: Request, res: Response) => {
-  const engine = new StrategyEngine(DEMO_USER_ID)
+router.get('/ai-hub/strategy/recommendations', async (req: Request, res: Response) => {
+  const engine = new StrategyEngine(getUserId(req as any))
   const recommendations = await engine.getRecommendations()
   res.json({ recommendations })
 })
@@ -72,7 +74,7 @@ router.post('/ai-hub/strategy/evaluate-hotspot', async (req: Request, res: Respo
     res.status(400).json({ error: 'title is required' })
     return
   }
-  const engine = new StrategyEngine(DEMO_USER_ID)
+  const engine = new StrategyEngine(getUserId(req as any))
   const result = await engine.evaluateHotspot(String(title), String(description ?? ''))
   res.json(result)
 })
@@ -88,7 +90,7 @@ router.post('/ai-hub/evolution/analyze', async (req: Request, res: Response) => 
     res.status(400).json({ error: `type must be one of: ${VALID_EVOLUTION_TYPES.join(', ')}` })
     return
   }
-  const engine = new EvolutionEngine(DEMO_USER_ID)
+  const engine = new EvolutionEngine(getUserId(req as any))
   await engine.recordAndLearn({ type, trigger, before, after, metric })
   res.json({ success: true })
 })
@@ -98,7 +100,7 @@ router.get('/ai-hub/evolution/log', async (req: Request, res: Response) => {
   const limit = Math.min(toInt(req.query.limit, 20), 100)
   const type = str(req.query.type) as EvolutionType | ''
 
-  const engine = new EvolutionEngine(DEMO_USER_ID)
+  const engine = new EvolutionEngine(getUserId(req as any))
   if (type && VALID_EVOLUTION_TYPES.includes(type)) {
     const patterns = await engine.analyzePatterns(type)
     const logs = await engine.getRecentLogs(limit)

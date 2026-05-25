@@ -31,42 +31,38 @@ export interface EvolutionLog {
 
 // --- 品牌记忆 ---
 
-export async function fetchBrandMemory(params?: {
-  category?: BrandMemoryCategory
-}): Promise<{ profile: Record<string, unknown> | null; items: BrandMemory[] }> {
-  const query = new URLSearchParams()
-  if (params?.category) query.set('category', params.category)
-  return api.get(`/ai-hub/brand-memory?${query}`) as unknown as Promise<{ profile: Record<string, unknown> | null; items: BrandMemory[] }>
+export async function fetchBrandMemory(): Promise<{ profile: Record<string, unknown> | null; items: BrandMemory[] }> {
+  return api.get('/ai-hub/brand-memory') as unknown as Promise<{ profile: Record<string, unknown> | null; items: BrandMemory[] }>
 }
 
-export async function upsertBrandMemory(items: Array<{
+export async function upsertBrandMemory(data: {
   category: BrandMemoryCategory
   key: string
   value: unknown
-}>): Promise<{ success: boolean }> {
-  return api.put('/ai-hub/brand-memory', { items }) as unknown as Promise<{ success: boolean }>
+  source?: string
+  weight?: number
+}): Promise<{ success: boolean }> {
+  return api.put('/ai-hub/brand-memory', data) as unknown as Promise<{ success: boolean }>
 }
 
-export async function deleteBrandMemory(id: string): Promise<{ success: boolean }> {
-  return api.delete(`/ai-hub/brand-memory/${id}`) as unknown as Promise<{ success: boolean }>
+export async function deleteBrandMemory(data: {
+  category: BrandMemoryCategory
+  key: string
+}): Promise<{ success: boolean }> {
+  return api.delete('/ai-hub/brand-memory', data) as unknown as Promise<{ success: boolean }>
 }
 
 export async function learnBrandMemory(data: {
-  category: BrandMemoryCategory
-  before: string
-  after: string
-}): Promise<{ findings: string[] }> {
-  return api.post('/ai-hub/brand-memory/learn', data) as unknown as Promise<{ findings: string[] }>
+  original_text: string
+  modified_text: string
+}): Promise<{ success: boolean }> {
+  return api.post('/ai-hub/brand-memory/learn', data) as unknown as Promise<{ success: boolean }>
 }
 
 // --- 策略引擎 ---
 
-export async function fetchStrategyRecommendations(params?: {
-  context?: string
-}): Promise<{ items: StrategyRecommendation[] }> {
-  const query = new URLSearchParams()
-  if (params?.context) query.set('context', params.context)
-  return api.get(`/ai-hub/strategy/recommendations?${query}`) as unknown as Promise<{ items: StrategyRecommendation[] }>
+export async function fetchStrategyRecommendations(): Promise<{ recommendations: StrategyRecommendation[] }> {
+  return api.get('/ai-hub/strategy/recommendations') as unknown as Promise<{ recommendations: StrategyRecommendation[] }>
 }
 
 export async function evaluateHotspot(data: {
@@ -79,19 +75,21 @@ export async function evaluateHotspot(data: {
 // --- 进化引擎 ---
 
 export async function triggerEvolutionAnalysis(data: {
-  content_type: string
-  content_id: string
-  metrics: Record<string, number>
-}): Promise<{ findings: string[] }> {
-  return api.post('/ai-hub/evolution/analyze', data) as unknown as Promise<{ findings: string[] }>
+  type: EvolutionType
+  trigger: string
+  before?: string
+  after?: string
+  metric?: number
+}): Promise<{ success: boolean }> {
+  return api.post('/ai-hub/evolution/analyze', data) as unknown as Promise<{ success: boolean }>
 }
 
 export async function fetchEvolutionLogs(params?: {
-  evolution_type?: EvolutionType
+  type?: EvolutionType
   limit?: number
-}): Promise<{ items: EvolutionLog[] }> {
+}): Promise<{ logs: EvolutionLog[]; patterns?: unknown }> {
   const query = new URLSearchParams()
-  if (params?.evolution_type) query.set('evolution_type', params.evolution_type)
+  if (params?.type) query.set('type', params.type)
   if (params?.limit) query.set('limit', String(params.limit))
-  return api.get(`/ai-hub/evolution/log?${query}`) as unknown as Promise<{ items: EvolutionLog[] }>
+  return api.get(`/ai-hub/evolution/log?${query}`) as unknown as Promise<{ logs: EvolutionLog[]; patterns?: unknown }>
 }
