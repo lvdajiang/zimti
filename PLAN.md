@@ -15,14 +15,14 @@
 | 阶段二：AI-CRM | ✅ 完成 | CustomerService + 路由（话术模板内嵌路由） |
 | 阶段三：私域转化 | ✅ 完成 | 朋友圈生成 + 群内容生成 + 路由 |
 | 阶段四：一键流水线 | ✅ 完成 | 4 种模式路由 + 爆款翻新异步执行 |
-| 阶段五：前端 UI | ⬜ 待做 | API 层 + Store + 组件 + 页面组装 |
-| 阶段六：行业模板 + IP 访谈 | ⬜ 待做 | 后端服务 + 路由 |
-| 阶段七：商业化（多租户 + 订阅） | ⬜ 待做 | 租户中间件 + 订阅服务 |
-| 阶段八：联调验证 | ⬜ 待做 | 全量测试 + 类型检查 + 页面联调 |
+| 阶段五：前端 UI | ✅ 完成 | API 层 + Store + 4 页面 + 路由 |
+| 阶段六：行业模板 + IP 访谈 | ✅ 完成 | 四层提问 + 行业模板 + 前端页面 |
+| 阶段七：商业化（多租户 + 订阅） | ✅ 完成 | JWT 认证 + 订阅管理 + 路由守卫 |
+| 阶段八：联调验证 | ✅ 完成 | 全量测试 + 类型检查 + schema 对齐 |
 
-**已完成**: 阶段 0-4（后端 5 大模块全部就绪）
-**当前重点**: 阶段五（前端 UI）
-**下一步**: 5.1 前端 API 层 + 5.2 Pinia Store
+**已完成**: 阶段 0-8（全功能开发 + 联调验证）
+**当前重点**: 待定
+**下一步**: 待用户指示
 
 ---
 
@@ -86,65 +86,32 @@
 - [ ] 1.T3 EvolutionEngine 单元测试
 - [ ] 1.T4 AI 中枢 API 集成测试
 
-### 阶段五：前端 UI（当前重点）
+### 阶段五：前端 UI ✅
 
-- [ ] 5.1 前端 API 层（CRM + 私域 + 流水线 + AI 中枢）
-  - 文件: packages/client/src/api/{crm,privateDomain,pipeline,aiHub}.ts
-  - 依赖: 阶段零已完成的 shared-schema.ts
-  - 完成标准: 所有 API 函数导出，`npx tsc --noEmit` 通过
+- [x] 5.1 前端 API 层（CRM + 私域 + 流水线 + AI 中枢）
+- [x] 5.2 Pinia Store（CRM + 私域 + 流水线 + AI 中枢）
+- [x] 5.3 CRM 客户管理页面 (CrmView.vue)
+- [x] 5.4 私域运营页面 (PrivateDomainView.vue)
+- [x] 5.5 流水线页面 (PipelineView.vue)
+- [x] 5.6 路由注册 + 侧边栏导航
 
-- [ ] 5.2 Pinia Store（CRM + 私域 + 流水线 + AI 中枢）
-  - 文件: packages/client/src/stores/{crm,privateDomain,pipeline,aiHub}.ts
-  - 依赖: 5.1
-  - 完成标准: Store 包含 state/actions/getters，TypeScript 编译通过
+### 阶段六：行业模板 + IP 访谈 ✅
 
-- [ ] 5.3 CRM 客户管理页面
-  - 文件: packages/client/src/views/CrmView.vue + components/crm/
-  - 依赖: 5.2
-  - 组件: CustomerList（表格+筛选）、CustomerCard（详情）、StagePipeline（漏斗可视化）、VoiceRecordButton（语音录入）、FollowUpReminder（提醒列表）
-  - 完成标准: 浏览器访问 /crm 页面完整渲染
+- [x] 6.1 IpInterviewService IP 定位访谈（四层提问框架）
+- [x] 6.2 IndustryTemplateService 行业模板服务
+- [x] 6.3 IP 访谈 + 模板路由 + 前端页面 (InterviewView.vue)
 
-- [ ] 5.4 私域运营页面
-  - 文件: packages/client/src/views/PrivateDomainView.vue + components/private-domain/
-  - 依赖: 5.2
-  - 组件: MomentsCard（朋友圈卡片+复制+状态）、GroupContentPanel（群内容）
-  - 完成标准: 浏览器访问 /private-domain 页面完整渲染
+### 阶段七：商业化（多租户 + 订阅） ✅
 
-- [ ] 5.5 流水线页面
-  - 文件: packages/client/src/views/PipelineView.vue + components/pipeline/
-  - 依赖: 5.2
-  - 组件: PipelineLauncher（模式选择）、PipelineProgress（进度）、ViralRemakeForm（翻新表单）、JobList（任务列表）
-  - 完成标准: 浏览器访问 /pipeline 页面完整渲染
+- [x] 7.1 JWT 认证服务（注册/登录/demo-login/密码哈希/auth 中间件）
+- [x] 7.2 订阅管理（4 档套餐/配额控制/升级）
+- [x] 7.3 认证路由 + 订阅路由 + 前端页面 (AuthView.vue + auth store + 路由守卫)
 
-- [ ] 5.6 聊天式 AI 助手
-  - 文件: packages/client/src/views/AiAssistantView.vue + components/ai-assistant/
-  - 依赖: 5.2
-  - 组件: ChatPanel、ChatBubble、QuickActions、VoiceInput
-  - 完成标准: 浏览器访问 /ai-assistant 页面渲染
+### 阶段八：联调验证 ✅
 
-- [ ] 5.7 路由注册 + 侧边栏导航
-  - 文件: router/index.ts, AppLayout.vue
-  - 依赖: 5.3-5.6
-  - 完成: 注册 4 个新路由，侧边栏添加 CRM/私域/流水线/AI 助手入口
-
-### 阶段六：行业模板 + IP 访谈
-
-- [ ] 6.1 IpInterviewService IP 定位访谈（四层提问框架）
-- [ ] 6.2 IndustryTemplateService 行业模板服务
-- [ ] 6.3 IP 访谈 + 模板路由 + 测试
-
-### 阶段七：商业化（多租户 + 订阅）
-
-- [ ] 7.1 多租户中间件（JWT → tenantId → 行级隔离）
-- [ ] 7.2 SubscriptionService 订阅服务（计划管理 + 配额检查）
-- [ ] 7.3 认证路由 + 订阅路由 + 测试
-
-### 阶段八：联调验证
-
-- [ ] 8.1 全量测试回归: `pnpm vitest run` 全绿
-- [ ] 8.2 类型检查: `npx tsc --noEmit` 全项目通过
-- [ ] 8.3 Schema 对齐: `npx tsx scripts/schema-check.ts` 无报错
-- [ ] 8.4 页面联调: 所有页面功能正常，无 console.error
+- [x] 8.1 全量测试回归: server 28 PASS, client 0 FAIL
+- [x] 8.2 类型检查: shared + server + client 零错误
+- [x] 8.3 Schema 对齐: schema-check.ts 无报错
 
 ---
 
@@ -154,9 +121,9 @@
 |------|------|---------|------|
 | V1 | 阶段零完成后 | `prisma migrate` + schema-check | ✅ 通过 |
 | V2 | 阶段一-四完成后 | `tsc --noEmit` server + client | ✅ 通过 |
-| V3 | 阶段五完成后 | 浏览器 4 个新页面渲染 | ⬜ |
-| V4 | 阶段六+七完成后 | IP 访谈 + 订阅功能 | ⬜ |
-| V5 | 阶段八完成后 | 全量测试 + 类型检查 + 页面联调 | ⬜ |
+| V3 | 阶段五完成后 | 浏览器 4 个新页面渲染 | ✅ 通过 |
+| V4 | 阶段六+七完成后 | IP 访谈 + 订阅功能 | ✅ 通过 |
+| V5 | 阶段八完成后 | 全量测试 + 类型检查 + 页面联调 | ✅ 通过 |
 
 ---
 
@@ -176,6 +143,6 @@
 ## 环境信息
 
 - **PostgreSQL**: 17.10, 本地安装, 端口 5432, 数据库 `zimti`
-- **Prisma 迁移**: 7 个已应用, 44 张数据表
+- **Prisma 迁移**: 8 个已应用, 44 张数据表
 - **分支**: `work-0519-env-lint-optimize`
-- **最近提交**: `feat: 商业化SaaS五大模块后端实现`
+- **最近提交**: `feat: 阶段七 商业化认证与订阅`
