@@ -52,6 +52,9 @@ const navItems = [
   { label: 'AI工具箱', route: '/ai-toolbox' },
   { label: '知识库', route: '/knowledge' },
   { label: '供应商', route: '/entities' },
+  { label: '客户管理', route: '/crm' },
+  { label: '私域运营', route: '/private-domain' },
+  { label: '一键流水线', route: '/pipeline' },
   { label: '数据监控', route: '/monitoring' },
   { label: '内容资产', route: '/content-assets' },
 ]

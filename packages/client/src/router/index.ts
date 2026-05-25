@@ -122,6 +122,24 @@ const router = createRouter({
       component: () => import('@/views/EntitiesView.vue'),
       meta: { title: '供应商管理' },
     },
+    {
+      path: ROUTES.CRM,
+      name: 'Crm',
+      component: () => import('@/views/CrmView.vue'),
+      meta: { title: '客户管理' },
+    },
+    {
+      path: ROUTES.PRIVATE_DOMAIN,
+      name: 'PrivateDomain',
+      component: () => import('@/views/PrivateDomainView.vue'),
+      meta: { title: '私域运营' },
+    },
+    {
+      path: ROUTES.PIPELINE,
+      name: 'Pipeline',
+      component: () => import('@/views/PipelineView.vue'),
+      meta: { title: '一键流水线' },
+    },
   ],
 })
 

@@ -1124,6 +1124,7 @@ export const ROUTES = {
   AI_STUDIO_PROJECT: '/ai-studio/:projectId',
   ENTITIES: '/entities',
   CRM: '/crm',
+  PRIVATE_DOMAIN: '/private-domain',
   PIPELINE: '/pipeline',
 } as const
 
