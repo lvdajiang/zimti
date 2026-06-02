@@ -8,6 +8,10 @@
           <button class="tab" :class="{ active: activeTab === 'templates' }" @click="switchTab('templates')">话术模板</button>
           <button class="tab" :class="{ active: activeTab === 'funnel' }" @click="switchTab('funnel')">漏斗统计</button>
           <button class="tab" :class="{ active: activeTab === 'reminders' }" @click="switchTab('reminders')">跟进提醒</button>
+          <button class="tab" :class="{ active: activeTab === 'health' }" @click="switchTab('health')">健康度</button>
+          <button class="tab" :class="{ active: activeTab === 'today' }" @click="switchTab('today')">今日触达</button>
+          <button class="tab" :class="{ active: activeTab === 'funnel_analysis' }" @click="switchTab('funnel_analysis')">漏斗分析</button>
+          <button class="tab" :class="{ active: activeTab === 'referral' }" @click="switchTab('referral')">推荐管理</button>
         </div>
       </div>
     </div>
@@ -32,14 +36,18 @@
       <table v-else-if="store.customers.length > 0" class="data-table">
         <thead>
           <tr>
-            <th>姓名</th><th>阶段</th><th>意向</th><th>微信</th><th>标签</th><th>最后跟进</th><th>操作</th>
+            <th>姓名</th><th>阶段</th><th>意向</th><th>来源</th><th>微信</th><th>标签</th><th>最后跟进</th><th>操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="c in store.customers" :key="c.id">
-            <td class="name-cell">{{ c.name }}</td>
+            <td class="name-cell">
+              <span class="health-dot" :class="'dot-' + quickHealth(c.last_follow_up_at)"></span>
+              {{ c.name }}
+            </td>
             <td><span class="badge" :class="'badge-' + stageColor(c.stage)">{{ CUSTOMER_STAGE_LABELS[c.stage as CustomerStage] }}</span></td>
             <td>{{ INTENT_LEVEL_LABELS[c.intent_level as IntentLevel] || '-' }}</td>
+            <td><span class="tag tag-blue" v-if="c.source_type && c.source_type !== 'manual'">{{ sourceLabel(c.source_type) }}</span><span v-else>-</span></td>
             <td>{{ c.wechat || '-' }}</td>
             <td><span v-for="t in c.tags" :key="t.id" class="tag-chip">{{ t.tag }}</span></td>
             <td>{{ formatDate(c.last_follow_up_at) }}</td>
@@ -117,6 +125,142 @@
         </tbody>
       </table>
       <div v-else class="empty-state"><div class="empty-text">暂无跟进提醒</div></div>
+    </template>
+
+    <!-- 健康度 -->
+    <template v-if="activeTab === 'health'">
+      <div class="filters">
+        <select v-model="healthFilter" class="input" style="width: 120px" @change="store.loadContactHealth(healthFilter ? { health: healthFilter } : undefined)">
+          <option value="">全部</option>
+          <option v-for="(label, key) in CONTACT_HEALTH_LABELS" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <button class="btn-primary" :disabled="store.wakeGenerating || selectedHealthIds.length === 0" @click="handleBatchWake">
+          {{ store.wakeGenerating ? '生成中...' : '批量唤醒' }}
+        </button>
+      </div>
+      <div v-if="store.healthLoading" class="loading-wrapper">加载中...</div>
+      <template v-else>
+        <!-- 唤醒话术结果 -->
+        <div v-if="store.wakeScripts.length > 0" class="wake-scripts">
+          <div v-for="s in store.wakeScripts" :key="s.customerId" class="wake-card card">
+            <div class="wake-name">{{ s.name }}</div>
+            <div class="wake-script">{{ s.script }}</div>
+            <button class="btn-link" @click="copyText(s.script)">复制</button>
+          </div>
+        </div>
+        <table v-if="store.contactHealthList.length > 0" class="data-table">
+          <thead><tr><th><input type="checkbox" @change="toggleAllHealth" /></th><th>状态</th><th>姓名</th><th>阶段</th><th>沉默天数</th></tr></thead>
+          <tbody>
+            <tr v-for="h in store.contactHealthList" :key="h.id">
+              <td><input type="checkbox" :value="h.id" v-model="selectedHealthIds" /></td>
+              <td><span class="health-indicator" :class="'hi-' + h.health">{{ healthIcon(h.health) }}</span></td>
+              <td class="name-cell">{{ h.name }}</td>
+              <td><span class="badge" :class="'badge-' + stageColor(h.stage)">{{ CUSTOMER_STAGE_LABELS[h.stage as CustomerStage] || h.stage }}</span></td>
+              <td>{{ h.daysSinceContact != null ? h.daysSinceContact + '天' : '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state"><div class="empty-text">暂无健康度数据</div></div>
+      </template>
+    </template>
+
+    <!-- 今日触达 -->
+    <template v-if="activeTab === 'today'">
+      <div class="filters">
+        <button class="btn" @click="touchPointStore.loadTodayTasks()">刷新</button>
+      </div>
+      <div v-if="touchPointStore.loading" class="loading-wrapper">加载中...</div>
+      <table v-else-if="touchPointStore.todayTasks.length > 0" class="data-table">
+        <thead><tr><th>客户</th><th>触达类型</th><th>内容摘要</th><th>时间</th></tr></thead>
+        <tbody>
+          <tr v-for="t in touchPointStore.todayTasks" :key="t.id">
+            <td>{{ t.customer?.name || t.customer_id }}</td>
+            <td><span class="tag tag-blue">{{ TOUCH_POINT_TYPE_LABELS[t.touch_type] }}</span></td>
+            <td>{{ t.content_summary }}</td>
+            <td>{{ formatDate(t.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty-state"><div class="empty-text">今日暂无触达任务</div></div>
+    </template>
+
+    <!-- 漏斗分析 -->
+    <template v-if="activeTab === 'funnel_analysis'">
+      <div class="filters">
+        <button class="btn-primary" @click="store.loadFunnelAnalysis()">刷新分析</button>
+      </div>
+      <div v-if="store.funnelAnalysisLoading" class="loading-wrapper">分析中...</div>
+      <div v-else-if="store.funnelAnalysis" class="funnel-analysis">
+        <div class="analysis-summary">
+          <div class="summary-card card">
+            <div class="summary-value">{{ store.funnelAnalysis.totalCustomers }}</div>
+            <div class="summary-label">总客户数</div>
+          </div>
+          <div class="summary-card card" v-if="store.funnelAnalysis.bottleneck.stage">
+            <div class="summary-value">{{ CUSTOMER_STAGE_LABELS[store.funnelAnalysis.bottleneck.stage as CustomerStage] }}</div>
+            <div class="summary-label">瓶颈阶段（转化率 {{ Math.round(store.funnelAnalysis.bottleneck.rate * 100) }}%）</div>
+          </div>
+        </div>
+        <div class="funnel-chart">
+          <div v-for="s in store.funnelAnalysis.stages" :key="s.stage" class="funnel-row">
+            <span class="funnel-label">{{ CUSTOMER_STAGE_LABELS[s.stage as CustomerStage] }}</span>
+            <div class="funnel-bar-wrapper">
+              <div class="funnel-bar" :class="'funnel-' + stageColor(s.stage)" :style="{ width: (store.funnelAnalysis ? s.count / Math.max(...store.funnelAnalysis.stages.map(x => x.count), 1) * 100 : 0) + '%' }"></div>
+            </div>
+            <span class="funnel-count">{{ s.count }}</span>
+            <span class="funnel-rate">{{ Math.round(s.conversionRate * 100) }}%</span>
+            <span class="funnel-days">{{ s.avgDays > 0 ? s.avgDays + '天' : '' }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-state"><div class="empty-text">点击「刷新分析」查看漏斗分析</div></div>
+    </template>
+
+    <!-- 推荐管理 -->
+    <template v-if="activeTab === 'referral'">
+      <div class="filters">
+        <select v-model="referralFilter" class="input" style="width: 120px" @change="referralStore.loadReferrals(referralFilter ? { status: referralFilter } : undefined)">
+          <option value="">全部状态</option>
+          <option v-for="(label, key) in REFERRAL_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <button class="btn-primary" @click="referralStore.loadStats()">刷新统计</button>
+      </div>
+      <!-- 统计卡片 -->
+      <div v-if="referralStore.stats" class="referral-stats">
+        <div class="summary-card card"><div class="summary-value">{{ referralStore.stats.total }}</div><div class="summary-label">总推荐</div></div>
+        <div class="summary-card card"><div class="summary-value">{{ referralStore.stats.converted }}</div><div class="summary-label">已转化</div></div>
+        <div class="summary-card card"><div class="summary-value">{{ referralStore.stats.pending }}</div><div class="summary-label">待转化</div></div>
+      </div>
+      <!-- 推荐排行 -->
+      <div v-if="referralStore.stats?.topReferrers?.length" class="top-referrers">
+        <h4 class="section-subtitle">推荐排行</h4>
+        <div v-for="(r, idx) in referralStore.stats.topReferrers" :key="r.id" class="referrer-item">
+          <span class="referrer-rank">{{ idx + 1 }}</span>
+          <span class="referrer-name">{{ r.name }}</span>
+          <span class="referrer-count">{{ r.count }} 次</span>
+          <button class="btn btn-sm btn-primary" @click="handleGenCode(r.id)">生成推荐码</button>
+        </div>
+      </div>
+      <!-- 推荐码展示 -->
+      <div v-if="referralStore.referralCode" class="referral-code card">
+        <div class="code-text">{{ referralStore.referralCode.referralText }}</div>
+        <div class="code-link">{{ referralStore.referralCode.shareLink }}</div>
+        <button class="btn-link" @click="copyText(referralStore.referralCode.referralText)">复制</button>
+      </div>
+      <!-- 推荐列表 -->
+      <div v-if="referralStore.loading" class="loading-wrapper">加载中...</div>
+      <table v-else-if="referralStore.referrals.length > 0" class="data-table">
+        <thead><tr><th>推荐人</th><th>来源</th><th>状态</th><th>时间</th></tr></thead>
+        <tbody>
+          <tr v-for="r in referralStore.referrals" :key="r.id">
+            <td>{{ r.referrer_customer_id?.slice(0, 8) }}...</td>
+            <td><span class="tag tag-blue">{{ REFERRAL_SOURCE_TYPE_LABELS[r.source_type as ReferralSourceType] }}</span></td>
+            <td><span class="badge" :class="'badge-' + referralStatusColor(r.status)">{{ REFERRAL_STATUS_LABELS[r.status as ReferralStatus] }}</span></td>
+            <td>{{ formatDate(r.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty-state"><div class="empty-text">暂无推荐记录</div></div>
     </template>
 
     <!-- 新增/编辑客户弹窗 -->
@@ -201,11 +345,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useCrmStore } from '../stores/crm'
-import { CUSTOMER_STAGE_LABELS, INTENT_LEVEL_LABELS, CHAT_TEMPLATE_CATEGORY_LABELS } from '@zimti/shared'
+import { useTouchPointStore } from '../stores/touchPoint'
+import { useReferralStore } from '../stores/referral'
+import {
+  CUSTOMER_STAGE_LABELS, INTENT_LEVEL_LABELS, CHAT_TEMPLATE_CATEGORY_LABELS,
+  CONTACT_HEALTH_LABELS, TOUCH_POINT_TYPE_LABELS, REFERRAL_STATUS_LABELS,
+  REFERRAL_SOURCE_TYPE_LABELS,
+} from '@zimti/shared'
 import type { Customer } from '../api/crm'
-import type { CustomerStage, IntentLevel, ChatTemplateCategory } from '@zimti/shared'
+import type { CustomerStage, IntentLevel, ChatTemplateCategory, ContactHealth, ReferralSourceType, ReferralStatus } from '@zimti/shared'
 
 const store = useCrmStore()
+const touchPointStore = useTouchPointStore()
+const referralStore = useReferralStore()
 const activeTab = ref('customers')
 
 // 客户表单
@@ -229,10 +381,18 @@ const templateStage = ref('')
 const showReminderModal = ref(false)
 const reminderForm = ref({ customer_id: '', remind_at: '', message: '' })
 
+// 健康度
+const healthFilter = ref<ContactHealth | ''>('')
+const selectedHealthIds = ref<string[]>([])
+
+// 推荐管理
+const referralFilter = ref('')
+
 onMounted(() => {
   store.loadCustomers()
   store.loadFunnelStats()
   store.loadReminders()
+  store.loadContactHealth()
 })
 
 function switchTab(tab: string) {
@@ -241,6 +401,10 @@ function switchTab(tab: string) {
   else if (tab === 'templates') loadTemplates()
   else if (tab === 'funnel') store.loadFunnelStats()
   else if (tab === 'reminders') store.loadReminders()
+  else if (tab === 'health') store.loadContactHealth(healthFilter.value ? { health: healthFilter.value } : undefined)
+  else if (tab === 'today') touchPointStore.loadTodayTasks()
+  else if (tab === 'funnel_analysis') store.loadFunnelAnalysis()
+  else if (tab === 'referral') { referralStore.loadReferrals(); referralStore.loadStats() }
 }
 
 function search() { store.currentPage = 1; store.loadCustomers() }
@@ -324,6 +488,53 @@ async function handleCreateReminder() {
   reminderForm.value = { customer_id: '', remind_at: '', message: '' }
 }
 
+// 健康度
+function healthIcon(health: string): string {
+  const map: Record<string, string> = { healthy: '🟢', attention: '🟡', at_risk: '🔴', lost: '⚫' }
+  return map[health] || '⚪'
+}
+
+function toggleAllHealth(e: Event) {
+  const checked = (e.target as HTMLInputElement).checked
+  selectedHealthIds.value = checked ? store.contactHealthList.map((h) => h.id) : []
+}
+
+async function handleBatchWake() {
+  if (selectedHealthIds.value.length === 0) return
+  await store.generateWakeScripts(selectedHealthIds.value)
+}
+
+async function copyText(text: string) {
+  try { await navigator.clipboard.writeText(text) } catch { /* fallback */ }
+}
+
+// 推荐管理
+async function handleGenCode(customerId: string) {
+  await referralStore.generateCode(customerId)
+}
+
+function referralStatusColor(status: string): string {
+  const map: Record<string, string> = { pending: 'orange', converted: 'green', expired: 'gray' }
+  return map[status] || 'gray'
+}
+
+// 辅助
+function sourceLabel(type: string): string {
+  const map: Record<string, string> = {
+    video: '视频', referral: '推荐', group_chat: '群聊', poster: '海报', group_invite: '社群',
+  }
+  return map[type] || type
+}
+
+function quickHealth(lastFollowUp: string | null): string {
+  if (!lastFollowUp) return 'lost'
+  const days = Math.floor((Date.now() - new Date(lastFollowUp).getTime()) / (24 * 60 * 60 * 1000))
+  if (days <= 7) return 'healthy'
+  if (days <= 30) return 'attention'
+  if (days <= 90) return 'at_risk'
+  return 'lost'
+}
+
 function stageColor(stage: string): string {
   const map: Record<string, string> = {
     new_friend: 'blue', chatting: 'green', deep_consult: 'purple', hesitating: 'orange',
@@ -346,60 +557,96 @@ function funnelWidth(count: number): number {
 </script>
 
 <style scoped>
-.crm { padding: 20px; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
-.page-title { margin: 0; font-size: 20px; }
-.toolbar-actions { display: flex; align-items: center; gap: 8px; }
-.tabs { display: flex; gap: 4px; }
-.tab { padding: 6px 14px; border: 1px solid #d9d9d9; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
-.tab.active { background: #1890ff; color: #fff; border-color: #1890ff; }
-.filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-.input { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; }
+.crm { padding: var(--space-5); }
+.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-3); }
+.page-title { margin: 0; font-size: var(--font-size-xl); }
+.toolbar-actions { display: flex; align-items: center; gap: var(--space-2); }
+.tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.tab { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); cursor: pointer; font-size: var(--font-size-sm); }
+.tab.active { background: var(--color-primary); color: var(--color-bg); border-color: var(--color-primary); }
+.filters { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); flex-wrap: wrap; align-items: center; }
+.input { padding: 6px var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-sm); }
 textarea.input { resize: vertical; font-family: inherit; }
-.btn { padding: 6px 14px; border: 1px solid #d9d9d9; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
-.btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+.btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); cursor: pointer; font-size: var(--font-size-sm); }
+.btn-primary { background: var(--color-primary); color: var(--color-bg); border-color: var(--color-primary); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-warning { background: #fa8c16; color: #fff; border-color: #fa8c16; }
-.btn-danger { color: #ff4d4f; }
-.btn-link { background: none; border: none; color: #1890ff; cursor: pointer; padding: 2px 6px; font-size: 13px; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.data-table th, .data-table td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; text-align: left; }
-.data-table th { font-weight: 600; color: #666; background: #fafafa; }
+.btn-warning { background: var(--color-warning); color: var(--color-bg); border-color: var(--color-warning); }
+.btn-danger { color: var(--color-danger); }
+.btn-link { background: none; border: none; color: var(--color-primary); cursor: pointer; padding: 2px 6px; font-size: var(--font-size-sm); }
+.btn-sm { padding: 3px 10px; font-size: var(--font-size-xs); }
+.data-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+.data-table th, .data-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border-light); text-align: left; }
+.data-table th { font-weight: 600; color: var(--color-text-secondary); background: var(--color-bg-tertiary); }
 .name-cell { font-weight: 500; cursor: pointer; }
 .actions-cell { white-space: nowrap; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #fff; }
-.badge-blue { background: #1890ff; } .badge-green { background: #52c41a; } .badge-gray { background: #999; }
-.badge-orange { background: #fa8c16; } .badge-red { background: #ff4d4f; } .badge-pink { background: #eb2f96; }
+.badge { display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-bg); }
+.badge-blue { background: var(--color-primary); } .badge-green { background: var(--color-success); } .badge-gray { background: var(--color-text-tertiary); }
+.badge-orange { background: var(--color-warning); } .badge-red { background: var(--color-danger); } .badge-pink { background: #eb2f96; }
 .badge-purple { background: #722ed1; } .badge-cyan { background: #13c2c2; }
-.tag-chip { display: inline-block; padding: 1px 8px; background: #f0f0f0; border-radius: 4px; font-size: 12px; margin: 2px 4px 2px 0; }
-.tag-chip.removable { cursor: pointer; background: #e6f7ff; }
-.tag-chip.removable:hover { background: #bae7ff; }
-.loading-wrapper { text-align: center; padding: 40px; color: #999; }
-.empty-state { text-align: center; padding: 60px 20px; }
-.empty-text { color: #999; margin-bottom: 12px; }
-.pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; font-size: 13px; }
-.page-info { color: #666; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal { background: #fff; border-radius: 8px; padding: 24px; width: 480px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
-.modal-title { margin: 0 0 16px; font-size: 16px; }
-.form-group { margin-bottom: 12px; }
-.form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
-.form-row { display: flex; gap: 12px; }
+.tag-chip { display: inline-block; padding: 1px var(--space-2); background: var(--color-border-light); border-radius: var(--radius-sm); font-size: var(--font-size-xs); margin: 2px 4px 2px 0; }
+.tag-chip.removable { cursor: pointer; background: var(--color-primary-light); }
+.tag-chip.removable:hover { background: var(--color-primary-hover); }
+.loading-wrapper { text-align: center; padding: var(--space-8); color: var(--color-text-tertiary); }
+.empty-state { text-align: center; padding: 60px var(--space-5); }
+.empty-text { color: var(--color-text-tertiary); margin-bottom: var(--space-3); }
+.pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-3); margin-top: var(--space-4); font-size: var(--font-size-sm); }
+.page-info { color: var(--color-text-secondary); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal { background: var(--color-bg); border-radius: var(--radius); padding: var(--space-6); width: 480px; max-width: 90vw; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.modal-title { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); }
+.form-group { margin-bottom: var(--space-3); }
+.form-group label { display: block; font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-1); }
+.form-row { display: flex; gap: var(--space-3); }
 .form-row .form-group { flex: 1; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-.card { border: 1px solid #f0f0f0; border-radius: 8px; overflow: hidden; }
-.card-header { padding: 10px 14px; background: #fafafa; display: flex; align-items: center; gap: 8px; }
-.card-body { padding: 14px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
-.score { margin-left: auto; font-size: 12px; color: #52c41a; }
-.tags-area { margin-bottom: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-3); }
+.card { border: 1px solid var(--color-border-light); border-radius: var(--radius); overflow: hidden; }
+.card-header { padding: 10px 14px; background: var(--color-bg-tertiary); display: flex; align-items: center; gap: var(--space-2); }
+.card-body { padding: 14px; font-size: var(--font-size-sm); line-height: 1.6; white-space: pre-wrap; }
+.score { margin-left: auto; font-size: var(--font-size-xs); color: var(--color-success); }
+.tags-area { margin-bottom: var(--space-3); }
+/* 漏斗 */
 .funnel { max-width: 600px; margin: 0 auto; }
-.funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.funnel-label { width: 80px; text-align: right; font-size: 13px; color: #666; }
-.funnel-bar-wrapper { flex: 1; height: 28px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
-.funnel-bar { height: 100%; border-radius: 4px; transition: width 0.3s; min-width: 4px; }
-.funnel-count { width: 40px; font-size: 13px; font-weight: 600; }
-.funnel-new_friend { background: #1890ff; } .funnel-chatting { background: #52c41a; } .funnel-deep_consult { background: #722ed1; }
-.funnel-hesitating { background: #fa8c16; } .funnel-ordered { background: #eb2f96; } .funnel-traveling { background: #13c2c2; }
-.funnel-completed { background: #52c41a; } .funnel-repurchase { background: #ff4d4f; }
+.funnel-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.funnel-label { width: 80px; text-align: right; font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+.funnel-bar-wrapper { flex: 1; height: 28px; background: var(--color-border-light); border-radius: var(--radius-sm); overflow: hidden; }
+.funnel-bar { height: 100%; border-radius: var(--radius-sm); transition: width var(--transition-slow); min-width: 4px; }
+.funnel-count { width: 40px; font-size: var(--font-size-sm); font-weight: 600; }
+.funnel-rate { width: 45px; font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+.funnel-days { width: 50px; font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+.funnel-new_friend { background: var(--color-primary); } .funnel-chatting { background: var(--color-success); } .funnel-deep_consult { background: #722ed1; }
+.funnel-hesitating { background: var(--color-warning); } .funnel-ordered { background: #eb2f96; } .funnel-traveling { background: #13c2c2; }
+.funnel-completed { background: var(--color-success); } .funnel-repurchase { background: var(--color-danger); }
+/* 健康度 */
+.health-dot { display: inline-block; width: 8px; height: 8px; border-radius: var(--radius-round); margin-right: var(--space-1); }
+.dot-healthy { background: var(--color-success); }
+.dot-attention { background: var(--color-warning); }
+.dot-at_risk { background: var(--color-danger); }
+.dot-lost { background: var(--color-text-tertiary); }
+.health-indicator { font-size: var(--font-size-sm); }
+.hi-healthy { color: var(--color-success); }
+.hi-attention { color: var(--color-warning); }
+.hi-at_risk { color: var(--color-danger); }
+.hi-lost { color: var(--color-text-tertiary); }
+.wake-scripts { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
+.wake-card { padding: var(--space-3); }
+.wake-name { font-weight: 600; margin-bottom: var(--space-1); }
+.wake-script { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-1); }
+/* 漏斗分析 */
+.funnel-analysis { max-width: 700px; margin: 0 auto; }
+.analysis-summary { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
+.summary-card { padding: var(--space-4); text-align: center; flex: 1; }
+.summary-value { font-size: var(--font-size-xl); font-weight: 700; color: var(--color-primary); }
+.summary-label { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: var(--space-1); }
+/* 推荐管理 */
+.referral-stats { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
+.top-referrers { margin-bottom: var(--space-4); }
+.section-subtitle { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin: 0 0 var(--space-2); }
+.referrer-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-light); }
+.referrer-rank { width: 20px; height: 20px; border-radius: var(--radius-round); background: var(--color-primary); color: var(--color-bg); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.referrer-name { flex: 1; font-size: var(--font-size-sm); }
+.referrer-count { font-size: var(--font-size-sm); color: var(--color-text-tertiary); }
+.referral-code { padding: var(--space-4); text-align: center; margin-bottom: var(--space-4); }
+.code-text { font-size: var(--font-size-base); font-weight: 500; margin-bottom: var(--space-2); }
+.code-link { font-size: var(--font-size-sm); color: var(--color-primary); margin-bottom: var(--space-2); }
 </style>

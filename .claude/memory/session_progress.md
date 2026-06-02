@@ -4,42 +4,56 @@ description: 会话进度记录
 metadata: 
   node_type: memory
   type: project
-  originSessionId: 1d44c428-cee5-4128-b0e7-89961534f93f
+  originSessionId: 628f4189-3c4d-4efc-9c01-d1b64260249f
 ---
 
 # 会话进度
 
-## 2026-05-14 (第二次)
+## 2026-06-01 ~ 06-02
 ### 已完成
-- **开发环境整理**: 清理 2 个路径异常空目录（`d:zimti.claudeskillsdesign-review/` 等）
-- **前端 .env 体系**: 创建 `.env` / `.env.development` / `.env.production` / `.env.example`（packages/client/），vite.config.ts 代理目标改为从 `VITE_API_PROXY_TARGET` 读取
-- **ESLint + Prettier 配置**: 安装 8 个依赖（eslint@10, typescript-eslint, eslint-plugin-vue, prettier@3 等），创建 `eslint.config.js`（flat config）、`.prettierrc`、`.prettierignore`，根 package.json 新增 lint/format/lint:check 脚本
-- **后端 .env.example**: 创建 `packages/server/.env.example`，包含全部 11 个环境变量及中文注释
-- **后端日志系统**: 新建 `packages/server/src/logger.ts`（控制台+文件双输出，10MB 轮转，5 备份，UTF-8），index.ts 全部替换为 logger 调用，.gitignore 添加 `logs/`
-- **确认跳过项**: 本项目无 Python 代码（pyproject.toml/requirements.txt/start.bat/start.sh 均不存在），无 .db 文件（使用 PostgreSQL）
-### 进行中
-- 无
-### 待处理
-- eslint/prettier 配置已创建但未提交到 git
-- .env 文件需手动配置（API Key: GLM/Pexels/即梦/OpenAI）
-- SSH Key 未生成（C 盘重装后丢失）
+- **UI 美化 + 数据初始化 + 移动端适配**（收尾上期任务）：
+  - CSS 变量设计系统 `theme.css` + 24 页面样式统一 + 移动端侧边栏抽屉
+  - 种子数据服务 `dataSeeder.ts` + 注册自动初始化 + `POST /api/v1/data/seed`
+  - 修复 Express ESM `require('crypto')` → `import { createHmac }`、测试死锁重试
+- **私域流量运营模块**（9 项需求全量开发）：
+  - 客户标签体系增强（4 类标签：基础/兴趣/消费/状态 + 组合筛选）
+  - 好友健康度检测（🟢🟡🔴⚫ 4 级 + 批量 AI 唤醒话术）
+  - 引流来源归因（6 种来源：manual/video/referral/group_chat/poster/group_invite）
+  - 群聊分析器（微信 PC txt 解析 + AI 线索提取 + 一键导入 CRM）→ `/group-chat`
+  - 运营日历（事件 CRUD + 旅行行业 13 个节日预置 + 月历视图）→ `/operation-calendar`
+  - 分层触达引擎（冷/温/热/忠诚 4 层 + 今日触达任务 + AI 推荐话术）
+  - 裂变机制（HMAC 推荐码 + 统计 + 奖励管理）
+  - 转化漏斗分析（StageLog 聚合 + 瓶颈识别 + 转化率/平均天数）
+- **测试**: Server 232 + Client 95 = 327 全绿
 
-## 2026-05-14 (第一次)
-### 已完成
-- **Git 状态检查**: origin 连接正常，main 分支，20 次提交，另有 work-0512-review-optimize 分支
-- **记忆系统重建**: 7 个记忆文件 + MEMORY.md 索引，从代码和文档推断重建（C 盘格式化后首次恢复）
-- **记忆持久化**: 创建 Windows Junction 链接 C:\Users\...\memory\ → D:\zimti\.claude\memory\，记忆随仓库 git 管理
-- **恢复脚本**: scripts/setup-dev.sh，5 阶段自动恢复开发环境（Node/pnpm/Git/Docker/VS Code 23扩展/Git配置/Claude Code/记忆链接/项目依赖）
-- **VS Code 扩展**: 新增 6 个（Prisma/Error Lens/Pretty TS Errors/ESLint/Prettier/EditorConfig）
-- **GitHub 推送**: 4 个 commit 已推送（a35b478..862d39f）
+### 进行中/待办
+- [ ] 浏览器验证新页面（群聊分析、运营日历、CRM 4 个新 Tab）
+- [ ] 上传群聊 txt 文件验证端到端流程
+- [ ] Git commit 所有变更
+- [ ] 朋友圈日历排期前端 UI（数据层已就绪，scheduledAt + status 字段）
+- [ ] 部署到服务器
+
+### 关键文件清单
+- **新增后端服务**: `services/groupChatAnalyzer.ts`, `services/operationCalendarService.ts`, `services/touchPointService.ts`, `services/referralService.ts`
+- **新增后端路由**: `routes/modules/groupChat.ts`, `routes/modules/operationCalendar.ts`, `routes/modules/touchPoint.ts`, `routes/modules/referral.ts`
+- **新增前端页面**: `views/GroupChatView.vue`, `views/OperationCalendarView.vue`
+- **修改前端**: `views/CrmView.vue`（健康度/今日触达/漏斗分析/推荐管理 4 个新 Tab）
+- **修改侧边栏**: `components/AppLayout.vue`（新增群聊分析、运营日历入口）
+- **新增前端 API/Store**: `api/{groupChat,operationCalendar,touchPoint,referral}.ts` + 对应 stores
+- **Prisma 新增 5 表**: GroupChatAnalysis, OperationCalendar, TouchPoint, Referral, ReferralReward
+- **shared-schema.ts**: 新增 ~10 个类型/枚举（ContactHealth, TouchPointType, ReferralSourceType 等）
+
+### 关键决策
+- [[decisions]] 私域运营模块采用「后端服务 + 前端页面 + 数据模型」三层并行 agent 开发
+- 群聊解析器支持微信 PC 导出 txt 格式（正则提取发送人+时间+内容）
+- 客户健康度基于 lastFollowUpAt 计算（7/30/90 天阈值）
+- 裂变推荐码使用 HMAC-SHA256 生成
+- 运营日历预置 13 个旅行行业关键节点（含农历节日 2025-2028 查表）
 
 ## 2026-05-25
 ### 已完成
-- **记忆系统再次保存**: save-ctx 提交 session_progress/decisions/known_issues，已推送 GitHub
-- **Flova AI 影视流程分析**: 对比 Zimti 与 Flova 1.0 功能差异，重合约 30%，核心方向不同
-### 进行中
-- **AI 视频制作功能讨论**: 用户有意向将 AI 分镜+即梦生视频+Remotion 组装整合到现有流程
-- **GPT Image 2.0 接入**: 用户确认要加入，技术方案已确认（复用 OpenAI API Key，走 Images API），待开始实现
+- **记忆系统再次保存**: save-ctx 提交 session_progress/decisions/known_issues
+- **Flova AI 影视流程分析**: 对比 Zimti 与 Flova 1.0 功能差异
 ### 待处理
-- **GPT Image 2.0 接入实现**: 后端 service + 前端入口（素材库/选题工作台），与即梦并列
-- **AI 分镜流程**: GLM 拆分镜 → 即梦/GPT Image 生画面 → Remotion 组装（长期规划）
+- **GPT Image 2.0 接入实现**: 后端 service + 前端入口，与即梦并列
+- **AI 分镜流程**: GLM 拆分镜 → 即梦/GPT Image 生画面 → Remotion 组装

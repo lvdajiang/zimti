@@ -261,7 +261,55 @@ export const INTENT_LEVEL_LABELS: Record<IntentLevel, string> = {
 }
 
 // --- 1.46 客户来源 ---
-export type CustomerSourceType = 'manual' | 'video' | 'referral'
+export type CustomerSourceType = 'manual' | 'video' | 'referral' | 'group_chat' | 'poster' | 'group_invite'
+
+// --- 1.46a 客户标签分类 ---
+export type CustomerTagCategory = 'basic' | 'interest' | 'consume' | 'status'
+export const CUSTOMER_TAG_CATEGORY_LABELS: Record<CustomerTagCategory, string> = {
+  basic: '基础', interest: '兴趣', consume: '消费', status: '状态',
+}
+
+// --- 1.46b 好友健康度 ---
+export type ContactHealth = 'healthy' | 'attention' | 'at_risk' | 'lost'
+export const CONTACT_HEALTH_LABELS: Record<ContactHealth, string> = {
+  healthy: '健康', attention: '需关注', at_risk: '即将流失', lost: '已流失',
+}
+
+// --- 1.46c 朋友圈内容状态 ---
+export type MomentsContentStatus = 'draft' | 'scheduled' | 'sent'
+export const MOMENTS_CONTENT_STATUS_LABELS: Record<MomentsContentStatus, string> = {
+  draft: '草稿', scheduled: '已排期', sent: '已发送',
+}
+
+// --- 1.46d 触达类型 ---
+export type TouchPointType = 'private_chat' | 'moments' | 'group_post'
+export const TOUCH_POINT_TYPE_LABELS: Record<TouchPointType, string> = {
+  private_chat: '私聊', moments: '朋友圈', group_post: '群发',
+}
+
+// --- 1.46e 裂变来源类型 ---
+export type ReferralSourceType = 'friend' | 'poster' | 'group_invite'
+export const REFERRAL_SOURCE_TYPE_LABELS: Record<ReferralSourceType, string> = {
+  friend: '老带新', poster: '海报裂变', group_invite: '社群裂变',
+}
+
+// --- 1.46f 裂变状态 ---
+export type ReferralStatus = 'pending' | 'converted' | 'expired'
+export const REFERRAL_STATUS_LABELS: Record<ReferralStatus, string> = {
+  pending: '待转化', converted: '已转化', expired: '已过期',
+}
+
+// --- 1.46g 运营日历事件类型 ---
+export type CalendarEventType = 'holiday' | 'campaign' | 'content_plan' | 'reminder'
+export const CALENDAR_EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
+  holiday: '节日', campaign: '活动', content_plan: '内容计划', reminder: '提醒',
+}
+
+// --- 1.46h 推荐奖励状态 ---
+export type RewardStatus = 'pending' | 'issued' | 'redeemed' | 'expired'
+export const REWARD_STATUS_LABELS: Record<RewardStatus, string> = {
+  pending: '待发放', issued: '已发放', redeemed: '已兑换', expired: '已过期',
+}
 
 // --- 1.47 朋友圈内容类型 ---
 export type MomentsContentType = 'professional' | 'life' | 'conversion'
@@ -785,11 +833,13 @@ export interface CustomerRecord {
   wechat: string | null
   source_type: CustomerSourceType
   source_ref_id: string | null
+  source_detail: { groupName?: string; addMethod?: string; cost?: number } | null
   intent_level: IntentLevel
   stage: CustomerStage
   travel_intent: { people?: number; date?: string; destination?: string; budget?: string } | null
   notes: string | null
   last_follow_up_at: string | null
+  is_deleted: boolean
   created_at: string
   updated_at: string
 }
@@ -817,6 +867,76 @@ export interface SubscriptionRecord {
   end_date: string | null
   quota_used: number
   quota_limit: number
+  created_at: string
+  updated_at: string
+}
+
+// --- 群聊分析报告 ---
+export interface GroupChatAnalysisRecord {
+  id: string
+  user_id: string
+  group_name: string
+  file_name: string
+  message_count: number
+  lead_count: number
+  report: {
+    leads: Array<{ name: string; intent: string; context: string }>
+    hotTopics: Array<{ word: string; count: number }>
+    painPoints: string[]
+    priceRange: { min: number; max: number; currency: string } | null
+  }
+  created_at: string
+}
+
+// --- 运营日历事件 ---
+export interface OperationCalendarRecord {
+  id: string
+  user_id: string
+  event_date: string
+  title: string
+  event_type: CalendarEventType
+  content: {
+    moments_plan?: string
+    chat_script?: string
+    campaign_plan?: string
+  } | null
+  remind_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 触达记录 ---
+export interface TouchPointRecord {
+  id: string
+  user_id: string
+  customer_id: string
+  touch_type: TouchPointType
+  content_summary: string
+  response: string | null
+  created_at: string
+}
+
+// --- 推荐关系 ---
+export interface ReferralRecord {
+  id: string
+  user_id: string
+  referrer_customer_id: string
+  referee_customer_id: string | null
+  source_type: ReferralSourceType
+  status: ReferralStatus
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 推荐奖励 ---
+export interface ReferralRewardRecord {
+  id: string
+  user_id: string
+  referral_id: string
+  reward_type: string
+  reward_value: number
+  status: RewardStatus
   created_at: string
   updated_at: string
 }
@@ -1079,6 +1199,11 @@ export const API = {
     FOLLOW_UP_REMINDERS: '/crm/follow-up-reminders',
     SILENT_CUSTOMERS: '/crm/silent-customers',
     FUNNEL_STATS: '/crm/funnel-stats',
+    CONTACT_HEALTH: '/crm/contact-health',
+    TAG_CATEGORIES: '/crm/tag-categories',
+    FUNNEL_ANALYSIS: '/crm/funnel-analysis',
+    BATCH_WAKE_SCRIPTS: '/crm/batch-wake-scripts',
+    IMPORT_LEADS: '/crm/import-leads',
   },
 
   // --- 私域 ---
@@ -1087,6 +1212,41 @@ export const API = {
     MOMENTS_SENT: (id: string) => `/private-domain/moments/${id}/sent`,
     MOMENTS_ENGAGEMENT: (id: string) => `/private-domain/moments/${id}/engagement`,
     GROUP_CONTENT: '/private-domain/group-content',
+    MOMENTS_CALENDAR: '/private-domain/moments/calendar',
+  },
+
+  // --- 群聊分析 ---
+  GROUP_CHAT: {
+    UPLOAD: '/group-chat/upload',
+    ANALYSES: '/group-chat/analyses',
+    ANALYSIS: (id: string) => `/group-chat/analyses/${id}`,
+  },
+
+  // --- 运营日历 ---
+  OPERATION_CALENDAR: {
+    EVENTS: '/operation-calendar/events',
+    EVENT: (id: string) => `/operation-calendar/events/${id}`,
+    EVENTS_BY_MONTH: (year: number, month: number) => `/operation-calendar/events/${year}/${month}`,
+    PRESET_HOLIDAYS: '/operation-calendar/preset-holidays',
+  },
+
+  // --- 触达 ---
+  TOUCH_POINTS: {
+    LIST: '/touch-points',
+    CREATE: '/touch-points',
+    TODAY_TASKS: '/touch-points/today-tasks',
+    CUSTOMER_HISTORY: (customerId: string) => `/touch-points/customer/${customerId}`,
+  },
+
+  // --- 裂变 ---
+  REFERRAL: {
+    LIST: '/referral',
+    CREATE: '/referral',
+    REFERRAL: (id: string) => `/referral/${id}`,
+    REWARDS: '/referral/rewards',
+    REWARD: (id: string) => `/referral/rewards/${id}`,
+    STATS: '/referral/stats',
+    GENERATE_CODE: (customerId: string) => `/referral/generate-code/${customerId}`,
   },
 
   // --- 流水线 ---
@@ -1138,6 +1298,8 @@ export const ROUTES = {
   ENTITIES: '/entities',
   CRM: '/crm',
   PRIVATE_DOMAIN: '/private-domain',
+  GROUP_CHAT: '/group-chat',
+  OPERATION_CALENDAR: '/operation-calendar',
   PIPELINE: '/pipeline',
   INTERVIEW: '/interview',
 } as const

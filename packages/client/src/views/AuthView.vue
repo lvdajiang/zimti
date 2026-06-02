@@ -201,57 +201,57 @@ async function handleUpgrade(plan: string): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
-  padding: 24px;
+  background: var(--color-bg-secondary);
+  padding: var(--space-6);
 }
 
 /* 登录/注册卡片 */
 .auth-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 40px;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md);
 }
 .auth-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .auth-title {
   font-size: 28px;
-  color: #1a1a2e;
-  margin: 0 0 4px;
+  color: var(--color-sidebar);
+  margin: 0 0 var(--space-1);
 }
 .auth-subtitle {
-  font-size: 13px;
-  color: #999;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
   margin: 0;
 }
 .auth-tabs {
   display: flex;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-border-light);
+  margin-bottom: var(--space-6);
 }
 .tab-btn {
   flex: 1;
   padding: 10px;
   background: none;
   border: none;
-  font-size: 14px;
-  color: #999;
+  font-size: var(--font-size-base);
+  color: var(--color-text-tertiary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 .tab-btn.active {
-  color: #4fc3f7;
-  border-bottom-color: #4fc3f7;
+  color: var(--color-sidebar-active);
+  border-bottom-color: var(--color-sidebar-active);
 }
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .form-group {
   display: flex;
@@ -259,37 +259,38 @@ async function handleUpgrade(plan: string): Promise<void> {
   gap: 6px;
 }
 .form-group label {
-  font-size: 13px;
-  color: #666;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 .optional {
-  color: #bbb;
+  color: var(--color-text-disabled);
 }
 .form-group input {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 10px var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: var(--font-size-base);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition);
 }
 .form-group input:focus {
-  border-color: #4fc3f7;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 .error-msg {
-  color: #e74c3c;
-  font-size: 13px;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
   margin: 0;
 }
 .submit-btn {
-  padding: 12px;
-  background: #4fc3f7;
-  color: #fff;
+  padding: var(--space-3);
+  background: var(--color-sidebar-active);
+  color: var(--color-bg);
   border: none;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: var(--radius);
+  font-size: var(--font-size-md);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--transition);
 }
 .submit-btn:hover:not(:disabled) {
   background: #39b0d8;
@@ -299,17 +300,17 @@ async function handleUpgrade(plan: string): Promise<void> {
   cursor: not-allowed;
 }
 .demo-btn {
-  padding: 12px;
-  background: #1a1a2e;
-  color: #fff;
+  padding: var(--space-3);
+  background: var(--color-sidebar);
+  color: var(--color-bg);
   border: none;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: var(--radius);
+  font-size: var(--font-size-md);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--transition);
 }
 .demo-btn:hover:not(:disabled) {
-  background: #2a2a4e;
+  background: var(--color-sidebar-text);
 }
 
 /* 订阅管理页 */
@@ -321,66 +322,66 @@ async function handleUpgrade(plan: string): Promise<void> {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .user-name {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--color-sidebar);
 }
 .user-plan {
-  font-size: 13px;
-  padding: 4px 10px;
+  font-size: var(--font-size-sm);
+  padding: var(--space-1) 10px;
   background: rgba(79, 195, 247, 0.12);
-  color: #4fc3f7;
-  border-radius: 12px;
+  color: var(--color-sidebar-active);
+  border-radius: var(--radius-lg);
 }
 .logout-btn {
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 .logout-btn:hover {
-  background: #eee;
+  background: var(--color-border-light);
 }
 .current-plan-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 .current-plan-card h3 {
-  margin: 0 0 16px;
-  font-size: 16px;
-  color: #1a1a2e;
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-lg);
+  color: var(--color-sidebar);
 }
 .quota-bar {
   height: 8px;
-  background: #eee;
-  border-radius: 4px;
+  background: var(--color-border-light);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .quota-progress {
   height: 100%;
-  background: linear-gradient(90deg, #4fc3f7, #1a1a2e);
-  border-radius: 4px;
-  transition: width 0.3s;
+  background: linear-gradient(90deg, var(--color-sidebar-active), var(--color-sidebar));
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-slow);
 }
 .quota-text {
-  font-size: 13px;
-  color: #666;
-  margin: 0 0 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-3);
 }
 .features {
   display: flex;
@@ -388,80 +389,80 @@ async function handleUpgrade(plan: string): Promise<void> {
   gap: 6px;
 }
 .feature-tag {
-  font-size: 12px;
-  padding: 4px 10px;
-  background: #f0f8ff;
-  color: #4fc3f7;
-  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) 10px;
+  background: var(--color-primary-light);
+  color: var(--color-sidebar-active);
+  border-radius: var(--radius-sm);
 }
 .no-sub {
-  color: #999;
-  font-size: 14px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-base);
 }
 .plans-section h3 {
-  font-size: 16px;
-  color: #1a1a2e;
-  margin: 0 0 16px;
+  font-size: var(--font-size-lg);
+  color: var(--color-sidebar);
+  margin: 0 0 var(--space-4);
 }
 .loading {
-  color: #999;
-  font-size: 14px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-base);
 }
 .plans-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 .plan-card {
-  background: #fff;
-  border: 1px solid #eee;
-  border-radius: 12px;
-  padding: 20px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
   text-align: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.2s;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition);
 }
 .plan-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md);
 }
 .plan-card.current {
-  border-color: #4fc3f7;
+  border-color: var(--color-sidebar-active);
 }
 .plan-card h4 {
-  margin: 0 0 8px;
-  font-size: 16px;
-  color: #1a1a2e;
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-lg);
+  color: var(--color-sidebar);
 }
 .plan-quota {
-  font-size: 13px;
-  color: #666;
-  margin: 0 0 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-3);
 }
 .plan-features {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px;
-  font-size: 13px;
-  color: #888;
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 .plan-features li {
   padding: 2px 0;
 }
 .upgrade-btn {
-  padding: 8px 24px;
-  background: #4fc3f7;
-  color: #fff;
+  padding: var(--space-2) 24px;
+  background: var(--color-sidebar-active);
+  color: var(--color-bg);
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }
 .upgrade-btn:hover {
   background: #39b0d8;
 }
 .current-badge {
-  font-size: 12px;
-  color: #4fc3f7;
+  font-size: var(--font-size-xs);
+  color: var(--color-sidebar-active);
   font-weight: 500;
 }
 </style>

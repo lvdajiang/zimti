@@ -58,6 +58,10 @@ model User {
   momentsContents      MomentsContent[]
   groupContents        GroupContent[]
   subscriptions        Subscription[]
+  groupChatAnalyses    GroupChatAnalysis[]
+  operationCalendars   OperationCalendar[]
+  touchPoints          TouchPoint[]
+  referrals            Referral[]
 
   @@map("users")
 }
@@ -730,12 +734,14 @@ model Customer {
   aliases        String    @default("") @db.VarChar(300)
   phone          String?   @db.VarChar(50)
   wechat         String?   @db.VarChar(100)
-  sourceType     String    @default("manual") @map("source_type") @db.VarChar(20) // manual/video/referral
+  sourceType     String    @default("manual") @map("source_type") @db.VarChar(20) // manual/video/referral/group_chat/poster/group_invite
   sourceRefId    String?   @map("source_ref_id") @db.VarChar(100)   // 引流来源ID
+  sourceDetail   Json?     @map("source_detail")  // { groupName, addMethod, cost }
   intentLevel    String    @default("medium") @map("intent_level") @db.VarChar(10) // high/medium/low
   stage          String    @default("new_friend") @db.VarChar(20)  // 8阶段
   travelIntent   Json?     @map("travel_intent")  // {people, date, destination, budget}
   notes          String?   @db.Text
+  isDeleted      Boolean   @default(false) @map("is_deleted")
   lastFollowUpAt DateTime? @map("last_follow_up_at")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
@@ -744,6 +750,7 @@ model Customer {
   tags           CustomerTag[]
   stageLogs      CustomerStageLog[]
   reminders      FollowUpReminder[]
+  touchPoints    TouchPoint[]
 
   @@index([userId])
   @@index([stage])
@@ -756,11 +763,13 @@ model CustomerTag {
   id         String   @id @default(uuid()) @db.Uuid
   customerId String   @map("customer_id") @db.Uuid
   tag        String   @db.VarChar(50)
+  category   String   @default("basic") @db.VarChar(20) // basic/interest/consume/status
 
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@unique([customerId, tag])
   @@index([customerId])
+  @@index([category])
   @@map("customer_tags")
 }
 
@@ -827,6 +836,8 @@ model MomentsContent {
   contentType     String    @map("content_type") @db.VarChar(20)  // professional/life/conversion
   content         String    @db.Text
   imageSuggestion String?   @map("image_suggestion") @db.Text
+  status          String    @default("draft") @db.VarChar(20)  // draft/scheduled/sent
+  scheduledAt     DateTime? @map("scheduled_at")
   sentAt          DateTime? @map("sent_at")
   engagementData  Json?     @map("engagement_data")  // {likes, comments, screenshot}
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -835,6 +846,8 @@ model MomentsContent {
 
   @@index([userId])
   @@index([contentType])
+  @@index([status])
+  @@index([scheduledAt])
   @@map("moments_contents")
 }
 
@@ -933,4 +946,103 @@ model Subscription {
   @@index([plan])
   @@index([status])
   @@map("subscriptions")
+}
+
+// ============================================================
+// 私域流量运营
+// ============================================================
+
+// --- 群聊分析报告 ---
+model GroupChatAnalysis {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  groupName    String   @map("group_name") @db.VarChar(200)
+  fileName     String   @map("file_name") @db.VarChar(500)
+  messageCount Int      @default(0) @map("message_count")
+  leadCount    Int      @default(0) @map("lead_count")
+  report       Json     @map("report") // { leads[], hotTopics[], painPoints[], priceRange }
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([groupName])
+  @@map("group_chat_analyses")
+}
+
+// --- 运营日历事件 ---
+model OperationCalendar {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  eventDate  DateTime  @map("event_date") @db.Date
+  title      String    @db.VarChar(200)
+  eventType  String    @map("event_type") @db.VarChar(20) // holiday/campaign/content_plan/reminder
+  content    Json?     @map("content") // { moments_plan, chat_script, campaign_plan }
+  remindAt   DateTime? @map("remind_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([eventDate])
+  @@map("operation_calendars")
+}
+
+// --- 触达记录 ---
+model TouchPoint {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  customerId     String   @map("customer_id") @db.Uuid
+  touchType      String   @map("touch_type") @db.VarChar(20) // private_chat/moments/group_post
+  contentSummary String   @map("content_summary") @db.Text
+  response       String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User     @relation(fields: [userId], references: [id])
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("touch_points")
+}
+
+// --- 推荐关系 ---
+model Referral {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  referrerCustomerId String   @map("referrer_customer_id") @db.Uuid
+  refereeCustomerId  String?  @map("referee_customer_id") @db.Uuid
+  sourceType         String   @map("source_type") @db.VarChar(20) // friend/poster/group_invite
+  status             String   @default("pending") @db.VarChar(20) // pending/converted/expired
+  note               String?  @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user               User     @relation(fields: [userId], references: [id])
+  rewards            ReferralReward[]
+
+  @@index([userId])
+  @@index([referrerCustomerId])
+  @@index([status])
+  @@map("referrals")
+}
+
+// --- 推荐奖励 ---
+model ReferralReward {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  referralId  String   @map("referral_id") @db.Uuid
+  rewardType  String   @map("reward_type") @db.VarChar(30) // coupon/cash/service
+  rewardValue Decimal  @map("reward_value") @db.Decimal(10, 2)
+  status      String   @default("pending") @db.VarChar(20) // pending/issued/redeemed/expired
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  referral    Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("referral_rewards")
 }

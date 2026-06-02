@@ -78,9 +78,44 @@ ${context || '（品牌画像尚未建立）'}
 router.post('/private-domain/moments/:id/sent', async (req: Request, res: Response) => {
   const item = await prisma.momentsContent.update({
     where: { id: str(req.params.id), userId: getUserId(req as any) },
-    data: { sentAt: new Date() },
+    data: { sentAt: new Date(), status: 'sent' },
   })
   res.json({ id: item.id, sent_at: item.sentAt?.toISOString() })
+})
+
+// GET /api/v1/private-domain/moments/calendar — 按月获取排期
+router.get('/private-domain/moments/calendar', async (req: Request, res: Response) => {
+  const year = Number(req.query.year) || new Date().getFullYear()
+  const month = Number(req.query.month) || new Date().getMonth() + 1
+  const start = new Date(year, month - 1, 1)
+  const end = new Date(year, month, 1)
+
+  const items = await prisma.momentsContent.findMany({
+    where: {
+      userId: getUserId(req as any),
+      OR: [
+        { createdAt: { gte: start, lt: end } },
+        { scheduledAt: { gte: start, lt: end } },
+        { sentAt: { gte: start, lt: end } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json({ items })
+})
+
+// PUT /api/v1/private-domain/moments/:id/schedule — 更新排期
+router.put('/private-domain/moments/:id/schedule', async (req: Request, res: Response) => {
+  const { scheduled_at, status } = req.body
+  const data: Record<string, unknown> = {}
+  if (scheduled_at !== undefined) data.scheduledAt = scheduled_at ? new Date(scheduled_at) : null
+  if (status !== undefined) data.status = status
+
+  const item = await prisma.momentsContent.update({
+    where: { id: str(req.params.id), userId: getUserId(req as any) },
+    data,
+  })
+  res.json({ id: item.id })
 })
 
 // POST /api/v1/private-domain/moments/:id/engagement — 录入互动数据

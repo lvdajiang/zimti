@@ -111,6 +111,18 @@ const router = createRouter({
       meta: { title: 'AI工具箱' },
     },
     {
+      path: ROUTES.GROUP_CHAT,
+      name: 'GroupChat',
+      component: () => import('@/views/GroupChatView.vue'),
+      meta: { title: '群聊分析' },
+    },
+    {
+      path: ROUTES.OPERATION_CALENDAR,
+      name: 'OperationCalendar',
+      component: () => import('@/views/OperationCalendarView.vue'),
+      meta: { title: '运营日历' },
+    },
+    {
       path: '/knowledge',
       name: 'Knowledge',
       component: () => import('@/views/KnowledgeView.vue'),

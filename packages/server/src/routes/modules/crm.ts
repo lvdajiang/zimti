@@ -4,7 +4,7 @@ import { getUserId, str, toInt } from '../../constants.js'
 import { optionalAuth } from '../../services/auth/authService.js'
 import { CustomerService } from '../../services/crm/customerService.js'
 import type { Request, Response } from 'express'
-import type { IntentLevel, CustomerStage } from '@zimti/shared'
+import type { IntentLevel, CustomerStage, ContactHealth } from '@zimti/shared'
 
 const router: Router = Router()
 router.use(optionalAuth)
@@ -12,10 +12,15 @@ router.use(optionalAuth)
 // GET /api/v1/crm/customers — 客户列表
 router.get('/crm/customers', async (req: Request, res: Response) => {
   const service = new CustomerService(getUserId(req as any))
+  const tagCategoriesStr = str(req.query.tag_categories)
   const result = await service.list({
     stage: str(req.query.stage) as CustomerStage || undefined,
     intentLevel: str(req.query.intent_level) as IntentLevel || undefined,
     keyword: str(req.query.keyword) || undefined,
+    tagCategories: tagCategoriesStr ? tagCategoriesStr.split(',') : undefined,
+    sourceType: str(req.query.source_type) || undefined,
+    isDeleted: req.query.is_deleted === 'true' ? true : req.query.is_deleted === 'false' ? false : undefined,
+    health: str(req.query.health) as ContactHealth || undefined,
     page: toInt(req.query.page, 1),
     pageSize: toInt(req.query.page_size, 20),
   })
@@ -170,6 +175,97 @@ router.post('/crm/follow-up-reminders', async (req: Request, res: Response) => {
     data: { userId: getUserId(req as any), customerId: customer_id, remindAt: new Date(remind_at), message },
   })
   res.status(201).json({ id: item.id })
+})
+
+// --- 联系人健康度 ---
+
+// GET /api/v1/crm/contact-health — 获取联系人健康度列表
+router.get('/crm/contact-health', async (req: Request, res: Response) => {
+  try {
+    const service = new CustomerService(getUserId(req as any))
+    let items = await service.getContactHealth()
+
+    // 支持按健康度筛选
+    const healthFilter = str(req.query.health) as ContactHealth
+    if (healthFilter) {
+      items = items.filter((item) => item.health === healthFilter)
+    }
+
+    res.json({ items })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '获取健康度失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// --- 批量唤醒话术 ---
+
+// POST /api/v1/crm/batch-wake-scripts — 批量生成唤醒话术
+router.post('/crm/batch-wake-scripts', async (req: Request, res: Response) => {
+  try {
+    const { customer_ids } = req.body
+    if (!Array.isArray(customer_ids) || customer_ids.length === 0) {
+      res.status(400).json({ error: 'customer_ids 不能为空数组' })
+      return
+    }
+    if (customer_ids.length > 20) {
+      res.status(400).json({ error: '单次最多 20 个客户' })
+      return
+    }
+
+    const service = new CustomerService(getUserId(req as any))
+    const scripts = await service.batchGenerateWakeScripts(customer_ids)
+    res.json({ items: scripts })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '生成唤醒话术失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// --- 批量导入线索 ---
+
+// POST /api/v1/crm/import-leads — 批量导入线索
+router.post('/crm/import-leads', async (req: Request, res: Response) => {
+  try {
+    const { leads } = req.body
+    if (!Array.isArray(leads) || leads.length === 0) {
+      res.status(400).json({ error: 'leads 不能为空数组' })
+      return
+    }
+    // 校验每条数据必须有 name
+    for (let i = 0; i < leads.length; i++) {
+      if (!leads[i].name) {
+        res.status(400).json({ error: `第 ${i + 1} 条数据缺少 name` })
+        return
+      }
+    }
+
+    const service = new CustomerService(getUserId(req as any))
+    const result = await service.importLeads(leads)
+    res.status(201).json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '导入线索失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// --- 漏斗分析 ---
+
+// GET /api/v1/crm/funnel-analysis — 漏斗分析（转化率+停留时间）
+router.get('/crm/funnel-analysis', async (req: Request, res: Response) => {
+  try {
+    const service = new CustomerService(getUserId(req as any))
+    const result = await service.getFunnelAnalysis({
+      startDate: str(req.query.start_date) || undefined,
+      endDate: str(req.query.end_date) || undefined,
+      sourceType: str(req.query.source_type) || undefined,
+      tags: req.query.tags ? String(req.query.tags).split(',') : undefined,
+    })
+    res.json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '漏斗分析失败'
+    res.status(500).json({ error: message })
+  }
 })
 
 export default router

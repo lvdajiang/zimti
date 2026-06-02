@@ -5,8 +5,9 @@ import {
   updateCustomerStage, addCustomerTags, removeCustomerTag,
   parseVoiceInput, fetchChatTemplates, generateChatTemplates,
   fetchFollowUpReminders, createFollowUpReminder, fetchSilentCustomers, fetchFunnelStats,
+  fetchContactHealth, batchGenerateWakeScripts, fetchFunnelAnalysis,
 } from '../api/crm'
-import type { Customer, ChatTemplate, FollowUpReminder, FunnelStats, VoiceInputResult } from '../api/crm'
+import type { Customer, ChatTemplate, FollowUpReminder, FunnelStats, VoiceInputResult, ContactHealthItem, WakeScript, FunnelAnalysis } from '../api/crm'
 import type { CustomerStage, IntentLevel } from '@zimti/shared'
 
 export const useCrmStore = defineStore('crm', () => {
@@ -36,6 +37,18 @@ export const useCrmStore = defineStore('crm', () => {
   // 跟进提醒
   const followUpReminders = ref<FollowUpReminder[]>([])
   const remindersLoading = ref(false)
+
+  // 联系人健康度
+  const contactHealthList = ref<ContactHealthItem[]>([])
+  const healthLoading = ref(false)
+
+  // 唤醒话术
+  const wakeScripts = ref<WakeScript[]>([])
+  const wakeGenerating = ref(false)
+
+  // 漏斗分析（详细版）
+  const funnelAnalysis = ref<FunnelAnalysis | null>(null)
+  const funnelAnalysisLoading = ref(false)
 
   async function loadCustomers(): Promise<void> {
     loading.value = true
@@ -143,6 +156,40 @@ export const useCrmStore = defineStore('crm', () => {
     await loadReminders()
   }
 
+  async function loadContactHealth(params?: { health?: string }): Promise<void> {
+    healthLoading.value = true
+    try {
+      const res = await fetchContactHealth(params)
+      contactHealthList.value = res.items
+    } finally {
+      healthLoading.value = false
+    }
+  }
+
+  async function generateWakeScripts(customerIds: string[]): Promise<void> {
+    wakeGenerating.value = true
+    try {
+      const res = await batchGenerateWakeScripts(customerIds)
+      wakeScripts.value = res.items
+    } finally {
+      wakeGenerating.value = false
+    }
+  }
+
+  async function loadFunnelAnalysis(params?: {
+    start_date?: string
+    end_date?: string
+    source_type?: string
+    tags?: string[]
+  }): Promise<void> {
+    funnelAnalysisLoading.value = true
+    try {
+      funnelAnalysis.value = await fetchFunnelAnalysis(params)
+    } finally {
+      funnelAnalysisLoading.value = false
+    }
+  }
+
   return {
     customers, total, loading, currentPage, pageSize,
     filterStage, filterIntent, filterKeyword,
@@ -155,5 +202,8 @@ export const useCrmStore = defineStore('crm', () => {
     loadFunnelStats, loadSilentCustomers,
     loadChatTemplates, generateTemplates,
     loadReminders, createReminder,
+    contactHealthList, healthLoading, loadContactHealth,
+    wakeScripts, wakeGenerating, generateWakeScripts,
+    funnelAnalysis, funnelAnalysisLoading, loadFunnelAnalysis,
   }
 })

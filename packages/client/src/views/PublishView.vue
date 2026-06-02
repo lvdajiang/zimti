@@ -181,53 +181,53 @@ onUnmounted(() => {
 
 <style scoped>
 .publish-page { max-width: 900px; margin: 0 auto; }
-.title-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.title-bar h2 { margin: 0; font-size: 22px; color: #1a1a2e; }
-.auto-save-hint { font-size: 12px; color: #16a34a; background: #dcfce7; padding: 2px 10px; border-radius: 10px; }
-.btn { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
-.btn-primary { background: #4a6cf7; color: #fff; }
-.btn-sm { padding: 4px 12px; border-radius: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 12px; }
-.btn-sm.btn-primary { border: none; color: #fff; }
+.title-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5); }
+.title-bar h2 { margin: 0; font-size: var(--font-size-xl); color: var(--color-text); }
+.auto-save-hint { font-size: var(--font-size-xs); color: var(--color-success); background: #dcfce7; padding: 2px 10px; border-radius: 10px; }
+.btn { padding: var(--space-2) var(--space-5); border-radius: var(--radius); border: none; cursor: pointer; font-size: var(--font-size-base); font-weight: 500; }
+.btn-primary { background: var(--color-primary); color: var(--color-bg); }
+.btn-sm { padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); cursor: pointer; font-size: var(--font-size-xs); }
+.btn-sm.btn-primary { border: none; color: var(--color-bg); }
 .btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
-.filter-bar { margin-bottom: 16px; }
-.filter-tabs { display: flex; gap: 4px; }
-.filter-tab { padding: 6px 16px; border: 1px solid #ddd; border-radius: 20px; background: #fff; cursor: pointer; font-size: 13px; }
-.filter-tab.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
-.record-list { display: flex; flex-direction: column; gap: 12px; }
-.record-card { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: 16px; }
-.record-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.platform-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; }
-.platform-badge.xiaohongshu { background: #ffe0e6; color: #e53935; }
+.filter-bar { margin-bottom: var(--space-4); }
+.filter-tabs { display: flex; gap: var(--space-1); }
+.filter-tab { padding: var(--space-1) var(--space-4); border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-bg); cursor: pointer; font-size: var(--font-size-sm); }
+.filter-tab.active { background: var(--color-primary); color: var(--color-bg); border-color: var(--color-primary); }
+.record-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.record-card { background: var(--color-bg); border: 1px solid var(--color-border-light); border-radius: var(--radius-xl); padding: var(--space-4); }
+.record-header { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+.platform-badge { padding: 2px var(--space-2); border-radius: 10px; font-size: var(--font-size-xs); }
+.platform-badge.xiaohongshu { background: #ffe0e6; color: var(--color-danger); }
 .platform-badge.douyin { background: #e8f5e9; color: #2e7d32; }
 .platform-badge.weixin { background: #e3f2fd; color: #1565c0; }
-.status-sm { padding: 2px 8px; border-radius: 10px; font-size: 11px; }
-.status-sm.unpublished { background: #f5f5f5; color: #999; }
-.status-sm.published { background: #dcfce7; color: #16a34a; }
-.seo-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #f0f4ff; color: #4a6cf7; }
-.record-title { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: #333; }
-.record-desc { margin: 0 0 8px; font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.record-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
-.tag { font-size: 12px; color: #4a6cf7; }
-.record-meta { display: flex; gap: 16px; font-size: 12px; color: #999; margin-bottom: 12px; }
-.record-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
-.empty-state, .loading { text-align: center; padding: 60px; color: #999; background: #fff; border-radius: 10px; }
+.status-sm { padding: 2px var(--space-2); border-radius: 10px; font-size: var(--font-size-xs); }
+.status-sm.unpublished { background: var(--color-bg-secondary); color: var(--color-text-tertiary); }
+.status-sm.published { background: #dcfce7; color: var(--color-success); }
+.seo-badge { padding: 2px var(--space-2); border-radius: 10px; font-size: var(--font-size-xs); background: #f0f4ff; color: var(--color-primary); }
+.record-title { margin: 0 0 var(--space-1); font-size: var(--font-size-md); font-weight: 600; color: var(--color-text); }
+.record-desc { margin: 0 0 var(--space-2); font-size: var(--font-size-sm); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-tags { display: flex; gap: var(--space-1); flex-wrap: wrap; margin-bottom: var(--space-2); }
+.tag { font-size: var(--font-size-xs); color: var(--color-primary); }
+.record-meta { display: flex; gap: var(--space-4); font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-bottom: var(--space-3); }
+.record-actions { display: flex; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--color-border-light); }
+.empty-state, .loading { text-align: center; padding: 60px; color: var(--color-text-tertiary); background: var(--color-bg); border-radius: var(--radius-xl); }
 /* 转化目标 */
-.conversion-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.conversion-label { font-size: 12px; color: #999; }
-.conversion-select { padding: 2px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; background: #fff; }
-.conversion-tag { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #f0f4ff; color: #4a6cf7; }
+.conversion-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.conversion-label { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+.conversion-select { padding: 2px var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); background: var(--color-bg); }
+.conversion-tag { font-size: var(--font-size-xs); padding: 1px 6px; border-radius: var(--radius); background: #f0f4ff; color: var(--color-primary); }
 /* AIGC 确认 */
-.aigc-row { margin-bottom: 8px; }
-.aigc-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #666; cursor: pointer; }
-.aigc-check input[type="checkbox"] { accent-color: #4a6cf7; }
+.aigc-row { margin-bottom: var(--space-2); }
+.aigc-check { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-xs); color: var(--color-text-secondary); cursor: pointer; }
+.aigc-check input[type="checkbox"] { accent-color: var(--color-primary); }
 /* SEO 面板 */
-.seo-panel { margin-bottom: 12px; border: 1px solid #f0f4ff; border-radius: 8px; padding: 10px 12px; background: #fafbff; }
-.seo-panel-header { font-size: 12px; font-weight: 600; color: #4a6cf7; margin-bottom: 6px; }
+.seo-panel { margin-bottom: var(--space-3); border: 1px solid #f0f4ff; border-radius: var(--radius); padding: 10px var(--space-3); background: #fafbff; }
+.seo-panel-header { font-size: var(--font-size-xs); font-weight: 600; color: var(--color-primary); margin-bottom: 6px; }
 .seo-issues { margin: 0; padding-left: 18px; }
-.seo-issue { font-size: 12px; color: #555; line-height: 1.8; }
-.seo-issue .severity-icon { margin-right: 4px; }
-.seo-issue .issue-field { color: #999; margin-right: 4px; }
+.seo-issue { font-size: var(--font-size-xs); color: var(--color-text-secondary); line-height: 1.8; }
+.seo-issue .severity-icon { margin-right: var(--space-1); }
+.seo-issue .issue-field { color: var(--color-text-tertiary); margin-right: var(--space-1); }
 .seo-issue.warning { color: #b45309; }
-.seo-issue.error { color: #dc2626; }
+.seo-issue.error { color: var(--color-danger); }
 .seo-issue.info { color: #2563eb; }
 </style>

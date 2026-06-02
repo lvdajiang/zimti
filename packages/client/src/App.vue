@@ -13,7 +13,8 @@ import AppLayout from '@/components/AppLayout.vue'
   box-sizing: border-box;
 }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
+  color: var(--color-text);
 }
 </style>

@@ -1,7 +1,8 @@
 import { Router, Response } from 'express'
 import { prisma } from '../../db.js'
 import { DEMO_USER_ID } from '../../constants.js'
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
+import { randomBytes, scryptSync, timingSafeEqual, createHmac } from 'crypto'
+import { initDemoData } from '../dataSeeder.js'
 import type { Request, NextFunction } from 'express'
 
 // JWT 简单实现（生产环境应使用 jsonwebtoken 库）
@@ -30,7 +31,6 @@ function base64UrlDecode(str: string): string {
 
 // HMAC-SHA256 签名
 function hmacSha256(message: string): string {
-  const { createHmac } = require('crypto')
   return createHmac('sha256', JWT_KEY).update(message).digest('base64url')
 }
 
@@ -195,9 +195,9 @@ export function createAuthRouter(): Router {
       token,
       user: { id: user.id, username: user.username, email: user.email },
     })
-  })
 
-  // POST /api/v1/auth/login — 登录
+    initDemoData(user.id).catch((err) => console.error('[seeder] 注册初始化失败:', err))
+  })
   router.post('/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body
     if (!username || !password) {
@@ -258,6 +258,8 @@ export function createAuthRouter(): Router {
       token,
       user: { id: user.id, username: user.username, email: user.email },
     })
+
+    initDemoData(user.id).catch((err) => console.error('[seeder] 演示登录初始化失败:', err))
   })
 
   // --- 订阅管理 ---

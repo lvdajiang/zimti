@@ -180,3 +180,76 @@ export async function fetchSilentCustomers(): Promise<{ items: Customer[] }> {
 export async function fetchFunnelStats(): Promise<FunnelStats> {
   return api.get('/crm/funnel-stats') as unknown as Promise<FunnelStats>
 }
+
+// --- 联系人健康度 ---
+
+export interface ContactHealthItem {
+  id: string
+  name: string
+  stage: string
+  lastFollowUpAt: string | null
+  health: 'healthy' | 'attention' | 'at_risk' | 'lost'
+  daysSinceContact: number | null
+}
+
+export async function fetchContactHealth(params?: {
+  health?: string
+}): Promise<{ items: ContactHealthItem[] }> {
+  const query = new URLSearchParams()
+  if (params?.health) query.set('health', params.health)
+  return api.get(`/crm/contact-health?${query}`) as unknown as Promise<{ items: ContactHealthItem[] }>
+}
+
+// --- 批量唤醒话术 ---
+
+export interface WakeScript {
+  customerId: string
+  name: string
+  script: string
+}
+
+export async function batchGenerateWakeScripts(customerIds: string[]): Promise<{ items: WakeScript[] }> {
+  return api.post('/crm/batch-wake-scripts', { customer_ids: customerIds }) as unknown as Promise<{ items: WakeScript[] }>
+}
+
+// --- 批量导入线索 ---
+
+export async function importLeads(leads: Array<{
+  name: string
+  phone?: string
+  wechat?: string
+  sourceDetail?: unknown
+  travelIntent?: unknown
+  tags?: string[]
+}>): Promise<{ count: number }> {
+  return api.post('/crm/import-leads', { leads }) as unknown as Promise<{ count: number }>
+}
+
+// --- 漏斗分析 ---
+
+export interface FunnelAnalysisStage {
+  stage: string
+  count: number
+  conversionRate: number
+  avgDays: number
+}
+
+export interface FunnelAnalysis {
+  stages: FunnelAnalysisStage[]
+  totalCustomers: number
+  bottleneck: { stage: string; rate: number }
+}
+
+export async function fetchFunnelAnalysis(params?: {
+  start_date?: string
+  end_date?: string
+  source_type?: string
+  tags?: string[]
+}): Promise<FunnelAnalysis> {
+  const query = new URLSearchParams()
+  if (params?.start_date) query.set('start_date', params.start_date)
+  if (params?.end_date) query.set('end_date', params.end_date)
+  if (params?.source_type) query.set('source_type', params.source_type)
+  if (params?.tags?.length) query.set('tags', params.tags.join(','))
+  return api.get(`/crm/funnel-analysis?${query}`) as unknown as Promise<FunnelAnalysis>
+}

@@ -407,7 +407,7 @@ onMounted(() => {
 .monitor-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 20px;
+  padding: var(--space-6) var(--space-5);
 }
 
 /* ─── 标题栏 ─── */
@@ -415,64 +415,64 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .title-bar h2 {
   margin: 0;
-  font-size: 22px;
-  color: #1a1a2e;
+  font-size: var(--font-size-xl);
+  color: var(--color-text);
 }
 .time-tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   background: #f1f5f9;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 3px;
 }
 .tab-btn {
-  padding: 6px 16px;
+  padding: 6px var(--space-4);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: transparent;
   cursor: pointer;
-  font-size: 13px;
-  color: #64748b;
-  transition: all 0.2s;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  transition: all var(--transition);
 }
 .tab-btn.active {
-  background: #fff;
-  color: #1a1a2e;
+  background: var(--color-bg);
+  color: var(--color-text);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ─── 概览卡片 ─── */
 .overview-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 .kpi-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 18px 20px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 18px var(--space-5);
 }
 .kpi-label {
-  font-size: 13px;
-  color: #64748b;
-  margin-bottom: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
 }
 .kpi-value {
   font-size: 26px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--color-text);
   line-height: 1.2;
 }
 .kpi-sub {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
   margin-top: 6px;
 }
 
@@ -480,7 +480,7 @@ onMounted(() => {
 .dual-column {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: var(--space-6);
 }
 .left-column,
 .right-column {
@@ -496,53 +496,53 @@ onMounted(() => {
 }
 .section-header h3 {
   margin: 0;
-  font-size: 16px;
-  color: #1a1a2e;
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
 }
 .section-sub {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 
 /* ─── 搜索 ─── */
 .search-input {
-  padding: 6px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 6px var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: var(--font-size-sm);
   width: 180px;
   box-sizing: border-box;
 }
 .search-input:focus {
   outline: none;
-  border-color: #4a6cf7;
+  border-color: var(--color-primary);
 }
 
 /* ─── 视频表格 ─── */
 .video-table-wrap {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 .video-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 .video-table th {
   text-align: left;
   padding: 10px 14px;
   background: #f8fafc;
-  color: #64748b;
+  color: var(--color-text-secondary);
   font-weight: 600;
-  font-size: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--color-border);
 }
 .video-table td {
   padding: 10px 14px;
   border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  color: var(--color-text);
 }
 .video-table tbody tr:hover {
   background: #f8fafc;
@@ -558,9 +558,9 @@ onMounted(() => {
 }
 .platform-tag {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
   font-weight: 500;
 }
 .platform-tag.xiaohongshu {
@@ -581,19 +581,19 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 .page-info {
-  font-size: 13px;
-  color: #64748b;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 /* ─── 趋势列表 ─── */
 .trend-list {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   overflow: hidden;
   max-height: 400px;
   overflow-y: auto;
@@ -601,35 +601,35 @@ onMounted(() => {
 .trend-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   border-bottom: 1px solid #f1f5f9;
 }
 .trend-row:last-child {
   border-bottom: none;
 }
 .trend-date {
-  color: #64748b;
-  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
   min-width: 80px;
 }
 .trend-val {
-  color: #334155;
+  color: var(--color-text);
   white-space: nowrap;
 }
 
 /* ─── 踩坑日记 ─── */
 .pitfall-panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 18px 20px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 18px var(--space-5);
 }
 .pitfall-hint {
-  font-size: 13px;
-  color: #64748b;
-  margin: 0 0 16px 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-4) 0;
   line-height: 1.5;
 }
 
@@ -637,34 +637,34 @@ onMounted(() => {
 .monitor-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .monitor-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
 }
 .keyword {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
-  color: #333;
+  color: var(--color-text);
 }
 .monitor-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
-.status-dot.active { background: #22c55e; }
-.status-dot.inactive { background: #ccc; }
+.status-dot.active { background: var(--color-success); }
+.status-dot.inactive { background: var(--color-border); }
 
 /* ─── 弹窗 ─── */
 .overlay {
@@ -677,8 +677,8 @@ onMounted(() => {
   z-index: 1000;
 }
 .dialog {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
   width: 480px;
 }
 .dialog-sm { width: 400px; }
@@ -686,22 +686,22 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
 }
 .dialog-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
 }
 .dialog-close {
   background: none;
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 .dialog-body {
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 /* ─── 表单 ─── */
@@ -711,18 +711,18 @@ onMounted(() => {
 .form-field label {
   display: block;
   margin-bottom: 6px;
-  font-size: 13px;
-  color: #475569;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
-.required { color: #e53935; }
+.required { color: var(--color-danger); }
 .form-field input,
 .form-field textarea {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: var(--font-size-base);
   box-sizing: border-box;
   font-family: inherit;
   resize: vertical;
@@ -730,33 +730,33 @@ onMounted(() => {
 .form-field input:focus,
 .form-field textarea:focus {
   outline: none;
-  border-color: #4a6cf7;
+  border-color: var(--color-primary);
 }
 .form-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 /* ─── 通用按钮 ─── */
 .btn {
-  padding: 8px 20px;
-  border-radius: 6px;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius);
   border: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   background: #f1f5f9;
-  color: #334155;
+  color: var(--color-text);
 }
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .btn-primary {
-  background: #4a6cf7;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-bg);
 }
 .btn-primary:hover:not(:disabled) {
   background: #3b5de7;
@@ -764,16 +764,16 @@ onMounted(() => {
 .btn-sm {
   padding: 5px 14px;
   border-radius: 5px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
   cursor: pointer;
-  font-size: 12px;
-  color: #475569;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 .btn-sm.btn-danger {
   border-color: #fecaca;
-  color: #dc2626;
-  background: #fff;
+  color: var(--color-danger);
+  background: var(--color-bg);
 }
 .btn-sm.btn-danger:hover {
   background: #fef2f2;
@@ -783,12 +783,12 @@ onMounted(() => {
 .empty-state,
 .loading-box {
   text-align: center;
-  padding: 40px;
-  color: #94a3b8;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 14px;
+  padding: var(--space-10);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  font-size: var(--font-size-base);
 }
 
 /* ─── 响应式 ─── */

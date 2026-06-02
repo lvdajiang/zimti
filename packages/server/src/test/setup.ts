@@ -41,27 +41,35 @@ async function ensureTestUser(): Promise<void> {
 }
 
 export async function cleanupTestDb(): Promise<void> {
-  await prisma.$executeRawUnsafe(`
-    TRUNCATE TABLE
-      users,
-      pending_items, notifications, experience_logs,
-      video_metrics, data_snapshots, render_tasks, ai_tasks,
-      video_materials, storyboard_segments,
-      publish_records, video_products, scripts,
-      materials, content_assets,
-      viral_videos, collect_task_logs, collect_tasks,
-      benchmark_accounts, keyword_trends, keyword_monitors,
-      hotspots, topic_proposals, tasks, persona_configs,
-      customer_tags, customer_stage_logs, follow_up_reminders,
-      chat_templates, customers,
-      moments_contents, group_contents,
-      pipeline_jobs, pipeline_templates, industry_templates,
-      brand_memories, evolution_logs,
-      subscriptions, entities, resources,
-      knowledge_items, ai_studio_projects, ai_studio_assets
-    CASCADE
-  `)
-  await ensureTestUser()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await prisma.$executeRawUnsafe(`
+        TRUNCATE TABLE
+          users,
+          pending_items, notifications, experience_logs,
+          video_metrics, data_snapshots, render_tasks, ai_tasks,
+          video_materials, storyboard_segments,
+          publish_records, video_products, scripts,
+          materials, content_assets,
+          viral_videos, collect_task_logs, collect_tasks,
+          benchmark_accounts, keyword_trends, keyword_monitors,
+          hotspots, topic_proposals, tasks, persona_configs,
+          customer_tags, customer_stage_logs, follow_up_reminders,
+          chat_templates, customers,
+          moments_contents, group_contents,
+          pipeline_jobs, pipeline_templates, industry_templates,
+          brand_memories, evolution_logs,
+          subscriptions, entities, resources,
+          knowledge_items, ai_studio_projects, ai_studio_assets
+        CASCADE
+      `)
+      await ensureTestUser()
+      return
+    } catch (err: any) {
+      if (attempt === 2 || !err?.message?.includes('40P01')) throw err
+      await new Promise((r) => setTimeout(r, 200 * (attempt + 1)))
+    }
+  }
 }
 
 export async function teardownTestDb(): Promise<void> {

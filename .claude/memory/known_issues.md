@@ -4,29 +4,26 @@ description: 已知但未修复的问题
 metadata: 
   node_type: memory
   type: project
-  originSessionId: 1d44c428-cee5-4128-b0e7-89961534f93f
+  originSessionId: 628f4189-3c4d-4efc-9c01-d1b64260249f
 ---
 
 # 已知问题
 
-## 2026-05-14 (第二次)
-- **问题**: packages/client 和 packages/server 的 lint 脚本仍是 `vue-tsc --noEmit` 和 `tsc --noEmit`，未接入 ESLint
-  - **位置**: packages/client/package.json:11, packages/server/package.json:10
+## 2026-06-02
+- **问题**: authService.ts 中 `require('crypto')` 已修复为 ESM import，但 JWT_SECRET 环境变量未配置，运行时有警告
+  - **位置**: packages/server/src/services/auth/authService.ts
+  - **严重程度**: 低（开发环境可用，生产需配置）
+- **问题**: 测试 cleanupTestDb 中 TRUNCATE 可能死锁（已加重试，偶发）
+  - **位置**: packages/server/src/test/setup.ts
+  - **严重程度**: 低（重试机制已覆盖）
+- **问题**: 朋友圈日历排期后端数据层就绪（scheduledAt + status 字段），前端 UI 未开发
+  - **严重程度**: 中（功能半完成）
+  - **待办**: 创建 MomentsCalendar.vue 组件
+
+## 2026-05-14
+- **问题**: packages/client 和 packages/server 的 lint 脚本未接入 ESLint
   - **严重程度**: 低
-  - **临时方案**: 使用根目录 `pnpm lint` 代替（已配置好 eslint）
+  - **临时方案**: 使用根目录 `pnpm lint`
 
-## 2026-05-14 (第一次)
-- **问题**: .claude/settings.json 和 .claude/settings.local.json 不存在
-  - **位置**: d:\zimti\.claude\
+- **问题**: .claude/settings.json 和 settings.local.json 不存在，pre-commit hook 未绑定
   - **严重程度**: 中
-  - **影响**: 权限白名单/Hook 配置/模型配置缺失，CLAUDE.md 中提到的 pre-commit hook 未实际绑定
-  - **临时方案**: CLAUDE.md 中的规则仍有效，但 schema-check.ts 不会自动触发
-
-- **问题**: Git LFS 配置存在但仓库中无 LFS 文件
-  - **位置**: .gitconfig (filter.lfs.*)
-  - **严重程度**: 低
-  - **临时方案**: 无需处理
-
-- **问题**: SSH Key 未生成
-  - **严重程度**: 中
-  - **临时方案**: 当前用 HTTPS 推送（需开代理），建议后续生成 SSH Key

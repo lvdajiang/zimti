@@ -67,41 +67,41 @@ const categories = [
   max-width: 960px;
 }
 .page-title {
-  font-size: 20px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
-  color: #333;
-  margin: 0 0 4px;
+  color: var(--color-text);
+  margin: 0 0 var(--space-1);
 }
 .page-desc {
-  font-size: 13px;
-  color: #999;
-  margin: 0 0 24px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  margin: 0 0 var(--space-6);
 }
 .category {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .category-title {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
-  color: #666;
-  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-3);
 }
 .tool-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 .tool-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: #fff;
-  border-radius: 8px;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border-radius: var(--radius);
   text-decoration: none;
   color: inherit;
-  border: 1px solid #eee;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  border: 1px solid var(--color-border-light);
+  transition: box-shadow var(--transition), border-color var(--transition);
 }
 .tool-card:hover {
   border-color: #4fc3f7;
@@ -116,18 +116,18 @@ const categories = [
   min-width: 0;
 }
 .tool-name {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
-  color: #333;
+  color: var(--color-text);
 }
 .tool-desc {
-  font-size: 12px;
-  color: #999;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
   margin-top: 2px;
 }
 .tool-arrow {
-  color: #ccc;
-  font-size: 16px;
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-lg);
   flex-shrink: 0;
 }
 .tool-card:hover .tool-arrow {

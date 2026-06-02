@@ -8,6 +8,8 @@ export interface MomentsContent {
   content_type: MomentsContentType
   content: string
   image_suggestion: string | null
+  status: string           // draft/scheduled/sent
+  scheduled_at: string | null
   sent_at: string | null
   engagement_data: unknown
   created_at: string
@@ -27,8 +29,16 @@ export async function fetchDailyMoments(): Promise<{ items: MomentsContent[] }> 
   return api.get('/private-domain/moments/daily') as unknown as Promise<{ items: MomentsContent[] }>
 }
 
+export async function fetchMomentsCalendar(year: number, month: number): Promise<{ items: MomentsContent[] }> {
+  return api.get(`/private-domain/moments/calendar?year=${year}&month=${month}`) as unknown as Promise<{ items: MomentsContent[] }>
+}
+
 export async function markMomentSent(id: string): Promise<{ id: string; sent_at: string }> {
   return api.post(`/private-domain/moments/${id}/sent`) as unknown as Promise<{ id: string; sent_at: string }>
+}
+
+export async function scheduleMoment(id: string, data: { scheduled_at?: string | null; status?: string }): Promise<{ id: string }> {
+  return api.put(`/private-domain/moments/${id}/schedule`, data) as unknown as Promise<{ id: string }>
 }
 
 export async function recordMomentEngagement(id: string, data: {

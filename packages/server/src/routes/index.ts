@@ -24,8 +24,13 @@ import aiHub from './modules/aiHub.js'
 import crm from './modules/crm.js'
 import privateDomain from './modules/privateDomain.js'
 import pipeline from './modules/pipeline.js'
+import groupChat from './modules/groupChat.js'
+import operationCalendar from './modules/operationCalendar.js'
+import touchPoint from './modules/touchPoint.js'
 import { createInterviewRouter } from '../services/ai/ipInterview.js'
 import { createAuthRouter } from '../services/auth/authService.js'
+import data from './modules/data.js'
+import referral from './modules/referral.js'
 
 export const router: Router = Router()
 
@@ -54,5 +59,10 @@ router.use(aiHub)
 router.use(crm)
 router.use(privateDomain)
 router.use(pipeline)
+router.use(groupChat)
+router.use(operationCalendar)
+router.use(touchPoint)
 router.use(createInterviewRouter())
 router.use(createAuthRouter())
+router.use(data)
+router.use(referral)
