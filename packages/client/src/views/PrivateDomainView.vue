@@ -168,16 +168,18 @@ const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 
 interface CalDay { date: string; day: number; isToday: boolean; items: MomentsContent[] }
 
+const EMPTY_DAY: CalDay = { date: '', day: 0, isToday: false, items: [] }
+
 const calendarDays = computed(() => {
   const y = calYear.value, m = calMonth.value
   const firstDay = new Date(y, m - 1, 1)
   const lastDay = new Date(y, m, 0)
   let startWeekday = firstDay.getDay() - 1 // Mon=0
   if (startWeekday < 0) startWeekday = 6
-  const days: (CalDay | { date: '' })[] = []
+  const days: CalDay[] = []
 
   // 空白填充
-  for (let i = 0; i < startWeekday; i++) days.push({ date: '' })
+  for (let i = 0; i < startWeekday; i++) days.push(EMPTY_DAY)
 
   const todayStr = fmt(new Date())
   for (let d = 1; d <= lastDay.getDate(); d++) {
@@ -235,7 +237,7 @@ function nextMonth() {
   loadCalendar()
 }
 
-function selectDay(day: CalDay | { date: '' }) {
+function selectDay(day: CalDay) {
   if (!day.date) return
   selectedDate.value = selectedDate.value === day.date ? '' : day.date
 }
