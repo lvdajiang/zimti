@@ -1,5 +1,8 @@
 <template>
   <div class="pipeline">
+    <div class="back-nav">
+      <RouterLink to="/topic-workbench" class="back-link">← 返回</RouterLink>
+    </div>
     <div class="toolbar">
       <h2 class="page-title">一键流水线</h2>
     </div>
@@ -214,6 +217,9 @@ function formatJson(data: unknown): string {
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .pipeline { padding: var(--space-5); }
 .toolbar { margin-bottom: var(--space-4); }
 .page-title { margin: 0; font-size: var(--font-size-xl); }

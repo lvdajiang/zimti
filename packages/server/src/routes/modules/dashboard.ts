@@ -278,4 +278,53 @@ router.get('/dashboard/ai-analysis/:taskId/status', async (req: Request, res: Re
   }
 })
 
+// GET /api/v1/dashboard/today — 今日工作台聚合数据
+router.get('/dashboard/today', async (_req: Request, res: Response) => {
+  try {
+    const userId = DEMO_USER_ID
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    // 1. 待跟进客户（按健康度排序，最多 5 个）
+    const customers = await prisma.customer.findMany({
+      where: { userId, isDeleted: false, stage: { notIn: ['ordered', 'traveling', 'completed', 'repurchase'] } },
+      orderBy: { lastFollowUpAt: 'asc' },
+      take: 5,
+      select: { id: true, name: true, stage: true, lastFollowUpAt: true },
+    })
+
+    const pendingFollowUps = customers.map((c) => {
+      const days = c.lastFollowUpAt
+        ? Math.floor((now.getTime() - new Date(c.lastFollowUpAt).getTime()) / 86400000)
+        : 999
+      let health: 'healthy' | 'attention' | 'at_risk' | 'lost' = 'healthy'
+      if (days > 90) health = 'lost'
+      else if (days > 30) health = 'at_risk'
+      else if (days > 7) health = 'attention'
+      return { id: c.id, name: c.name, stage: c.stage, health, daysSinceContact: days }
+    })
+
+    // 2. 今日朋友圈
+    const momentsToday = await prisma.momentsContent.count({
+      where: { userId, createdAt: { gte: todayStart } },
+    })
+    const momentsSent = await prisma.momentsContent.count({
+      where: { userId, createdAt: { gte: todayStart }, status: 'sent' },
+    })
+
+    // 3. 热点推荐（前 3 个）
+    const topHotspots = await prisma.hotspot.findMany({
+      where: { usageStatus: 'unused' },
+      orderBy: { heatValue: 'desc' },
+      take: 3,
+      select: { id: true, title: true, heatValue: true },
+    })
+
+    res.json({ pendingFollowUps, momentsToday, momentsSent, topHotspots })
+  } catch (error) {
+    console.error('[GET dashboard/today]', error)
+    res.status(500).json({ error: 'Failed to load today data' })
+  }
+})
+
 export default router

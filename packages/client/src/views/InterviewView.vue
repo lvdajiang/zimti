@@ -1,5 +1,8 @@
 <template>
   <div class="interview">
+    <div class="back-nav">
+      <RouterLink to="/persona" class="back-link">← 返回</RouterLink>
+    </div>
     <div class="toolbar">
       <h2 class="page-title">IP 定位 & 行业模板</h2>
       <div class="toolbar-actions">
@@ -183,6 +186,9 @@ function formatObj(obj: unknown): string {
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .interview { padding: var(--space-5); }
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-3); }
 .page-title { margin: 0; font-size: var(--font-size-xl); }

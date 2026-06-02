@@ -1,5 +1,8 @@
 <template>
   <div class="preview-page">
+    <div class="back-nav">
+      <RouterLink to="/ai-studio" class="back-link">← 返回</RouterLink>
+    </div>
     <div class="title-bar">
       <h2>视频预览与渲染</h2>
       <button v-if="scriptId" class="btn btn-outline btn-back" @click="goBackToEditor">返回编辑</button>
@@ -325,6 +328,9 @@ onUnmounted(stopPolling)
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .preview-page { max-width: 1100px; margin: 0 auto; }
 .title-bar { margin-bottom: var(--space-5); display: flex; align-items: center; justify-content: space-between; }
 .title-bar h2 { margin: 0; font-size: var(--font-size-xl); color: var(--color-text); }

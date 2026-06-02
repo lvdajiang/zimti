@@ -8,6 +8,9 @@
         '上传参考样本（文章/视频文案），AI 会学习你的表达习惯',
         '保存后点击「预览效果」查看 AI 根据当前人设生成的示例文案',
       ]" />
+      <div class="sub-nav">
+        <RouterLink to="/interview" class="sub-nav-link">IP 定位</RouterLink>
+      </div>
       <div class="title-actions">
         <button class="btn btn-preview" :disabled="previewGenerating" @click="handlePreview">
           {{ previewGenerating ? '生成中...' : '预览效果' }}
@@ -704,4 +707,7 @@ onMounted(async () => {
   font-size: var(--font-size-md);
   white-space: pre-wrap;
 }
+.sub-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.sub-nav-link { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-text-secondary); text-decoration: none; transition: all var(--transition-fast); }
+.sub-nav-link:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
 </style>

@@ -11,6 +11,12 @@
       <button class="btn btn-primary" @click="showCreate = true">+ 新建选题</button>
     </div>
 
+    <div class="sub-nav">
+      <RouterLink to="/hotspots" class="sub-nav-link">热点追踪</RouterLink>
+      <RouterLink to="/viral-videos" class="sub-nav-link">爆款视频</RouterLink>
+      <RouterLink to="/pipeline" class="sub-nav-link">一键流水线</RouterLink>
+    </div>
+
     <!-- 搜索与筛选栏 -->
     <div class="filter-bar">
       <input
@@ -367,4 +373,7 @@ onUnmounted(() => { if (searchTimer) clearTimeout(searchTimer) })
 .form-field input:focus { outline: none; border-color: var(--color-primary); }
 .form-actions { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-2); }
 .empty-state, .loading { text-align: center; padding: 60px; color: var(--color-text-tertiary); background: var(--color-bg); border-radius: var(--radius-lg); }
+.sub-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.sub-nav-link { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-text-secondary); text-decoration: none; transition: all var(--transition-fast); }
+.sub-nav-link:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
 </style>

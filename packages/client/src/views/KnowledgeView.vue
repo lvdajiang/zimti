@@ -1,5 +1,8 @@
 <template>
   <div class="knowledge">
+    <div class="back-nav">
+      <RouterLink to="/ai-studio" class="back-link">← 返回</RouterLink>
+    </div>
     <div class="toolbar">
       <h2 class="page-title">知识库 <HelpTip title="知识库使用指引" :steps="[
         '收藏有价值的创作经验、行业知识、竞品分析等内容',
@@ -221,6 +224,9 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .knowledge { max-width: 960px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
 .page-title { font-size: var(--font-size-xl); font-weight: 600; margin: 0; }

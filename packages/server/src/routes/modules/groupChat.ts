@@ -1,19 +1,21 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
-import { authMiddleware, type AuthenticatedRequest } from '../../services/auth/authService.js'
+import { optionalAuth, type AuthenticatedRequest } from '../../services/auth/authService.js'
+import { getUserId } from '../../constants.js'
 import * as analyzer from '../../services/groupChatAnalyzer.js'
 import { toInt } from '../../constants.js'
 
 const router = Router()
+router.use(optionalAuth)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 })
 
 // POST /api/v1/group-chat/upload — 上传并分析群聊文件
-router.post('/group-chat/upload', authMiddleware, upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/group-chat/upload', upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user!.userId
+    const userId = getUserId(req)
     const file = req.file
     if (!file) {
       res.status(400).json({ error: '请上传文件' })
@@ -49,9 +51,9 @@ router.post('/group-chat/upload', authMiddleware, upload.single('file'), async (
 })
 
 // GET /api/v1/group-chat/analyses — 获取分析报告列表
-router.get('/group-chat/analyses', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/group-chat/analyses', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user!.userId
+    const userId = getUserId(req)
     const page = toInt(req.query.page, 1)
     const limit = toInt(req.query.limit, 20)
 
@@ -64,9 +66,9 @@ router.get('/group-chat/analyses', authMiddleware, async (req: AuthenticatedRequ
 })
 
 // GET /api/v1/group-chat/analyses/:id — 获取单条分析报告
-router.get('/group-chat/analyses/:id', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/group-chat/analyses/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user!.userId
+    const userId = getUserId(req)
     const result = await analyzer.getAnalysis(userId, req.params.id)
     res.json(result)
   } catch (error) {

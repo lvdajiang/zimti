@@ -1,5 +1,8 @@
 <template>
   <div class="monitor-page">
+    <div class="back-nav">
+      <RouterLink to="/dashboard" class="back-link">← 返回</RouterLink>
+    </div>
     <!-- 页面标题 + 时间筛选 -->
     <div class="title-bar">
       <h2>数据监控</h2>
@@ -404,6 +407,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .monitor-page {
   max-width: 1200px;
   margin: 0 auto;

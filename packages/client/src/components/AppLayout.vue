@@ -8,16 +8,19 @@
         <span v-if="!appStore.sidebarCollapsed" class="logo">Zimti</span>
       </div>
       <nav class="sidebar-nav">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.route"
-          :to="item.route"
-          class="nav-item"
-          active-class="nav-item--active"
-          @click="mobileMenuOpen = false"
-        >
-          {{ item.label }}
-        </RouterLink>
+        <template v-for="group in navGroups" :key="group.label">
+          <div class="nav-group-title">{{ group.label }}</div>
+          <RouterLink
+            v-for="item in group.items"
+            :key="item.route"
+            :to="item.route"
+            class="nav-item"
+            active-class="nav-item--active"
+            @click="mobileMenuOpen = false"
+          >
+            {{ item.label }}
+          </RouterLink>
+        </template>
       </nav>
     </aside>
 
@@ -51,28 +54,38 @@ const mobileMenuOpen = ref(false)
 
 const currentTitle = computed(() => (route.meta.title as string) ?? '')
 
-const navItems = [
-  { label: '仪表盘', route: '/dashboard' },
-  { label: '热点追踪', route: '/hotspots' },
-  { label: '对标账号', route: '/benchmark-accounts' },
-  { label: '数据采集', route: '/collect-tasks' },
-  { label: '爆款视频', route: '/viral-videos' },
-  { label: '选题工作台', route: '/topic-workbench' },
-  { label: '人设配置', route: '/persona' },
-  { label: '素材库', route: '/materials' },
-  { label: '视频预览', route: '/video-preview' },
-  { label: 'AI工作室', route: '/ai-studio' },
-  { label: 'AI工具箱', route: '/ai-toolbox' },
-  { label: '知识库', route: '/knowledge' },
-  { label: '供应商', route: '/entities' },
-  { label: '客户管理', route: '/crm' },
-  { label: '私域运营', route: '/private-domain' },
-  { label: '群聊分析', route: '/group-chat' },
-  { label: '运营日历', route: '/operation-calendar' },
-  { label: '一键流水线', route: '/pipeline' },
-  { label: 'IP 定位', route: '/interview' },
-  { label: '数据监控', route: '/monitoring' },
-  { label: '内容资产', route: '/content-assets' },
+const navGroups = [
+  {
+    label: '📊 工作台',
+    items: [
+      { label: '仪表盘', route: '/dashboard' },
+      { label: '运营日历', route: '/operation-calendar' },
+    ],
+  },
+  {
+    label: '📝 内容生产',
+    items: [
+      { label: '选题工作台', route: '/topic-workbench' },
+      { label: 'AI 工作室', route: '/ai-studio' },
+      { label: '素材库', route: '/materials' },
+    ],
+  },
+  {
+    label: '💬 私域运营',
+    items: [
+      { label: '客户管理', route: '/crm' },
+      { label: '朋友圈', route: '/private-domain' },
+      { label: '群聊分析', route: '/group-chat' },
+    ],
+  },
+  {
+    label: '⚙️ 设置',
+    items: [
+      { label: '人设配置', route: '/persona' },
+      { label: '对标账号', route: '/benchmark-accounts' },
+      { label: '供应商', route: '/entities' },
+    ],
+  },
 ]
 </script>
 
@@ -110,6 +123,18 @@ const navItems = [
   flex-direction: column;
   gap: 2px;
   padding: var(--space-2);
+}
+.nav-group-title {
+  padding: 16px var(--space-3) 4px;
+  font-size: var(--font-size-xs);
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nav-group-title:first-child {
+  padding-top: 4px;
 }
 .nav-item {
   padding: 10px var(--space-3);

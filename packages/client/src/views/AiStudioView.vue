@@ -5,6 +5,11 @@
         <h2>AI工作室</h2>
         <span class="stats-text">{{ projects.length }} 个项目</span>
       </div>
+      <div class="sub-nav">
+        <RouterLink to="/video-preview" class="sub-nav-link">视频预览</RouterLink>
+        <RouterLink to="/ai-toolbox" class="sub-nav-link">AI 工具箱</RouterLink>
+        <RouterLink to="/knowledge" class="sub-nav-link">知识库</RouterLink>
+      </div>
       <div class="title-actions">
         <button class="btn btn-primary" @click="showCreateModal = true">新建项目</button>
       </div>
@@ -142,4 +147,7 @@ async function handleDelete(id: string) {
 .form-input { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); font-size: var(--font-size-base); box-sizing: border-box; outline: none; transition: border-color var(--transition-fast); }
 .form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2); }
 .form-textarea { resize: vertical; font-family: inherit; }
+.sub-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.sub-nav-link { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-text-secondary); text-decoration: none; transition: all var(--transition-fast); }
+.sub-nav-link:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
 </style>

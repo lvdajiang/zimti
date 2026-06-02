@@ -13,6 +13,10 @@
       </button>
     </div>
 
+    <div class="sub-nav">
+      <RouterLink to="/collect-tasks" class="sub-nav-link">数据采集</RouterLink>
+    </div>
+
     <div class="stats-bar" v-if="stats">
       <div class="stat-card">
         <span class="stat-value">{{ stats.total }}</span>
@@ -468,4 +472,7 @@ onMounted(() => {
 .form-field input:focus,
 .form-field select:focus { outline: none; border-color: #4fc3f7; }
 .form-actions { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-2); }
+.sub-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.sub-nav-link { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-text-secondary); text-decoration: none; transition: all var(--transition-fast); }
+.sub-nav-link:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
 </style>

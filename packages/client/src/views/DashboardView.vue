@@ -1,11 +1,76 @@
 <template>
   <div class="dashboard-page">
+    <!-- 今日工作台 -->
+    <div class="today-section">
+      <h2 class="section-title">📋 今日工作台</h2>
+
+      <!-- 待跟进客户 -->
+      <div class="today-card">
+        <div class="card-header">
+          <span class="card-label">待跟进客户</span>
+          <span class="card-count">{{ todayData?.pendingFollowUps?.length ?? 0 }}</span>
+        </div>
+        <div v-if="!todayData" class="card-loading">加载中...</div>
+        <div v-else-if="todayData.pendingFollowUps.length === 0" class="card-empty">暂无待跟进客户 ✨</div>
+        <div v-else class="follow-up-list">
+          <div
+            v-for="c in todayData.pendingFollowUps"
+            :key="c.id"
+            class="follow-up-item"
+            @click="$router.push('/crm')"
+          >
+            <div class="fu-avatar">{{ c.name.slice(0, 1) }}</div>
+            <div class="fu-info">
+              <div class="fu-name">{{ c.name }}</div>
+              <div class="fu-stage">{{ stageLabel(c.stage) }}</div>
+            </div>
+            <div class="fu-days" :class="healthClass(c.health)">{{ c.daysSinceContact }}天未联系</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 朋友圈 + 热点 -->
+      <div class="today-row">
+        <div class="today-card half">
+          <div class="card-header">
+            <span class="card-label">📱 朋友圈</span>
+          </div>
+          <div v-if="todayData" class="moment-status">
+            <template v-if="todayData.momentsToday > 0">
+              <span class="status-ok">✅ 今日已生成 {{ todayData.momentsToday }} 条，已发 {{ todayData.momentsSent }} 条</span>
+            </template>
+            <template v-else>
+              <span class="status-warn">❌ 今日尚未生成</span>
+              <button class="btn-go" @click="$router.push('/private-domain')">去生成</button>
+            </template>
+          </div>
+        </div>
+        <div class="today-card half">
+          <div class="card-header">
+            <span class="card-label">🔥 热点推荐</span>
+          </div>
+          <div v-if="todayData && todayData.topHotspots.length > 0" class="hotspot-list">
+            <div v-for="h in todayData.topHotspots" :key="h.id" class="hotspot-item" @click="$router.push('/topic-workbench')">
+              {{ h.title }} <span class="heat">🔥{{ h.heatValue }}</span>
+            </div>
+          </div>
+          <div v-else class="card-empty">暂无热点</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 原有统计 -->
     <h2>数据看板 <HelpTip title="数据看板使用指引" :steps="[
     '概览卡片展示近7天发布量、选题数、素材数等关键指标',
     '工作流区域显示当前进行中的任务进度',
     '视频记录表展示最近创作的内容和状态',
     '趋势图表帮助分析内容表现的变化趋势',
   ]" /></h2>
+
+    <div class="sub-nav">
+      <RouterLink to="/monitoring" class="sub-nav-link">数据监控</RouterLink>
+      <RouterLink to="/content-assets" class="sub-nav-link">内容资产</RouterLink>
+    </div>
 
     <!-- 概览卡片 -->
     <div class="overview-cards" v-if="overview">
@@ -157,6 +222,31 @@ import api from '@/api/client'
 import { toast } from '@/utils/toast'
 import { formatDate, platformLabel } from '@/utils/format'
 
+const CUSTOMER_STAGE_LABELS: Record<string, string> = {
+  new_friend: '新加好友', chatting: '在聊', deep_consult: '深度咨询',
+  hesitating: '犹豫对比', ordered: '成交下单', traveling: '出行中',
+  completed: '出行后', repurchase: '复购/转介绍',
+}
+
+function stageLabel(stage: string): string { return CUSTOMER_STAGE_LABELS[stage] ?? stage }
+function healthClass(health: string): string {
+  if (health === 'lost' || health === 'at_risk') return 'health-danger'
+  if (health === 'attention') return 'health-warn'
+  return 'health-ok'
+}
+
+interface TodayData {
+  pendingFollowUps: { id: string; name: string; stage: string; health: string; daysSinceContact: number }[]
+  momentsToday: number
+  momentsSent: number
+  topHotspots: { id: number; title: string; heatValue: number }[]
+}
+const todayData = ref<TodayData | null>(null)
+
+async function loadToday(): Promise<void> {
+  try { todayData.value = await api.get<TodayData>('/dashboard/today') } catch (e) { console.error(e) }
+}
+
 const activeTab = ref('workflow')
 const videoPlatformFilter = ref('all')
 const overview = ref<{ recent_publishes_7d: number; total_plays: number; avg_completion_rate: number; recent_publishes_7d_trend: number | null } | null>(null)
@@ -223,7 +313,7 @@ async function loadTrends(): Promise<void> {
   } catch (e) { console.error(e); toast.error('加载趋势数据失败') }
 }
 
-onMounted(() => { loadOverview(); loadStats(); loadWorkflow() })
+onMounted(() => { loadToday(); loadOverview(); loadStats(); loadWorkflow() })
 </script>
 
 <style scoped>
@@ -278,4 +368,42 @@ onMounted(() => { loadOverview(); loadStats(); loadWorkflow() })
 .trend-bar { width: 100%; max-width: 30px; background: var(--color-primary); border-radius: 3px 3px 0 0; min-height: 4px; transition: height var(--transition-slow); }
 .bar-label { font-size: 10px; color: var(--color-text-tertiary); margin-top: var(--space-1); }
 .empty-state { text-align: center; padding: 60px; color: var(--color-text-tertiary); }
+
+/* 今日工作台 */
+.today-section { margin-bottom: var(--space-6); }
+.section-title { margin: 0 0 var(--space-4); font-size: var(--font-size-xl); color: var(--color-sidebar); }
+.today-card { background: var(--color-bg); border-radius: var(--radius-lg); border: 1px solid var(--color-border-light); padding: var(--space-4); margin-bottom: var(--space-3); }
+.today-card.half { flex: 1; }
+.card-header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.card-label { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
+.card-count { background: var(--color-danger); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 600; }
+.card-loading, .card-empty { font-size: var(--font-size-sm); color: var(--color-text-tertiary); padding: var(--space-3) 0; }
+.today-row { display: flex; gap: var(--space-3); }
+.follow-up-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.follow-up-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius); cursor: pointer; transition: background var(--transition-fast); }
+.follow-up-item:hover { background: var(--color-primary-light); }
+.fu-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary), #6366f1); color: #fff; display: flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); font-weight: 600; flex-shrink: 0; }
+.fu-info { flex: 1; min-width: 0; }
+.fu-name { font-size: var(--font-size-sm); font-weight: 500; color: var(--color-text); }
+.fu-stage { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+.fu-days { font-size: var(--font-size-xs); font-weight: 600; white-space: nowrap; }
+.health-ok { color: var(--color-success); }
+.health-warn { color: var(--color-warning); }
+.health-danger { color: var(--color-danger); }
+.moment-status { font-size: var(--font-size-sm); display: flex; align-items: center; gap: var(--space-2); }
+.status-ok { color: var(--color-success); }
+.status-warn { color: var(--color-text-tertiary); }
+.btn-go { padding: 2px 12px; border: 1px solid var(--color-primary); border-radius: var(--radius-sm); background: transparent; color: var(--color-primary); font-size: var(--font-size-xs); cursor: pointer; }
+.btn-go:hover { background: var(--color-primary-light); }
+.hotspot-list { display: flex; flex-direction: column; gap: 6px; }
+.hotspot-item { font-size: var(--font-size-sm); color: var(--color-text); cursor: pointer; padding: 4px 0; }
+.hotspot-item:hover { color: var(--color-primary); }
+.heat { font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+
+@media (max-width: 768px) {
+  .today-row { flex-direction: column; }
+}
+.sub-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.sub-nav-link { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); color: var(--color-text-secondary); text-decoration: none; transition: all var(--transition-fast); }
+.sub-nav-link:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-primary-light); }
 </style>

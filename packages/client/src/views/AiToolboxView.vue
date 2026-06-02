@@ -1,5 +1,8 @@
 <template>
   <div class="ai-toolbox">
+    <div class="back-nav">
+      <RouterLink to="/ai-studio" class="back-link">← 返回</RouterLink>
+    </div>
     <h2 class="page-title">AI 工具箱</h2>
     <p class="page-desc">常用 AI 创作工具，点击卡片在新标签页中打开</p>
 
@@ -63,6 +66,9 @@ const categories = [
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .ai-toolbox {
   max-width: 960px;
 }

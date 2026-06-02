@@ -1,5 +1,8 @@
 <template>
   <div class="collect-page">
+    <div class="back-nav">
+      <RouterLink to="/benchmark-accounts" class="back-link">← 返回</RouterLink>
+    </div>
     <div class="title-bar">
       <h2>数据采集任务</h2>
       <HelpTip title="数据采集使用指引" :steps="[
@@ -416,6 +419,9 @@ onMounted(() => { loadData(); loadStats(); loadAccounts() })
 </script>
 
 <style scoped>
+.back-nav { margin-bottom: var(--space-3); }
+.back-link { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none; }
+.back-link:hover { color: var(--color-primary); }
 .collect-page { max-width: 1100px; margin: 0 auto; }
 .title-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5); }
 .title-bar h2 { margin: 0; font-size: var(--font-size-xl); color: var(--color-sidebar); }
