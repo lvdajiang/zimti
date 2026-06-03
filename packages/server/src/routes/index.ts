@@ -33,6 +33,7 @@ import data from './modules/data.js'
 import referral from './modules/referral.js'
 import distribution from './modules/distribution.js'
 import geo from './modules/geo.js'
+import pipelineProduction from './modules/pipelineProduction.js'
 
 export const router: Router = Router()
 
@@ -70,3 +71,4 @@ router.use(data)
 router.use(referral)
 router.use(distribution)
 router.use(geo)
+router.use(pipelineProduction)

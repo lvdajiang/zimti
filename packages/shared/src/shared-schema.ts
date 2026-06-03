@@ -329,10 +329,23 @@ export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
 }
 
 // --- 1.49 流水线模式 ---
-export type PipelineMode = 'viral_remind' | 'daily_auto' | 'hotspot_rush' | 'customer_question'
+export type PipelineMode = 'viral_remind' | 'daily_auto' | 'hotspot_rush' | 'customer_question' | 'production'
 export const PIPELINE_MODE_LABELS: Record<PipelineMode, string> = {
-  viral_remind: '爆款翻新', daily_auto: '每日自动', hotspot_rush: '热点紧急', customer_question: '客户问题',
+  viral_remind: '爆款翻新', daily_auto: '每日自动', hotspot_rush: '热点紧急', customer_question: '客户问题', production: '生产流水线',
 }
+
+// --- 1.49b 生产流水线步骤 ---
+export type ProductionStepName = 'script' | 'tts' | 'visual' | 'subtitle' | 'publish'
+export const PRODUCTION_STEP_LABELS: Record<ProductionStepName, string> = {
+  script: '脚本', tts: '配音', visual: '画面', subtitle: '字幕', publish: '发布',
+}
+export const PRODUCTION_STEPS: { step: number; name: ProductionStepName; label: string }[] = [
+  { step: 1, name: 'script', label: '脚本' },
+  { step: 2, name: 'tts', label: '配音' },
+  { step: 3, name: 'visual', label: '画面' },
+  { step: 4, name: 'subtitle', label: '字幕' },
+  { step: 5, name: 'publish', label: '发布' },
+]
 
 // --- 1.50 流水线任务状态 ---
 export type PipelineJobStatus = 'pending' | 'running' | 'waiting_confirm' | 'completed' | 'failed' | 'cancelled'
@@ -1371,6 +1384,10 @@ export const API = {
     CUSTOMER_QUESTION: '/pipeline/customer-question',
     JOBS: '/pipeline/jobs',
     JOB: (id: string) => `/pipeline/jobs/${id}`,
+    PRODUCTION: '/pipeline/production',
+    PRODUCTION_PROGRESS: (id: string) => `/pipeline/production/${id}/progress`,
+    PRODUCTION_STEP: (id: string) => `/pipeline/production/${id}/execute-step`,
+    PRODUCTION_UPDATE: (id: string) => `/pipeline/production/${id}/update-step`,
   },
 
   // --- 认证 & 订阅 ---
@@ -1452,6 +1469,7 @@ export const ROUTES = {
   GROUP_CHAT: '/group-chat',
   OPERATION_CALENDAR: '/operation-calendar',
   PIPELINE: '/pipeline',
+  PIPELINE_PRODUCTION: '/pipeline/production',
   INTERVIEW: '/interview',
   DISTRIBUTION: '/distribution',
   GEO: '/geo',

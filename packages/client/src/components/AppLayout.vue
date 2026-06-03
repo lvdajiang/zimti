@@ -66,6 +66,7 @@ const navGroups = [
     label: '📝 内容生产',
     items: [
       { label: '选题工作台', route: '/topic-workbench' },
+      { label: '生产流水线', route: '/pipeline/production' },
       { label: 'AI 工作室', route: '/ai-studio' },
       { label: '素材库', route: '/materials' },
       { label: '全渠道分发', route: '/distribution' },

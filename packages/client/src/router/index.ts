@@ -153,6 +153,12 @@ const router = createRouter({
       meta: { title: '一键流水线' },
     },
     {
+      path: '/pipeline/production/:jobId?',
+      name: 'ProductionPipeline',
+      component: () => import('@/views/ProductionPipelineView.vue'),
+      meta: { title: '生产流水线' },
+    },
+    {
       path: ROUTES.INTERVIEW,
       name: 'Interview',
       component: () => import('@/views/InterviewView.vue'),
