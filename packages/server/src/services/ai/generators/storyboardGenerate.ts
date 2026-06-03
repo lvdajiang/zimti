@@ -4,6 +4,7 @@ import { getAIProvider } from '../provider.js'
 interface StoryboardGenerateInput {
   script_id: number
   video_type?: string
+  brand_context?: string
 }
 
 export async function generateStoryboard(input: StoryboardGenerateInput): Promise<unknown> {
@@ -11,7 +12,12 @@ export async function generateStoryboard(input: StoryboardGenerateInput): Promis
   if (!script) throw new Error('Script not found')
 
   const provider = getAIProvider()
-  const prompt = `根据以下脚本生成短视频分镜。视频类型：${input.video_type ?? '通用'}。
+
+  const brandSection = input.brand_context
+    ? `\n\n品牌调性参考：\n${input.brand_context}\n请确保画面风格和文案语气与品牌调性一致。`
+    : ''
+
+  const prompt = `根据以下脚本生成短视频分镜。视频类型：${input.video_type ?? '通用'}。${brandSection}
 
 脚本全文：
 ${script.fullText}

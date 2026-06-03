@@ -11,6 +11,7 @@ import { getUserId, str, toInt } from '../../constants.js'
 import { optionalAuth } from '../../services/auth/authService.js'
 import { runTask, getTask } from '../../services/ai/index.js'
 import { adaptContentForPlatform, batchAdaptContent } from '../../services/ai/generators/contentAdapt.js'
+import { getBrandContextForPrompt } from '../../services/ai/brandContext.js'
 import { PLATFORM_CONFIGS, getAllPlatformConfigs } from '../../services/distribution/platformConfigs.js'
 import type { Platform } from '@zimti/shared'
 
@@ -119,24 +120,27 @@ router.delete('/distribution/records/:id', async (req: Request, res: Response) =
 
 // POST /api/v1/distribution/adapt — AI 适配单平台
 router.post('/distribution/adapt', async (req: Request, res: Response) => {
-  const { source_title, source_content, source_tags, target_platform, brand_context } = req.body
+  const { source_title, source_content, source_tags, target_platform, brand_context: bodyBrandContext } = req.body
   if (!source_title || !target_platform) {
     res.status(400).json({ error: 'source_title and target_platform are required' })
     return
   }
 
   try {
+    const userId = getUserId(req as any)
+    const autoBrandContext = await getBrandContextForPrompt(userId)
+    const brandContext = bodyBrandContext ? String(bodyBrandContext) : autoBrandContext
     const task = await runTask(
       {
         type: 'content_adapt',
-        input: { source_title, source_content, source_tags, target_platform, brand_context },
+        input: { source_title, source_content, source_tags, target_platform, brand_context: brandContext },
       },
       () => adaptContentForPlatform({
         source_title: String(source_title),
         source_content: String(source_content ?? ''),
         source_tags: Array.isArray(source_tags) ? source_tags : [],
         target_platform: String(target_platform) as Platform,
-        brand_context: brand_context ? String(brand_context) : undefined,
+        brand_context: brandContext || undefined,
       }),
     )
     res.json({ task_id: task.id, status: task.status })
@@ -155,17 +159,20 @@ router.get('/distribution/adapt/:taskId/status', async (req: Request, res: Respo
 
 // POST /api/v1/distribution/batch-adapt — 一键适配多平台
 router.post('/distribution/batch-adapt', async (req: Request, res: Response) => {
-  const { source_title, source_content, source_tags, platforms, brand_context } = req.body
+  const { source_title, source_content, source_tags, platforms, brand_context: bodyBrandContext } = req.body
   if (!source_title || !Array.isArray(platforms) || platforms.length === 0) {
     res.status(400).json({ error: 'source_title and platforms[] are required' })
     return
   }
 
   try {
+    const userId = getUserId(req as any)
+    const autoBrandContext = await getBrandContextForPrompt(userId)
+    const brandContext = bodyBrandContext ? String(bodyBrandContext) : autoBrandContext
     const task = await runTask(
       {
         type: 'content_batch_adapt',
-        input: { source_title, source_content, source_tags, platforms, brand_context },
+        input: { source_title, source_content, source_tags, platforms, brand_context: brandContext },
       },
       async () => {
         const results = await batchAdaptContent({
@@ -173,7 +180,7 @@ router.post('/distribution/batch-adapt', async (req: Request, res: Response) => 
           source_content: String(source_content ?? ''),
           source_tags: Array.isArray(source_tags) ? source_tags : [],
           platforms: platforms as Platform[],
-          brand_context: brand_context ? String(brand_context) : undefined,
+          brand_context: brandContext || undefined,
         })
         return results
       },

@@ -3,6 +3,7 @@ import { getAIProvider } from '../provider.js'
 
 interface AiCheckInput {
   script_id: number
+  brand_context?: string
 }
 
 export async function checkScript(input: AiCheckInput): Promise<unknown> {
@@ -10,7 +11,12 @@ export async function checkScript(input: AiCheckInput): Promise<unknown> {
   if (!script) throw new Error('Script not found')
 
   const provider = getAIProvider()
-  const prompt = `分析以下短视频脚本的"AI 风味"程度，检查是否有明显的 AI 生成痕迹。
+
+  const brandSection = input.brand_context
+    ? `\n\n品牌风格参考：\n${input.brand_context}\n请结合品牌风格判断脚本是否需要调整语气。`
+    : ''
+
+  const prompt = `分析以下短视频脚本的"AI 风味"程度，检查是否有明显的 AI 生成痕迹。${brandSection}
 
 脚本全文：
 ${script.fullText}

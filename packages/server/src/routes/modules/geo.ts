@@ -12,6 +12,7 @@ import { optionalAuth } from '../../services/auth/authService.js'
 import { runTask, getTask } from '../../services/ai/index.js'
 import { generateGeoQuestions } from '../../services/ai/generators/geoQuestionGenerate.js'
 import { generateGeoContent, batchGenerateGeoContent } from '../../services/ai/generators/geoContentGenerate.js'
+import { getBrandContextForPrompt } from '../../services/ai/brandContext.js'
 import type { GeoQuestionCategory } from '@zimti/shared'
 
 const router: Router = Router()
@@ -279,6 +280,8 @@ router.post('/geo/contents/generate', async (req: Request, res: Response) => {
   if (!question) { res.status(404).json({ error: 'Question not found' }); return }
 
   try {
+    const userId = getUserId(req as any)
+    const brandContext = await getBrandContextForPrompt(userId)
     const task = await runTask(
       {
         type: 'geo_content_generate',
@@ -290,6 +293,7 @@ router.post('/geo/contents/generate', async (req: Request, res: Response) => {
         question_id: question.id,
         question_text: question.question,
         category: question.category,
+        brand_context: brandContext,
       }),
     )
     res.json({ task_id: task.id, status: task.status })
@@ -308,7 +312,7 @@ router.get('/geo/contents/generate/:taskId/status', async (req: Request, res: Re
 
 // POST /api/v1/geo/contents/batch-generate — 批量生成
 router.post('/geo/contents/batch-generate', async (req: Request, res: Response) => {
-  const { question_ids, domain, brand_context } = req.body
+  const { question_ids, domain, brand_context: bodyBrandContext } = req.body
   if (!Array.isArray(question_ids) || question_ids.length === 0) {
     res.status(400).json({ error: 'question_ids array is required' })
     return
@@ -316,6 +320,8 @@ router.post('/geo/contents/batch-generate', async (req: Request, res: Response) 
 
   try {
     const userId = getUserId(req as any)
+    const autoBrandContext = await getBrandContextForPrompt(userId)
+    const brandContext = bodyBrandContext ? String(bodyBrandContext) : autoBrandContext
     const questions = await prisma.geoQuestion.findMany({
       where: { id: { in: question_ids }, userId },
     })
@@ -323,7 +329,7 @@ router.post('/geo/contents/batch-generate', async (req: Request, res: Response) 
     const task = await runTask(
       {
         type: 'geo_content_batch_generate',
-        input: { question_ids, domain, brand_context },
+        input: { question_ids, domain, brand_context: brandContext },
       },
       () => batchGenerateGeoContent(
         questions.map(q => ({
@@ -331,7 +337,7 @@ router.post('/geo/contents/batch-generate', async (req: Request, res: Response) 
           question_text: q.question,
           category: q.category,
           domain: domain ? String(domain) : undefined,
-          brand_context: brand_context ? String(brand_context) : undefined,
+          brand_context: brandContext || undefined,
         })),
       ),
     )

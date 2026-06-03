@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { toInt } from '../../constants.js'
+import { toInt, getUserId } from '../../constants.js'
 import { runTask, getTask } from '../../services/ai/index.js'
 import { generateStoryboard } from '../../services/ai/generators/storyboardGenerate.js'
 import { checkScript } from '../../services/ai/generators/aiCheck.js'
+import { getBrandContextForPrompt } from '../../services/ai/brandContext.js'
 
 const router: Router = Router()
 
@@ -144,9 +145,11 @@ router.post('/scripts/:id/generate-storyboard', async (req: Request, res: Respon
   try {
     const scriptId = toInt(req.params.id)
     const { video_type } = req.body
+    const userId = getUserId(req as any)
+    const brandContext = await getBrandContextForPrompt(userId)
     const task = await runTask(
       { type: 'storyboard_generate', input: { script_id: scriptId, video_type }, refId: String(scriptId), refType: 'script' },
-      () => generateStoryboard({ script_id: scriptId, video_type }),
+      () => generateStoryboard({ script_id: scriptId, video_type, brand_context: brandContext }),
     )
     res.json({ task_id: task.id, status: task.status })
   } catch (error) {
@@ -295,9 +298,11 @@ router.delete('/scripts/:scriptId/segments/:segmentId', async (req: Request, res
 router.post('/scripts/:id/ai-check', async (req: Request, res: Response) => {
   try {
     const scriptId = toInt(req.params.id)
+    const userId = getUserId(req as any)
+    const brandContext = await getBrandContextForPrompt(userId)
     const task = await runTask(
       { type: 'ai_check', input: { script_id: scriptId }, refId: String(scriptId), refType: 'script' },
-      () => checkScript({ script_id: scriptId }),
+      () => checkScript({ script_id: scriptId, brand_context: brandContext }),
     )
     res.json({ task_id: task.id, status: task.status })
   } catch (error) {

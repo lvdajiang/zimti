@@ -4,6 +4,7 @@ import { getAIProvider } from '../provider.js'
 interface TopicGenerateInput {
   task_id: string
   count?: number
+  brand_context?: string
 }
 
 export async function generateTopics(input: TopicGenerateInput): Promise<unknown> {
@@ -13,7 +14,11 @@ export async function generateTopics(input: TopicGenerateInput): Promise<unknown
   const count = input.count ?? 5
   const provider = getAIProvider()
 
-  const prompt = `根据任务"${task.title}"（描述：${task.description ?? '无'}），生成 ${count} 个短视频选题。
+  const brandSection = input.brand_context
+    ? `\n\n品牌画像参考：\n${input.brand_context}\n请确保选题风格与品牌调性一致。`
+    : ''
+
+  const prompt = `根据任务"${task.title}"（描述：${task.description ?? '无'}），生成 ${count} 个短视频选题。${brandSection}
 每个选题包含：title（标题）、contentSkeleton（内容骨架，100字左右）、targetAudience（目标受众）、estimatedHotValue（预估热度 1-100）。
 返回 JSON 数组。`
 

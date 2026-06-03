@@ -3,6 +3,8 @@ import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { toInt } from '../../constants.js'
 import { runTask, getTask } from '../../services/ai/index.js'
+import { getBrandContextForPrompt } from '../../services/ai/brandContext.js'
+import { getUserId } from '../../constants.js'
 import { generateTopics, mergeTopics } from '../../services/ai/generators/topicGenerate.js'
 
 const router: Router = Router()
@@ -145,9 +147,11 @@ router.post('/topic-proposals/generate', async (req: Request, res: Response) => 
       res.status(400).json({ error: 'task_id is required' })
       return
     }
+    const userId = getUserId(req as any)
+    const brandContext = await getBrandContextForPrompt(userId)
     const task = await runTask(
       { type: 'topic_generate', input: { task_id, count: count ?? 5 } },
-      () => generateTopics({ task_id, count }),
+      () => generateTopics({ task_id, count, brand_context: brandContext }),
     )
     res.json({ task_id: task.id, status: task.status })
   } catch (error) {

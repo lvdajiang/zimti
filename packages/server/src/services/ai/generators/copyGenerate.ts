@@ -4,6 +4,7 @@ import { getAIProvider } from '../provider.js'
 interface CopyGenerateInput {
   record_id: string
   platform?: string
+  brand_context?: string
 }
 
 interface DashboardAnalysisInput {
@@ -15,7 +16,12 @@ export async function generateCopy(input: CopyGenerateInput): Promise<unknown> {
   if (!record) throw new Error('Record not found')
 
   const provider = getAIProvider()
-  const prompt = `为以下短视频生成${input.platform ?? '通用'}平台的发布文案。
+
+  const brandSection = input.brand_context
+    ? `\n\n品牌调性参考：\n${input.brand_context}\n请确保文案风格与品牌调性一致。`
+    : ''
+
+  const prompt = `为以下短视频生成${input.platform ?? '通用'}平台的发布文案。${brandSection}
 
 视频信息：
 - 标题：${record.title ?? '未设置'}
