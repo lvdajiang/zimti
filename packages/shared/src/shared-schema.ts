@@ -1168,6 +1168,7 @@ export const API = {
     SELECT: (topicId: number) => `/topic-proposals/${topicId}/select`,
     MERGE: '/topic-proposals/merge',
     ADD_VIDEOS: '/topic-proposals/add-videos',
+    SOURCES: '/topic-proposals/sources',
   },
 
   // --- 人设配置 ---

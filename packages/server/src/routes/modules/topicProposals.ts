@@ -5,7 +5,9 @@ import { toInt } from '../../constants.js'
 import { runTask, getTask } from '../../services/ai/index.js'
 import { getBrandContextForPrompt } from '../../services/ai/brandContext.js'
 import { getUserId } from '../../constants.js'
-import { generateTopics, mergeTopics } from '../../services/ai/generators/topicGenerate.js'
+import { mergeTopics } from '../../services/ai/generators/topicGenerate.js'
+import { generateEnhancedTopics } from '../../services/ai/generators/enhancedTopicGenerate.js'
+import { aggregateTopicSources } from '../../services/aiHub/topicSourceAggregator.js'
 
 const router: Router = Router()
 
@@ -139,7 +141,7 @@ router.post('/topic-proposals', async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/v1/topic-proposals/generate — AI 生成选题
+// POST /api/v1/topic-proposals/generate — AI 生成选题（增强版：注入品牌记忆+多源上下文）
 router.post('/topic-proposals/generate', async (req: Request, res: Response) => {
   try {
     const { task_id, count } = req.body
@@ -148,15 +150,46 @@ router.post('/topic-proposals/generate', async (req: Request, res: Response) => 
       return
     }
     const userId = getUserId(req as any)
-    const brandContext = await getBrandContextForPrompt(userId)
-    const task = await runTask(
-      { type: 'topic_generate', input: { task_id, count: count ?? 5 } },
-      () => generateTopics({ task_id, count, brand_context: brandContext }),
+
+    // 并行获取：任务信息 + 品牌记忆 + 多源聚合数据
+    const [task, brandContext, sources] = await Promise.all([
+      prisma.task.findUnique({ where: { id: task_id } }),
+      getBrandContextForPrompt(userId),
+      aggregateTopicSources(userId),
+    ])
+
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+
+    const task_count = count ?? 5
+    const task_rec = await runTask(
+      { type: 'topic_generate', input: { task_id, count: task_count } },
+      () => generateEnhancedTopics({
+        task_title: task.title,
+        task_description: task.description ?? undefined,
+        count: task_count,
+        brand_context: brandContext,
+        sources,
+      }),
     )
-    res.json({ task_id: task.id, status: task.status })
+    res.json({ task_id: task_rec.id, status: task_rec.status })
   } catch (error) {
     console.error('[POST /topic-proposals/generate]', error)
     res.status(500).json({ error: 'Failed to generate topics' })
+  }
+})
+
+// GET /api/v1/topic-proposals/sources — 灵感来源聚合数据
+router.get('/topic-proposals/sources', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req as any)
+    const sources = await aggregateTopicSources(userId)
+    res.json(sources)
+  } catch (error) {
+    console.error('[GET /topic-proposals/sources]', error)
+    res.status(500).json({ error: 'Failed to load topic sources' })
   }
 })
 
