@@ -31,6 +31,8 @@ import { createInterviewRouter } from '../services/ai/ipInterview.js'
 import { createAuthRouter } from '../services/auth/authService.js'
 import data from './modules/data.js'
 import referral from './modules/referral.js'
+import distribution from './modules/distribution.js'
+import geo from './modules/geo.js'
 
 export const router: Router = Router()
 
@@ -66,3 +68,5 @@ router.use(createInterviewRouter())
 router.use(createAuthRouter())
 router.use(data)
 router.use(referral)
+router.use(distribution)
+router.use(geo)

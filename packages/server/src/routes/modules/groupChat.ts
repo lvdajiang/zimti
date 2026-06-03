@@ -1,11 +1,10 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
 import { optionalAuth, type AuthenticatedRequest } from '../../services/auth/authService.js'
-import { getUserId } from '../../constants.js'
+import { getUserId, str, toInt } from '../../constants.js'
 import * as analyzer from '../../services/groupChatAnalyzer.js'
-import { toInt } from '../../constants.js'
 
-const router = Router()
+const router: Router = Router()
 router.use(optionalAuth)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -69,7 +68,7 @@ router.get('/group-chat/analyses', async (req: AuthenticatedRequest, res: Respon
 router.get('/group-chat/analyses/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = getUserId(req)
-    const result = await analyzer.getAnalysis(userId, req.params.id)
+    const result = await analyzer.getAnalysis(userId, str(req.params.id))
     res.json(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : '获取分析报告失败'

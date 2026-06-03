@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest'
 import { setupTestDb, cleanupTestDb, teardownTestDb } from '../setup.js'
 import { prisma } from '../../db.js'
 import { DEMO_USER_ID } from '../../constants.js'
@@ -50,6 +50,7 @@ describe('EvolutionEngine', () => {
       await engine.recordAndLearn({
         type: 'content',
         trigger: 'publish',
+        before: null,
         after: '高表现内容文本',
         metric: 0.85,
       })
@@ -74,6 +75,7 @@ describe('EvolutionEngine', () => {
       await engine.recordAndLearn({
         type: 'content',
         trigger: 'publish',
+        before: null,
         after: '低表现内容',
         metric: 0.5,
       })
@@ -93,6 +95,7 @@ describe('EvolutionEngine', () => {
       await engine.recordAndLearn({
         type: 'content',
         trigger: 'publish',
+        before: null,
         after: '无度量内容',
       })
 
@@ -143,8 +146,8 @@ describe('EvolutionEngine', () => {
     })
 
     it('多条日志聚合计算 frequency 和 impact', async () => {
-      await engine.recordAndLearn({ type: 'content', trigger: 'publish', after: 'A', metric: 0.8 })
-      await engine.recordAndLearn({ type: 'content', trigger: 'publish', after: 'B', metric: 0.6 })
+      await engine.recordAndLearn({ type: 'content', trigger: 'publish', before: null, after: 'A', metric: 0.8 })
+      await engine.recordAndLearn({ type: 'content', trigger: 'publish', before: null, after: 'B', metric: 0.6 })
       await engine.recordAndLearn({ type: 'style', trigger: 'user_edit', before: 'X', after: 'Y' })
 
       const result = await engine.analyzePatterns()
@@ -161,7 +164,7 @@ describe('EvolutionEngine', () => {
     })
 
     it('按 type 过滤', async () => {
-      await engine.recordAndLearn({ type: 'content', trigger: 'publish', after: 'A', metric: 0.8 })
+      await engine.recordAndLearn({ type: 'content', trigger: 'publish', before: null, after: 'A', metric: 0.8 })
       await engine.recordAndLearn({ type: 'style', trigger: 'user_edit', before: 'X', after: 'Y' })
 
       const result = await engine.analyzePatterns('content')
@@ -172,9 +175,9 @@ describe('EvolutionEngine', () => {
 
   describe('getRecentLogs', () => {
     it('返回最近 N 条', async () => {
-      await engine.recordAndLearn({ type: 'content', trigger: 'publish', after: '第1条' })
+      await engine.recordAndLearn({ type: 'content', trigger: 'publish', before: null, after: '第1条' })
       await engine.recordAndLearn({ type: 'style', trigger: 'edit', before: 'A', after: 'B' })
-      await engine.recordAndLearn({ type: 'skill', trigger: 'use', before: 'tool' })
+      await engine.recordAndLearn({ type: 'skill', trigger: 'use', before: 'tool', after: null })
 
       const logs = await engine.getRecentLogs(2)
       expect(logs).toHaveLength(2)
@@ -185,7 +188,7 @@ describe('EvolutionEngine', () => {
     })
 
     it('默认 limit 返回记录', async () => {
-      await engine.recordAndLearn({ type: 'content', trigger: 'publish', after: 'A' })
+      await engine.recordAndLearn({ type: 'content', trigger: 'publish', before: null, after: 'A' })
 
       const logs = await engine.getRecentLogs()
       expect(logs.length).toBeGreaterThanOrEqual(1)

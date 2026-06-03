@@ -75,7 +75,7 @@ export async function createEvent(
       eventDate: new Date(data.eventDate),
       title: data.title,
       eventType: data.eventType,
-      content: data.content ?? null,
+      content: (data.content ?? undefined) as any,
       remindAt: data.remindAt ? new Date(data.remindAt) : null,
     },
   })

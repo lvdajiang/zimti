@@ -30,14 +30,6 @@ describe('authService', () => {
     return { token: res.body.token as string, userId: res.body.user.id as string }
   }
 
-  // --- 辅助：登录 demo 用户获取 token ---
-  async function getDemoToken() {
-    const res = await request(app)
-      .post('/api/v1/auth/demo-login')
-      .expect(200)
-    return res.body.token as string
-  }
-
   // ============================================================
   // 1. JWT 签发与验证
   // ============================================================

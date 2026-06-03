@@ -159,6 +159,18 @@ const router = createRouter({
       meta: { title: 'IP 定位' },
     },
     {
+      path: ROUTES.DISTRIBUTION,
+      name: 'Distribution',
+      component: () => import('@/views/DistributionView.vue'),
+      meta: { title: '全渠道分发' },
+    },
+    {
+      path: ROUTES.GEO,
+      name: 'Geo',
+      component: () => import('@/views/GeoView.vue'),
+      meta: { title: 'GEO 优化' },
+    },
+    {
       path: '/auth',
       name: 'Auth',
       component: () => import('@/views/AuthView.vue'),

@@ -74,7 +74,7 @@ function shouldReachToday(tier: CustomerTier, weeklyCount: number): boolean {
   // 按比例分摊：将每周频次均摊到各天
   // 例如 cold 1-2次/周 → 每天概率 1~2/7
   const todayIndex = (new Date().getDay() || 7) - 1 // 0=周一, 6=周日
-  const daysNeeded = Math.max(freq.min, 1)
+  void Math.max(freq.min, 1)
   // 简化：如果本周还没达到最低频次，且今天是均匀分布的那几天之一
   if (weeklyCount < freq.max) {
     // 每隔几天触达一次

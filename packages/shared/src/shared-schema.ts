@@ -12,12 +12,17 @@
 // §1 枚举定义
 // ============================================================
 
-// --- 1.1 平台 ---
-export type Platform = 'xiaohongshu' | 'douyin' | 'weixin'
+// --- 1.1 平台（扩展：3 → 8） ---
+export type Platform = 'xiaohongshu' | 'douyin' | 'weixin' | 'zhihu' | 'baijiahao' | 'toutiao' | 'wechat_official' | 'bilibili'
 export const PLATFORM_LABELS: Record<Platform, string> = {
   xiaohongshu: '小红书',
   douyin: '抖音',
   weixin: '视频号',
+  zhihu: '知乎',
+  baijiahao: '百家号',
+  toutiao: '头条号',
+  wechat_official: '公众号',
+  bilibili: 'B站',
 }
 
 // --- 1.2 任务状态（仪表盘工作流） ---
@@ -346,6 +351,36 @@ export const SUBSCRIPTION_PLAN_LABELS: Record<SubscriptionPlan, string> = {
 export type ChatTemplateCategory = 'greeting' | 'probing' | 'closing' | 'objection' | 'general'
 export const CHAT_TEMPLATE_CATEGORY_LABELS: Record<ChatTemplateCategory, string> = {
   greeting: '破冰', probing: '挖需求', closing: '促成交', objection: '消顾虑', general: '通用',
+}
+
+// --- 1.53 分发状态 ---
+export type DistributionStatus = 'draft' | 'adapted' | 'scheduled' | 'published' | 'failed'
+export const DISTRIBUTION_STATUS_LABELS: Record<DistributionStatus, string> = {
+  draft: '待适配', adapted: '已适配', scheduled: '已排期', published: '已发布', failed: '失败',
+}
+
+// --- 1.54 GEO 问题分类 ---
+export type GeoQuestionCategory = 'route' | 'food' | 'season' | 'budget' | 'tips' | 'general'
+export const GEO_QUESTION_CATEGORY_LABELS: Record<GeoQuestionCategory, string> = {
+  route: '路线规划', food: '美食推荐', season: '季节时令', budget: '预算费用', tips: '实用攻略', general: '综合',
+}
+
+// --- 1.55 GEO 意图类型 ---
+export type GeoIntentType = 'informational' | 'navigational' | 'transactional' | 'commercial'
+export const GEO_INTENT_TYPE_LABELS: Record<GeoIntentType, string> = {
+  informational: '信息型', navigational: '导航型', transactional: '交易型', commercial: '商业调查型',
+}
+
+// --- 1.56 GEO 内容状态 ---
+export type GeoContentStatus = 'draft' | 'published' | 'archived'
+export const GEO_CONTENT_STATUS_LABELS: Record<GeoContentStatus, string> = {
+  draft: '草稿', published: '已发布', archived: '已归档',
+}
+
+// --- 1.57 GEO 提及状态 ---
+export type GeoMentionStatus = 'found' | 'not_found' | 'partial' | 'pending'
+export const GEO_MENTION_STATUS_LABELS: Record<GeoMentionStatus, string> = {
+  found: '已引用', not_found: '未引用', partial: '部分引用', pending: '待检测',
 }
 
 
@@ -941,6 +976,85 @@ export interface ReferralRewardRecord {
   updated_at: string
 }
 
+// --- 3.32 分发记录 ---
+export interface DistributionRecord {
+  id: string
+  user_id: string
+  source_content_id: string
+  source_type: 'content_asset' | 'publish_record'
+  platform: Platform
+  adapted_title: string | null
+  adapted_content: string | null
+  adapted_tags: string[]
+  character_count: number
+  status: DistributionStatus
+  scheduled_at: string | null
+  published_at: string | null
+  publish_url: string | null
+  platform_metrics: Record<string, number> | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.33 分发模板 ---
+export interface DistributionTemplateRecord {
+  id: string
+  user_id: string
+  platform: Platform
+  name: string
+  content_template: string
+  max_length: number
+  tag_limit: number
+  hashtag_format: string
+  optimal_times: string[]
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.34 GEO 意图问题 ---
+export interface GeoQuestionRecord {
+  id: string
+  user_id: string
+  question: string
+  category: GeoQuestionCategory
+  intent_type: GeoIntentType
+  ai_generated: boolean
+  source: string
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.35 GEO 优化内容 ---
+export interface GeoContentRecord {
+  id: string
+  user_id: string
+  question_id: string
+  title: string
+  content: string
+  schema_markup: Record<string, unknown> | null
+  keywords: string[]
+  status: GeoContentStatus
+  eeat_score: number | null
+  published_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.36 GEO 提及记录 ---
+export interface GeoMentionRecord {
+  id: string
+  user_id: string
+  content_id: string
+  search_engine: string
+  query: string
+  mentioned: boolean
+  mention_rank: number | null
+  mention_snippet: string | null
+  checked_at: string
+  created_at: string
+}
+
 
 // ============================================================
 // §4 API 端点常量
@@ -1271,6 +1385,43 @@ export const API = {
     UPGRADE: '/subscriptions/upgrade',
     PLANS: '/subscriptions/plans',
   },
+
+  // --- 全渠道分发 ---
+  DISTRIBUTION: {
+    RECORDS: '/distribution/records',
+    RECORD: (id: string) => `/distribution/records/${id}`,
+    ADAPT: '/distribution/adapt',
+    ADAPT_STATUS: (taskId: string) => `/distribution/adapt/${taskId}/status`,
+    BATCH_ADAPT: '/distribution/batch-adapt',
+    BATCH_ADAPT_STATUS: (taskId: string) => `/distribution/batch-adapt/${taskId}/status`,
+    TEMPLATES: '/distribution/templates',
+    TEMPLATE: (id: string) => `/distribution/templates/${id}`,
+    CALENDAR: '/distribution/calendar',
+    SCHEDULE: (id: string) => `/distribution/records/${id}/schedule`,
+    PUBLISH: (id: string) => `/distribution/records/${id}/publish`,
+    ANALYTICS: '/distribution/analytics',
+    PLATFORM_CONFIGS: '/distribution/platform-configs',
+  },
+
+  // --- GEO 优化 ---
+  GEO: {
+    QUESTIONS: '/geo/questions',
+    QUESTION: (id: string) => `/geo/questions/${id}`,
+    GENERATE_QUESTIONS: '/geo/questions/generate',
+    GENERATE_STATUS: (taskId: string) => `/geo/questions/generate/${taskId}/status`,
+    BATCH_CREATE: '/geo/questions/batch',
+    CONTENTS: '/geo/contents',
+    CONTENT: (id: string) => `/geo/contents/${id}`,
+    GENERATE_CONTENT: '/geo/contents/generate',
+    GENERATE_CONTENT_STATUS: (taskId: string) => `/geo/contents/generate/${taskId}/status`,
+    BATCH_GENERATE: '/geo/contents/batch-generate',
+    BATCH_GENERATE_STATUS: (taskId: string) => `/geo/contents/batch-generate/${taskId}/status`,
+    SCHEMA_PREVIEW: (id: string) => `/geo/contents/${id}/schema-preview`,
+    MENTIONS: '/geo/mentions',
+    MENTION_CHECK: '/geo/mentions/check',
+    MENTION_CHECK_STATUS: (taskId: string) => `/geo/mentions/check/${taskId}/status`,
+    DASHBOARD: '/geo/dashboard',
+  },
 } as const
 
 
@@ -1302,6 +1453,8 @@ export const ROUTES = {
   OPERATION_CALENDAR: '/operation-calendar',
   PIPELINE: '/pipeline',
   INTERVIEW: '/interview',
+  DISTRIBUTION: '/distribution',
+  GEO: '/geo',
 } as const
 
 

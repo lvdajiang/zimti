@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, type AuthenticatedRequest } from '../../services/auth/authService.js'
 import { initDemoData } from '../../services/dataSeeder.js'
 
-const router = Router()
+const router: Router = Router()
 
 // POST /api/v1/data/seed — 手动触发种子数据初始化
 router.post('/data/seed', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {

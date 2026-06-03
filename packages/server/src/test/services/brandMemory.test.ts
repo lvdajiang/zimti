@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest'
 import { setupTestDb, cleanupTestDb, teardownTestDb } from '../setup.js'
 import { prisma } from '../../db.js'
 import { DEMO_USER_ID } from '../../constants.js'
 import { mockAI, clearMockAI } from '../mockAI.js'
 import { BrandMemoryService } from '../../services/aiHub/brandMemory.js'
-import type { BrandMemoryCategory } from '@zimti/shared'
 
 describe('BrandMemoryService', () => {
   let service: BrandMemoryService

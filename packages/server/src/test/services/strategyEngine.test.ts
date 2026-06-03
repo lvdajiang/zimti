@@ -30,7 +30,7 @@ describe('StrategyEngine', () => {
   describe('evaluateHotspot', () => {
     it('mock AI 返回有效 JSON，验证返回结构', async () => {
       // 先建立品牌画像，否则 getContext 返回空字符串会短路
-      await brandMemory.upsert('identity', 'niche', '旅游自媒体', 'manual', 1.0)
+      await brandMemory.upsert('profile', 'niche', '旅游自媒体', 'manual', 1.0)
 
       const aiResponse = JSON.stringify({
         match_score: 75,
@@ -57,7 +57,7 @@ describe('StrategyEngine', () => {
 
     it('AI 不可用时返回降级结果', async () => {
       // 建立品牌画像但不设置 mock AI
-      await brandMemory.upsert('identity', 'niche', '旅游自媒体', 'manual', 1.0)
+      await brandMemory.upsert('profile', 'niche', '旅游自媒体', 'manual', 1.0)
       // clearMockAI 设置 NullAIProvider（generate 抛异常），走 catch 降级
 
       const result = await engine.evaluateHotspot('某热点', '某描述')
@@ -68,7 +68,7 @@ describe('StrategyEngine', () => {
     })
 
     it('AI 返回无效 JSON 时降级', async () => {
-      await brandMemory.upsert('identity', 'niche', '旅游自媒体', 'manual', 1.0)
+      await brandMemory.upsert('profile', 'niche', '旅游自媒体', 'manual', 1.0)
       mockAI(['这不是JSON'])
 
       const result = await engine.evaluateHotspot('某热点', '某描述')

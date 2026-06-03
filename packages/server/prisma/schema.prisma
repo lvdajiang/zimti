@@ -62,6 +62,11 @@ model User {
   operationCalendars   OperationCalendar[]
   touchPoints          TouchPoint[]
   referrals            Referral[]
+  distributionRecords  DistributionRecord[]
+  distributionTemplates DistributionTemplate[]
+  geoQuestions         GeoQuestion[]
+  geoContents          GeoContent[]
+  geoMentions          GeoMention[]
 
   @@map("users")
 }
@@ -1045,4 +1050,132 @@ model ReferralReward {
   @@index([userId])
   @@index([status])
   @@map("referral_rewards")
+}
+
+// ============================================================
+// 全渠道分发
+// ============================================================
+
+// --- 分发记录 ---
+model DistributionRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  sourceContentId String    @map("source_content_id") @db.Uuid
+  sourceType      String    @map("source_type") @db.VarChar(30) // content_asset | publish_record
+  platform        String    @db.VarChar(20)
+  adaptedTitle    String?   @map("adapted_title") @db.VarChar(500)
+  adaptedContent  String?   @map("adapted_content") @db.Text
+  adaptedTags     String[]  @default([]) @map("adapted_tags")
+  characterCount  Int       @default(0) @map("character_count")
+  platformRules   Json?     @map("platform_rules")
+  status          String    @default("draft") @db.VarChar(20)
+  scheduledAt     DateTime? @map("scheduled_at") @db.Timestamptz()
+  publishedAt     DateTime? @map("published_at") @db.Timestamptz()
+  publishUrl      String?   @map("publish_url") @db.VarChar(500)
+  platformMetrics Json?     @map("platform_metrics")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([platform])
+  @@index([status])
+  @@index([sourceContentId])
+  @@map("distribution_records")
+}
+
+// --- 分发模板 ---
+model DistributionTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  platform         String   @db.VarChar(20)
+  name             String   @db.VarChar(100)
+  contentTemplate  String   @map("content_template") @db.Text
+  maxLength        Int      @map("max_length")
+  tagLimit         Int      @map("tag_limit")
+  hashtagFormat    String   @default("#") @map("hashtag_format") @db.VarChar(20)
+  optimalTimes     String[] @default([]) @map("optimal_times")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([platform])
+  @@map("distribution_templates")
+}
+
+// ============================================================
+// GEO 优化模块
+// ============================================================
+
+// --- GEO 意图问题 ---
+model GeoQuestion {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  question    String   @db.VarChar(500)
+  category    String   @default("general") @db.VarChar(20)
+  intentType  String   @default("informational") @map("intent_type") @db.VarChar(20)
+  aiGenerated Boolean  @default(false) @map("ai_generated")
+  source      String   @default("manual") @db.VarChar(50)
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  contents    GeoContent[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([intentType])
+  @@map("geo_questions")
+}
+
+// --- GEO 优化内容 ---
+model GeoContent {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  questionId   String    @map("question_id") @db.Uuid
+  title        String    @db.VarChar(200)
+  content      String    @db.Text
+  schemaMarkup Json?     @map("schema_markup")
+  keywords     String[]  @default([])
+  status       String    @default("draft") @db.VarChar(20)
+  eeatScore    Int?      @map("eeat_score")
+  publishedAt  DateTime? @map("published_at") @db.Timestamptz()
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id])
+  question     GeoQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  mentions     GeoMention[]
+
+  @@index([userId])
+  @@index([questionId])
+  @@index([status])
+  @@map("geo_contents")
+}
+
+// --- GEO 提及记录 ---
+model GeoMention {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  contentId      String   @map("content_id") @db.Uuid
+  searchEngine   String   @map("search_engine") @db.VarChar(20)
+  query          String   @db.VarChar(500)
+  mentioned      Boolean  @default(false)
+  mentionRank    Int?     @map("mention_rank")
+  mentionSnippet String?  @map("mention_snippet") @db.Text
+  checkedAt      DateTime @map("checked_at") @db.Timestamptz()
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User       @relation(fields: [userId], references: [id])
+  content        GeoContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([contentId])
+  @@index([searchEngine])
+  @@index([checkedAt])
+  @@map("geo_mentions")
 }

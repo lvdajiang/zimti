@@ -68,6 +68,8 @@ const navGroups = [
       { label: '选题工作台', route: '/topic-workbench' },
       { label: 'AI 工作室', route: '/ai-studio' },
       { label: '素材库', route: '/materials' },
+      { label: '全渠道分发', route: '/distribution' },
+      { label: 'GEO 优化', route: '/geo' },
     ],
   },
   {

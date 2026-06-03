@@ -1,7 +1,7 @@
 ---
 name: session-progress
 description: 会话进度记录
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 628f4189-3c4d-4efc-9c01-d1b64260249f
@@ -9,51 +9,70 @@ metadata:
 
 # 会话进度
 
-## 2026-06-01 ~ 06-02
+## 2026-06-02 会话
+
 ### 已完成
-- **UI 美化 + 数据初始化 + 移动端适配**（收尾上期任务）：
-  - CSS 变量设计系统 `theme.css` + 24 页面样式统一 + 移动端侧边栏抽屉
-  - 种子数据服务 `dataSeeder.ts` + 注册自动初始化 + `POST /api/v1/data/seed`
-  - 修复 Express ESM `require('crypto')` → `import { createHmac }`、测试死锁重试
-- **私域流量运营模块**（9 项需求全量开发）：
-  - 客户标签体系增强（4 类标签：基础/兴趣/消费/状态 + 组合筛选）
-  - 好友健康度检测（🟢🟡🔴⚫ 4 级 + 批量 AI 唤醒话术）
-  - 引流来源归因（6 种来源：manual/video/referral/group_chat/poster/group_invite）
-  - 群聊分析器（微信 PC txt 解析 + AI 线索提取 + 一键导入 CRM）→ `/group-chat`
-  - 运营日历（事件 CRUD + 旅行行业 13 个节日预置 + 月历视图）→ `/operation-calendar`
-  - 分层触达引擎（冷/温/热/忠诚 4 层 + 今日触达任务 + AI 推荐话术）
-  - 裂变机制（HMAC 推荐码 + 统计 + 奖励管理）
-  - 转化漏斗分析（StageLog 聚合 + 瓶颈识别 + 转化率/平均天数）
-- **测试**: Server 232 + Client 95 = 327 全绿
-
-### 进行中/待办
-- [ ] 浏览器验证新页面（群聊分析、运营日历、CRM 4 个新 Tab）
-- [ ] 上传群聊 txt 文件验证端到端流程
-- [ ] Git commit 所有变更
-- [ ] 朋友圈日历排期前端 UI（数据层已就绪，scheduledAt + status 字段）
-- [ ] 部署到服务器
-
-### 关键文件清单
-- **新增后端服务**: `services/groupChatAnalyzer.ts`, `services/operationCalendarService.ts`, `services/touchPointService.ts`, `services/referralService.ts`
-- **新增后端路由**: `routes/modules/groupChat.ts`, `routes/modules/operationCalendar.ts`, `routes/modules/touchPoint.ts`, `routes/modules/referral.ts`
-- **新增前端页面**: `views/GroupChatView.vue`, `views/OperationCalendarView.vue`
-- **修改前端**: `views/CrmView.vue`（健康度/今日触达/漏斗分析/推荐管理 4 个新 Tab）
-- **修改侧边栏**: `components/AppLayout.vue`（新增群聊分析、运营日历入口）
-- **新增前端 API/Store**: `api/{groupChat,operationCalendar,touchPoint,referral}.ts` + 对应 stores
-- **Prisma 新增 5 表**: GroupChatAnalysis, OperationCalendar, TouchPoint, Referral, ReferralReward
-- **shared-schema.ts**: 新增 ~10 个类型/枚举（ContactHealth, TouchPointType, ReferralSourceType 等）
+- **GEO 优化 + 全渠道分发完整实施计划**：5 阶段（分发→题库→内容→监测→种子），14 新文件 + 7 修改文件
+- **全渠道分发模块（全量开发）**：
+  - 后端 13 API 端点：CRUD + AI 适配 + 批量适配 + 模板 + 日历 + 排期 + 发布 + 分析
+  - 前端 DistributionView.vue：分发管理/发布日历/数据分析 3 tab
+  - 8 平台配置：小红书/抖音/视频号/知乎/百家号/头条号/公众号/B站
+  - AI 内容适配器：根据平台规则（字数/标签/语气）自动重写
+- **GEO 优化模块（全量开发）**：
+  - 后端 18 API 端点：问题库 CRUD + AI 批量生成 + 内容 CRUD + AI 生成 + Schema 预览 + 提及监测 + Dashboard
+  - 前端 GeoView.vue：意图题库/内容生成/效果监测 3 tab
+  - AI 问题生成器：根据领域和分类生成搜索引擎意图问题
+  - AI 内容生成器：EEAT 标准 + FAQ Schema JSON-LD
+- **shared-schema.ts 更新**：Platform 3→8 + 6 新枚举 + 5 新接口 + API/路由常量
+- **Prisma 5 新模型**：DistributionRecord/Template + GeoQuestion/Content/Mention
+- **验证全部通过**：Server TS 零错误、Client TS 零错误、Vite 构建成功、232 测试全绿
+- **GEO 分发平台调研**：分析投媒网/媒介盒子/优媒汇/文芳城，选定投媒网 GEO 作为集成目标
 
 ### 关键决策
-- [[decisions]] 私域运营模块采用「后端服务 + 前端页面 + 数据模型」三层并行 agent 开发
-- 群聊解析器支持微信 PC 导出 txt 格式（正则提取发送人+时间+内容）
-- 客户健康度基于 lastFollowUpAt 计算（7/30/90 天阈值）
-- 裂变推荐码使用 HMAC-SHA256 生成
-- 运营日历预置 13 个旅行行业关键节点（含农历节日 2025-2028 查表）
+- **投媒网 GEO** 选定为分发集成合作伙伴（全链路 API：优化+分发+监测）
+- Zimti = 内容大脑（AI 创作+适配），投媒网 = 分发手臂（3万+媒体资源）
+- 现有 `geo_info`（地理坐标）与 GEO（Generative Engine Optimization）是两个不同概念，保留两者
+
+### 进行中
+- 联系投媒网获取 API 文档 + 测试账号（用户侧）
+- 投媒网 API 集成层代码设计（待 API 文档后开始）
+
+### 待处理
+- [ ] 提交当前所有变更（GEO + 分发模块）
+- [ ] 联系投媒网拿 API 文档 + 测试账号
+- [ ] 投媒网 API 集成到 distribution.ts 和 geo.ts
+- [ ] 50 条新疆旅行种子问题（GEO 阶段 5）
+- [ ] 阶段 2：AI 浮窗升级为对话面板
+- [ ] 部署到服务器
+
+### 本次新增/修改文件清单
+
+**新建 14 个文件：**
+- `server/src/services/distribution/platformConfigs.ts` — 8 平台规则配置
+- `server/src/services/ai/generators/contentAdapt.ts` — AI 内容适配器
+- `server/src/services/ai/generators/geoQuestionGenerate.ts` — AI 问题生成
+- `server/src/services/ai/generators/geoContentGenerate.ts` — AI 内容生成（EEAT）
+- `server/src/routes/modules/distribution.ts` — 分发路由（13 端点）
+- `server/src/routes/modules/geo.ts` — GEO 路由（18 端点）
+- `client/src/api/distribution.ts` — 分发 API 封装
+- `client/src/api/geo.ts` — GEO API 封装
+- `client/src/stores/distribution.ts` — 分发 Pinia Store
+- `client/src/stores/geo.ts` — GEO Pinia Store
+- `client/src/views/DistributionView.vue` — 分发页面
+- `client/src/views/GeoView.vue` — GEO 页面
+
+**修改 7 个文件：**
+- `shared/src/shared-schema.ts` — Platform 扩展 + 6 枚举 + 5 接口 + API/路由
+- `server/prisma/schema.prisma` — 5 新模型
+- `server/src/services/ai/taskManager.ts` — 7 新 AITaskType
+- `server/src/services/ai/index.ts` — 导出生成器
+- `server/src/routes/index.ts` — 注册路由
+- `client/src/router/index.ts` — 2 新路由
+- `client/src/components/AppLayout.vue` — 侧边栏 2 新入口
 
 ## 2026-05-25
 ### 已完成
-- **记忆系统再次保存**: save-ctx 提交 session_progress/decisions/known_issues
-- **Flova AI 影视流程分析**: 对比 Zimti 与 Flova 1.0 功能差异
+- 记忆系统保存 + Flova AI 影视流程分析
 ### 待处理
-- **GPT Image 2.0 接入实现**: 后端 service + 前端入口，与即梦并列
-- **AI 分镜流程**: GLM 拆分镜 → 即梦/GPT Image 生画面 → Remotion 组装
+- GPT Image 2.0 接入实现
+- AI 分镜流程（GLM 拆分镜 → 即梦/GPT Image 生画面 → Remotion 组装）
