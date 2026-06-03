@@ -114,3 +114,94 @@ async function seedChatTemplates(userId: string): Promise<number> {
   })
   return toCreate.length
 }
+
+// ============================================================
+// GEO 种子问题（50 条新疆旅行意图问题）
+// ============================================================
+
+const GEO_SEED_QUESTIONS: Array<{
+  question: string
+  category: 'route' | 'food' | 'season' | 'budget' | 'tips' | 'general'
+  intent_type: 'informational' | 'navigational' | 'transactional' | 'commercial'
+  tags: string[]
+}> = [
+  // --- 路线规划（10 条）---
+  { question: '新疆旅游走北疆环线还是南疆环线好？', category: 'route', intent_type: 'informational', tags: ['北疆', '南疆', '环线'] },
+  { question: '伊犁草原哪几个最值得去？那拉提、喀拉峻、巴音布鲁克怎么选？', category: 'route', intent_type: 'informational', tags: ['伊犁', '草原', '那拉提'] },
+  { question: '新疆自驾游走独库公路需要几天？沿途有哪些必停景点？', category: 'route', intent_type: 'informational', tags: ['独库公路', '自驾', '景点'] },
+  { question: '第一次去新疆，7天行程怎么安排最合理？', category: 'route', intent_type: 'informational', tags: ['行程', '7天', '新手'] },
+  { question: '南疆自驾从喀什出发，推荐走哪条线路？', category: 'route', intent_type: 'informational', tags: ['南疆', '喀什', '自驾'] },
+  { question: '新疆北疆10天深度游路线推荐，不想太赶', category: 'route', intent_type: 'informational', tags: ['北疆', '10天', '深度游'] },
+  { question: '从乌鲁木齐到禾木怎么走最快？需要多久？', category: 'route', intent_type: 'navigational', tags: ['乌鲁木齐', '禾木', '交通'] },
+  { question: '独库公路开放时间是什么时候？冬季能走吗？', category: 'route', intent_type: 'informational', tags: ['独库公路', '开放时间', '冬季'] },
+  { question: '赛里木湖环湖一圈要多久？有哪些拍照机位？', category: 'route', intent_type: 'informational', tags: ['赛里木湖', '环湖', '拍照'] },
+  { question: '喀纳斯和禾木安排几天比较合适？住哪里最方便？', category: 'route', intent_type: 'commercial', tags: ['喀纳斯', '禾木', '住宿'] },
+
+  // --- 美食推荐（8 条）---
+  { question: '新疆有哪些必吃的当地美食？', category: 'food', intent_type: 'informational', tags: ['美食', '必吃', '推荐'] },
+  { question: '乌鲁木齐哪里能吃到最正宗的大盘鸡？', category: 'food', intent_type: 'navigational', tags: ['乌鲁木齐', '大盘鸡', '餐厅'] },
+  { question: '新疆烤羊肉串和内地的有什么不同？怎么烤才好吃？', category: 'food', intent_type: 'informational', tags: ['烤肉', '羊肉串', '做法'] },
+  { question: '去新疆一定要尝的抓饭在哪里能吃到？', category: 'food', intent_type: 'navigational', tags: ['抓饭', '餐厅', '推荐'] },
+  { question: '新疆的馕有多少种？哪些最值得尝试？', category: 'food', intent_type: 'informational', tags: ['馕', '种类', '美食'] },
+  { question: '在新疆能喝到什么特色饮品？奶茶和酸奶推荐吗？', category: 'food', intent_type: 'informational', tags: ['饮品', '奶茶', '酸奶'] },
+  { question: '喀什老城附近有什么特色小吃？', category: 'food', intent_type: 'navigational', tags: ['喀什', '小吃', '老城'] },
+  { question: '新疆水果哪几个月最好吃？有什么季节限定？', category: 'food', intent_type: 'informational', tags: ['水果', '季节', '限定'] },
+
+  // --- 季节时令（8 条）---
+  { question: '新疆旅游几月份去最好？不同季节有什么区别？', category: 'season', intent_type: 'informational', tags: ['最佳时间', '季节', '对比'] },
+  { question: '6月去新疆看薰衣草，伊犁哪个花海最壮观？', category: 'season', intent_type: 'informational', tags: ['6月', '薰衣草', '伊犁'] },
+  { question: '9月去新疆看胡杨林，哪里最美？最佳观赏期是什么时候？', category: 'season', intent_type: 'informational', tags: ['9月', '胡杨林', '秋季'] },
+  { question: '冬天去新疆滑雪，阿勒泰和丝绸之路度假区哪个更适合新手？', category: 'season', intent_type: 'commercial', tags: ['冬季', '滑雪', '阿勒泰'] },
+  { question: '7-8月新疆热吗？需要带什么衣服？', category: 'season', intent_type: 'informational', tags: ['夏季', '穿衣', '气温'] },
+  { question: '新疆杏花什么时候开？哪里可以看杏花？', category: 'season', intent_type: 'informational', tags: ['杏花', '春季', '赏花'] },
+  { question: '国庆节去新疆人多吗？推荐去哪里避开人流？', category: 'season', intent_type: 'informational', tags: ['国庆', '人少', '小众'] },
+  { question: '新疆的日出日落时间跟内地差多少？需要调整作息吗？', category: 'season', intent_type: 'informational', tags: ['时差', '日出', '作息'] },
+
+  // --- 预算费用（8 条）---
+  { question: '去新疆旅游一趟大概要花多少钱？', category: 'budget', intent_type: 'informational', tags: ['费用', '预算', '总花销'] },
+  { question: '新疆自驾游每天花销大概多少？油费和过路费高吗？', category: 'budget', intent_type: 'informational', tags: ['自驾', '油费', '花销'] },
+  { question: '新疆住宿贵吗？推荐性价比高的酒店或民宿', category: 'budget', intent_type: 'commercial', tags: ['住宿', '酒店', '性价比'] },
+  { question: '跟团去新疆和自由行哪个更划算？', category: 'budget', intent_type: 'commercial', tags: ['跟团', '自由行', '对比'] },
+  { question: '新疆旅游有哪些隐形消费需要注意？', category: 'budget', intent_type: 'informational', tags: ['隐形消费', '陷阱', '注意'] },
+  { question: '独库公路沿途住宿怎么选？有平价选择吗？', category: 'budget', intent_type: 'commercial', tags: ['独库公路', '住宿', '平价'] },
+  { question: '新疆包车一天多少钱？找什么样的司机靠谱？', category: 'budget', intent_type: 'transactional', tags: ['包车', '价格', '司机'] },
+  { question: '在新疆吃饭贵不贵？人均一天餐饮预算多少？', category: 'budget', intent_type: 'informational', tags: ['餐饮', '人均', '预算'] },
+
+  // --- 实用攻略（10 条）---
+  { question: '去新疆需要办边防证吗？哪些地方需要？', category: 'tips', intent_type: 'informational', tags: ['边防证', '证件', '攻略'] },
+  { question: '新疆旅游会有高原反应吗？哪些地方海拔高？', category: 'tips', intent_type: 'informational', tags: ['高原反应', '海拔', '健康'] },
+  { question: '在新疆租车自驾需要什么条件？哪家租车公司靠谱？', category: 'tips', intent_type: 'transactional', tags: ['租车', '自驾', '条件'] },
+  { question: '新疆安全吗？一个人去旅行需要注意什么？', category: 'tips', intent_type: 'informational', tags: ['安全', '独自旅行', '注意'] },
+  { question: '去新疆要带什么必备物品？有什么容易忽略的？', category: 'tips', intent_type: 'informational', tags: ['行李清单', '必备', '攻略'] },
+  { question: '新疆网络信号好吗？需要买当地电话卡吗？', category: 'tips', intent_type: 'informational', tags: ['网络', '信号', '电话卡'] },
+  { question: '新疆有哪些民俗禁忌需要了解？', category: 'tips', intent_type: 'informational', tags: ['民俗', '禁忌', '文化'] },
+  { question: '新疆的安检严格吗？坐飞机火车需要提前多久到？', category: 'tips', intent_type: 'informational', tags: ['安检', '交通', '时间'] },
+  { question: '新疆旅游用什么导航软件最好？Google Maps 好用吗？', category: 'tips', intent_type: 'navigational', tags: ['导航', '地图', '软件'] },
+  { question: '新疆买东西能讲价吗？大巴扎购物有什么建议？', category: 'tips', intent_type: 'informational', tags: ['购物', '讲价', '大巴扎'] },
+
+  // --- 综合（6 条）---
+  { question: '新疆和西藏哪个更值得去？各有什么特色？', category: 'general', intent_type: 'commercial', tags: ['新疆', '西藏', '对比'] },
+  { question: '新疆有哪些小众景点值得去？不想去人挤人的地方', category: 'general', intent_type: 'informational', tags: ['小众', '秘境', '推荐'] },
+  { question: '新疆旅游带无人机航拍可以吗？哪些景区禁飞？', category: 'general', intent_type: 'informational', tags: ['无人机', '航拍', '规定'] },
+  { question: '新疆自由行不会开车怎么办？有公共交通吗？', category: 'general', intent_type: 'informational', tags: ['公共交通', '不开车', '出行'] },
+  { question: '新疆值得去第二次吗？每次去有什么不同体验？', category: 'general', intent_type: 'informational', tags: ['重游', '体验', '推荐'] },
+  { question: '新疆旅行最适合拍什么风格的照片？有什么拍摄技巧？', category: 'general', intent_type: 'informational', tags: ['摄影', '风格', '技巧'] },
+]
+
+export async function seedGeoQuestions(userId: string): Promise<number> {
+  const existing = await prisma.geoQuestion.count({ where: { userId } })
+  if (existing > 0) return 0 // 已有种子数据，跳过
+
+  await prisma.geoQuestion.createMany({
+    data: GEO_SEED_QUESTIONS.map((q) => ({
+      userId,
+      question: q.question,
+      category: q.category,
+      intentType: q.intent_type,
+      aiGenerated: false,
+      source: 'seed',
+      tags: q.tags,
+    })),
+  })
+  return GEO_SEED_QUESTIONS.length
+}
