@@ -4,11 +4,11 @@
       <!-- 左侧：预览 -->
       <div class="preview-section">
         <h3>字幕预览</h3>
-        <div class="preview-box" :style="previewBoxStyle">
+        <div class="preview-box">
           <div class="preview-video-placeholder">
             <span>视频画面区域</span>
           </div>
-          <div class="subtitle-overlay" :style="subtitleStyle">
+          <div class="subtitle-overlay" :class="'pos-' + store.subtitleStyle.position" :style="subtitleStyle">
             这是字幕预览文字效果
           </div>
         </div>
@@ -88,6 +88,10 @@
         >
           {{ store.executing ? '保存中...' : '保存字幕设置' }}
         </button>
+
+        <div v-if="store.steps[3]?.status === 'completed'" class="config-card success-card">
+          <span class="success-icon">✅</span> 字幕已配置，可以进入下一步
+        </div>
       </div>
     </div>
   </div>
@@ -99,15 +103,10 @@ import { useProductionStore } from '@/stores/production'
 
 const store = useProductionStore()
 
-const previewBoxStyle = computed(() => ({
-  position: 'relative' as const,
-}))
-
 const subtitleStyle = computed(() => ({
-  fontSize: store.subtitleStyle.font_size + 'px',
+  fontSize: store.subtitleStyle.font_size * 0.5 + 'px',
   color: store.subtitleStyle.color,
   backgroundColor: store.subtitleStyle.bg_color,
-  opacity: 1,
 }))
 
 async function handleSave() {
@@ -161,10 +160,16 @@ async function handleSave() {
 .subtitle-overlay {
   width: 100%;
   text-align: center;
-  padding: 8px 12px;
+  padding: 6px 10px;
   font-weight: 600;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  position: absolute;
+  left: 0;
 }
+
+.subtitle-overlay.pos-top { top: 10%; }
+.subtitle-overlay.pos-center { top: 50%; transform: translateY(-50%); }
+.subtitle-overlay.pos-bottom { bottom: 8%; }
 
 .config-section {
   display: flex;
@@ -267,6 +272,9 @@ async function handleSave() {
 .btn-block {
   width: 100%;
 }
+
+.success-card { text-align: center; color: #10b981; font-size: 14px; }
+.success-icon { margin-right: 4px; }
 
 @media (max-width: 768px) {
   .panel-grid {
