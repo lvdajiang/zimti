@@ -131,16 +131,18 @@ export const useProductionStore = defineStore('production', () => {
       await executeProductionStep(jobId.value, step, config)
 
       // 轮询等待步骤完成
-      if (step === 1) {
-        // 分镜生成需要时间，轮询
-        await pollStepCompletion(step)
-      } else if (step === 3) {
-        // 渲染需要时间，轮询
+      if (step === 1 || step === 2 || step === 3) {
+        // 分镜生成、TTS、渲染需要时间，轮询
         await pollStepCompletion(step)
       } else {
-        // TTS 和字幕步骤相对快，短暂等待后刷新
-        await new Promise(r => setTimeout(r, 1000))
+        // 字幕和发布步骤相对快，短暂等待后刷新
+        await new Promise(r => setTimeout(r, 500))
         await refreshProgress()
+      }
+
+      // 步骤完成后，自动前进到下一步
+      if (steps.value[step - 1]?.status === 'completed' && step < 5) {
+        currentStep.value = step + 1
       }
     } finally {
       executing.value = false

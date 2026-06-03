@@ -50,7 +50,9 @@
             :disabled="!store.fullText.trim() || store.executing"
             @click="handleGenerateStoryboard"
           >
-            {{ store.executing ? '生成中...' : 'AI 生成分镜' }}
+            <template v-if="store.executing">生成中...</template>
+            <template v-else-if="segmentCount > 0">重新生成分镜 ({{ segmentCount }})</template>
+            <template v-else>AI 生成分镜</template>
           </button>
         </div>
 
@@ -60,10 +62,15 @@
           <div class="segment-preview">
             <div v-for="(seg, i) in segmentList" :key="seg.id" class="segment-item">
               <span class="seg-index">{{ i + 1 }}</span>
-              <span class="seg-type">{{ seg.segmentType === 'oral' ? '口播' : seg.segmentType === 'visual' ? '画面' : '转场' }}</span>
-              <span class="seg-text">{{ (seg.oralText || seg.visualDescription || '').slice(0, 40) }}{{ (seg.oralText || seg.visualDescription || '').length > 40 ? '...' : '' }}</span>
+              <span class="seg-type">{{ seg.segment_type === 'oral' ? '口播' : seg.segment_type === 'visual' ? '画面' : '转场' }}</span>
+              <span class="seg-text">{{ textPreview(seg) }}</span>
             </div>
           </div>
+        </div>
+
+        <!-- 状态提示 -->
+        <div v-if="store.steps[0]?.status === 'completed'" class="config-card success-card">
+          <span class="success-icon">✅</span> 分镜已生成，可以进入下一步
         </div>
       </div>
     </div>
@@ -71,15 +78,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useProductionStore } from '@/stores/production'
 import api from '@/api/client'
 
 interface SegmentItem {
   id: number
-  segmentType: string
-  oralText: string | null
-  visualDescription: string | null
+  segment_type: string
+  oral_text: string | null
+  visual_description: string
   duration: number
 }
 
@@ -90,35 +97,55 @@ const charCount = computed(() => store.fullText.length)
 const estimatedDuration = computed(() => Math.max(1, Math.round(charCount.value / 5)))
 const segmentCount = computed(() => segmentList.value.length)
 
+// 自动保存 debounce
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
 function handleInput() {
-  if (store.jobId && store.scriptId) {
-    store.saveStepData(1, { full_text: store.fullText })
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
+    if (store.jobId && store.scriptId) {
+      await store.saveStepData(1, { full_text: store.fullText })
+    }
+  }, 1000)
+}
+
+function textPreview(seg: SegmentItem): string {
+  const text = seg.oral_text || seg.visual_description || ''
+  return text.length > 40 ? text.slice(0, 40) + '...' : text
+}
+
+async function loadSegments() {
+  if (!store.scriptId) return
+  try {
+    const res = await api.get(`/scripts/${store.scriptId}`) as any
+    segmentList.value = res.segments || []
+  } catch {
+    // 静默
   }
 }
 
 async function handleGenerateStoryboard() {
-  if (!store.scriptId) return
+  if (!store.scriptId || !store.fullText.trim()) return
 
-  // 先保存脚本文本
-  await api.put(`/scripts/${store.scriptId}`, {
-    full_text: store.fullText,
-    video_type: store.videoType,
-    oral_ratio: store.oralRatio,
-  })
+  // 先保存脚本到 DB
+  try {
+    await api.put(`/scripts/${store.scriptId}`, {
+      full_text: store.fullText,
+      video_type: store.videoType,
+      oral_ratio: store.oralRatio,
+    })
+  } catch {
+    // 保存失败不阻塞，后端会从 PipelineJob.output 读
+  }
 
-  // 执行分镜生成
+  // 执行分镜生成步骤
   await store.runStep(1, { video_type: store.videoType })
 
-  // 加载分镜列表
-  if (store.scriptId) {
-    try {
-      const res = await api.get(`/scripts/${store.scriptId}`) as any
-      segmentList.value = res.segments || []
-    } catch {
-      // 静默
-    }
-  }
+  // 重新加载分镜
+  await loadSegments()
 }
+
+onMounted(() => { loadSegments() })
 </script>
 
 <style scoped>
@@ -299,6 +326,16 @@ async function handleGenerateStoryboard() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.success-card {
+  text-align: center;
+  color: #10b981;
+  font-size: 14px;
+}
+
+.success-icon {
+  margin-right: 4px;
 }
 
 @media (max-width: 768px) {

@@ -17,16 +17,16 @@
             v-for="(seg, i) in segments"
             :key="seg.id"
             class="segment-card"
-            :class="{ has_audio: seg.oralAudioUrl }"
+            :class="{ has_audio: !!seg.oral_audio_url }"
           >
             <div class="seg-header">
               <span class="seg-index">{{ i + 1 }}</span>
-              <span class="seg-type">{{ seg.segmentType === 'oral' ? '口播' : '画面' }}</span>
-              <span v-if="seg.oralAudioUrl" class="audio-badge">已配音</span>
+              <span class="seg-type-badge">{{ seg.segment_type === 'oral' ? '口播' : '画面' }}</span>
+              <span v-if="seg.oral_audio_url" class="audio-badge">已配音</span>
             </div>
-            <div class="seg-text">{{ seg.oralText || seg.visualDescription || '（无内容）' }}</div>
-            <div v-if="seg.oralAudioUrl" class="audio-player">
-              <audio controls :src="audioBaseUrl + seg.oralAudioUrl" class="player" />
+            <div class="seg-text">{{ seg.oral_text || seg.visual_description || '（无内容）' }}</div>
+            <div v-if="seg.oral_audio_url" class="audio-player">
+              <audio controls :src="audioPath(seg.oral_audio_url)" class="player" />
             </div>
           </div>
         </div>
@@ -65,12 +65,9 @@
           {{ store.executing ? '配音中...' : '一键配音' }}
         </button>
 
-        <!-- 全部试听 -->
-        <div v-if="hasAnyAudio" class="config-card">
-          <h4>全部试听</h4>
-          <audio controls class="player full-player">
-            <source v-for="seg in segmentsWithAudio" :key="seg.id" :src="audioBaseUrl + seg.oralAudioUrl" />
-          </audio>
+        <!-- 状态提示 -->
+        <div v-if="store.steps[1]?.status === 'completed'" class="config-card success-card">
+          <span class="success-icon">✅</span> 配音完成，可以进入下一步
         </div>
       </div>
     </div>
@@ -84,10 +81,10 @@ import api from '@/api/client'
 
 interface SegmentItem {
   id: number
-  segmentType: string
-  oralText: string | null
-  visualDescription: string | null
-  oralAudioUrl: string | null
+  segment_type: string
+  oral_text: string | null
+  visual_description: string
+  oral_audio_url: string | null
   duration: number
 }
 
@@ -96,19 +93,18 @@ const segments = ref<SegmentItem[]>([])
 const loading = ref(false)
 const ttsRate = ref('+0%')
 
-const audioBaseUrl = '/api/v1/' // 代理地址
-
 const totalDuration = computed(() =>
   segments.value.reduce((sum, s) => sum + (s.duration || 0), 0),
 )
 
-const hasAnyAudio = computed(() =>
-  segments.value.some(s => s.oralAudioUrl),
-)
-
-const segmentsWithAudio = computed(() =>
-  segments.value.filter(s => s.oralAudioUrl),
-)
+/** 音频文件路径：后端存的是 uploads/tts/xxx.mp3，前端通过静态文件服务访问 */
+function audioPath(url: string): string {
+  if (!url) return ''
+  // 如果已经是 http 开头的完整 URL，直接返回
+  if (url.startsWith('http')) return url
+  // 否则作为静态文件路径
+  return `/static/${url.replace(/\\/g, '/').split('/').slice(-2).join('/')}`
+}
 
 onMounted(() => { loadSegments() })
 watch(() => store.scriptId, () => { loadSegments() })
@@ -209,7 +205,7 @@ async function handleVoiceover() {
   flex-shrink: 0;
 }
 
-.seg-type {
+.seg-type-badge {
   font-size: 12px;
   color: var(--color-primary);
   background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.1);
@@ -307,8 +303,14 @@ async function handleVoiceover() {
   width: 100%;
 }
 
-.full-player {
-  margin-top: 4px;
+.success-card {
+  text-align: center;
+  color: #10b981;
+  font-size: 14px;
+}
+
+.success-icon {
+  margin-right: 4px;
 }
 
 .loading-wrapper {
