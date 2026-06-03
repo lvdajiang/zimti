@@ -93,11 +93,22 @@ router.post('/pipeline/production', async (req: Request, res: Response) => {
       taskId = task.id
     }
 
-    // 2. 创建 Script（通过 taskId 关联用户，无直接 userId）
+    // 2. 创建 TopicProposal 占位（Script 必须关联有效的 topicId）
+    const placeholder = await prisma.topicProposal.create({
+      data: {
+        taskId,
+        title: `[生产流水线] ${title}`,
+        contentSkeleton: { source: 'pipeline', title },
+        voiceRatio: 0.7,
+        status: 'pipeline_draft',
+      },
+    })
+
+    // 3. 创建 Script（通过 taskId 关联用户，无直接 userId）
     const script = await prisma.script.create({
       data: {
         taskId,
-        topicId: 0,
+        topicId: placeholder.id,
         fullText: full_text || '',
         videoType: video_type || 'knowledge',
         oralRatio: 0.7,
@@ -105,7 +116,7 @@ router.post('/pipeline/production', async (req: Request, res: Response) => {
       },
     })
 
-    // 3. 创建 PipelineJob
+    // 4. 创建 PipelineJob
     const job = await prisma.pipelineJob.create({
       data: {
         userId,
