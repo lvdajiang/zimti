@@ -20,6 +20,13 @@
           <label>视频标题</label>
           <input v-model="newTitle" class="input" placeholder="例如：新疆旅行 7 天攻略" />
         </div>
+        <div v-if="store.templates.length > 0" class="form-group">
+          <label>从模板创建（可选）</label>
+          <select v-model="selectedTemplateId" class="input">
+            <option value="">空白开始</option>
+            <option v-for="t in store.templates" :key="t.id" :value="t.id">{{ t.name }}</option>
+          </select>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label>视频类型</label>
@@ -96,8 +103,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useProductionStore } from '@/stores/production'
 import { PRODUCTION_STEPS } from '@zimti/shared'
 import ScriptPanel from '@/components/production/ScriptPanel.vue'
@@ -115,6 +122,7 @@ const stepList = PRODUCTION_STEPS
 const newTitle = ref('')
 const newVideoType = ref('knowledge')
 const newFullText = ref('')
+const selectedTemplateId = ref('')
 
 const statusLabel = computed(() => {
   const cs = store.steps[store.currentStep - 1]
@@ -129,6 +137,7 @@ const statusLabel = computed(() => {
 })
 
 onMounted(async () => {
+  store.loadTemplates()
   const jobId = route.params.jobId as string
   if (jobId) {
     await store.loadJob(jobId)
@@ -155,10 +164,37 @@ function handleReset() {
 }
 
 function handleStepClick(step: number) {
-  if (store.canAdvanceTo(step) || store.isStepCompleted(step)) {
+  if (step === store.currentStep) return
+  // 如果点击已完成步骤且回退会清除后续数据，需确认
+  if (store.isStepCompleted(step)) {
+    const hasLaterCompleted = store.steps.slice(step).some(s => s.status === 'completed')
+    if (hasLaterCompleted) {
+      if (!confirm(`回退到步骤 ${step} 会清除后续步骤的数据，确定要回退吗？`)) return
+      store.rollbackToStep(step)
+    } else {
+      store.goToStep(step)
+    }
+  } else if (store.canAdvanceTo(step)) {
     store.goToStep(step)
   }
 }
+
+// beforeunload 保护
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (store.hasUnsavedChanges) {
+    e.preventDefault()
+  }
+}
+onMounted(() => { window.addEventListener('beforeunload', onBeforeUnload) })
+onUnmounted(() => { window.removeEventListener('beforeunload', onBeforeUnload) })
+
+// 路由离开确认
+onBeforeRouteLeave(() => {
+  if (store.hasUnsavedChanges) {
+    if (!confirm('有步骤正在执行中，确定要离开吗？')) return false
+  }
+  return true
+})
 
 function prevStep() {
   if (store.currentStep > 1) {

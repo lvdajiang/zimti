@@ -1,78 +1,66 @@
 ---
 name: session-progress
 description: 会话进度记录
-metadata:
+metadata: 
   node_type: memory
   type: project
-  originSessionId: 628f4189-3c4d-4efc-9c01-d1b64260249f
+  originSessionId: e12b7216-64c6-46bd-936f-5aab7a71ad5c
 ---
 
 # 会话进度
 
+## 2026-06-03 会话
+
+### 已完成
+- **生产流水线页面（阶段1-4）**：完整实现 5 步流水线 UI + 后端编排
+  - 后端 `pipelineProduction.ts`：4 个编排端点（创建/进度/执行步骤/更新数据）
+  - 前端 `ProductionPipelineView.vue`：入口面板 + 5 步步骤条 + 面板切换
+  - 5 个面板组件：ScriptPanel / TtsPanel / VisualPanel / SubtitlePanel / PublishPanel
+  - Pinia Store `production.ts`：状态管理 + 步骤轮询 + 自动前进
+  - PipelineMode 增加 `production`，ROUTES 增加 `PIPELINE_PRODUCTION`
+  - 侧边栏「内容生产」组增加「生产流水线」入口
+
+- **阶段1 骨架**：Schema + 后端4端点 + 前端页面 + 5面板 + 路由 + 侧边栏
+- **阶段2 数据流转**：后端执行器修复（分镜直接写入DB、Prisma字段修正）、前端自动保存/加载
+- **阶段3 视频+字幕**：VisualPanel 渲染轮询+素材选择弹窗、SubtitlePanel 位置动态预览
+- **阶段4 多平台发布**：PublishPanel 对接 distribution/batch-adapt API、创建分发记录
+
+### 新建文件
+- `server/src/routes/modules/pipelineProduction.ts`
+- `client/src/views/ProductionPipelineView.vue`
+- `client/src/components/production/ScriptPanel.vue`
+- `client/src/components/production/TtsPanel.vue`
+- `client/src/components/production/VisualPanel.vue`
+- `client/src/components/production/SubtitlePanel.vue`
+- `client/src/components/production/PublishPanel.vue`
+- `client/src/stores/production.ts`
+- `client/src/api/production.ts`
+
+### 修改文件
+- `shared/src/shared-schema.ts` — PipelineMode + PRODUCTION_STEPS + API + ROUTES
+- `server/src/routes/index.ts` — 注册 pipelineProduction
+- `client/src/router/index.ts` — `/pipeline/production/:jobId?` 路由
+- `client/src/components/AppLayout.vue` — 侧边栏入口
+
+### 验证结果
+- Server TS: 零错误 | Client Vite Build: 成功 | Server Tests: 232 PASS / 0 FAIL
+
+### 待处理
+- [ ] 阶段5：模板系统（PipelineTemplate CRUD + 从模板创建）
+- [ ] 阶段5：回退编辑（步骤回退后后续标记 pending）
+- [ ] 阶段5：beforeunload 保护 + 路由离开确认
+- [ ] 阶段5：集成测试补充
+- [ ] 数字人 API 集成（即梦/硅基智能/HeyGen 待选型）
+- [ ] 部署到服务器
+
 ## 2026-06-02 会话
 
 ### 已完成
-- **GEO 优化 + 全渠道分发完整实施计划**：5 阶段（分发→题库→内容→监测→种子），14 新文件 + 7 修改文件
-- **全渠道分发模块（全量开发）**：
-  - 后端 13 API 端点：CRUD + AI 适配 + 批量适配 + 模板 + 日历 + 排期 + 发布 + 分析
-  - 前端 DistributionView.vue：分发管理/发布日历/数据分析 3 tab
-  - 8 平台配置：小红书/抖音/视频号/知乎/百家号/头条号/公众号/B站
-  - AI 内容适配器：根据平台规则（字数/标签/语气）自动重写
-- **GEO 优化模块（全量开发）**：
-  - 后端 18 API 端点：问题库 CRUD + AI 批量生成 + 内容 CRUD + AI 生成 + Schema 预览 + 提及监测 + Dashboard
-  - 前端 GeoView.vue：意图题库/内容生成/效果监测 3 tab
-  - AI 问题生成器：根据领域和分类生成搜索引擎意图问题
-  - AI 内容生成器：EEAT 标准 + FAQ Schema JSON-LD
-- **shared-schema.ts 更新**：Platform 3→8 + 6 新枚举 + 5 新接口 + API/路由常量
-- **Prisma 5 新模型**：DistributionRecord/Template + GeoQuestion/Content/Mention
+- **GEO 优化 + 全渠道分发完整实施**
 - **验证全部通过**：Server TS 零错误、Client TS 零错误、Vite 构建成功、232 测试全绿
-- **GEO 分发平台调研**：分析投媒网/媒介盒子/优媒汇/文芳城，选定投媒网 GEO 作为集成目标
-
-### 关键决策
-- **投媒网 GEO** 选定为分发集成合作伙伴（全链路 API：优化+分发+监测）
-- Zimti = 内容大脑（AI 创作+适配），投媒网 = 分发手臂（3万+媒体资源）
-- 现有 `geo_info`（地理坐标）与 GEO（Generative Engine Optimization）是两个不同概念，保留两者
-
-### 进行中
-- 联系投媒网获取 API 文档 + 测试账号（用户侧）
-- 投媒网 API 集成层代码设计（待 API 文档后开始）
 
 ### 待处理
-- [ ] 提交当前所有变更（GEO + 分发模块）
 - [ ] 联系投媒网拿 API 文档 + 测试账号
 - [ ] 投媒网 API 集成到 distribution.ts 和 geo.ts
 - [ ] 50 条新疆旅行种子问题（GEO 阶段 5）
 - [ ] 阶段 2：AI 浮窗升级为对话面板
-- [ ] 部署到服务器
-
-### 本次新增/修改文件清单
-
-**新建 14 个文件：**
-- `server/src/services/distribution/platformConfigs.ts` — 8 平台规则配置
-- `server/src/services/ai/generators/contentAdapt.ts` — AI 内容适配器
-- `server/src/services/ai/generators/geoQuestionGenerate.ts` — AI 问题生成
-- `server/src/services/ai/generators/geoContentGenerate.ts` — AI 内容生成（EEAT）
-- `server/src/routes/modules/distribution.ts` — 分发路由（13 端点）
-- `server/src/routes/modules/geo.ts` — GEO 路由（18 端点）
-- `client/src/api/distribution.ts` — 分发 API 封装
-- `client/src/api/geo.ts` — GEO API 封装
-- `client/src/stores/distribution.ts` — 分发 Pinia Store
-- `client/src/stores/geo.ts` — GEO Pinia Store
-- `client/src/views/DistributionView.vue` — 分发页面
-- `client/src/views/GeoView.vue` — GEO 页面
-
-**修改 7 个文件：**
-- `shared/src/shared-schema.ts` — Platform 扩展 + 6 枚举 + 5 接口 + API/路由
-- `server/prisma/schema.prisma` — 5 新模型
-- `server/src/services/ai/taskManager.ts` — 7 新 AITaskType
-- `server/src/services/ai/index.ts` — 导出生成器
-- `server/src/routes/index.ts` — 注册路由
-- `client/src/router/index.ts` — 2 新路由
-- `client/src/components/AppLayout.vue` — 侧边栏 2 新入口
-
-## 2026-05-25
-### 已完成
-- 记忆系统保存 + Flova AI 影视流程分析
-### 待处理
-- GPT Image 2.0 接入实现
-- AI 分镜流程（GLM 拆分镜 → 即梦/GPT Image 生画面 → Remotion 组装）

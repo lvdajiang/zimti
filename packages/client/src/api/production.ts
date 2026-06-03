@@ -62,3 +62,36 @@ export async function updateProductionStep(
     status: string
   }>
 }
+
+export async function rollbackProductionStep(
+  jobId: string,
+  step: number,
+): Promise<{ job_id: string; rolled_back_to: number; status: string }> {
+  return api.post(`/pipeline/production/${jobId}/rollback`, { step }) as unknown as Promise<{
+    job_id: string
+    rolled_back_to: number
+    status: string
+  }>
+}
+
+export interface PipelineTemplateItem {
+  id: string
+  name: string
+  mode: string
+  steps: { step: number; service: string; config: Record<string, unknown> }[]
+}
+
+export async function fetchPipelineTemplates(): Promise<{ items: PipelineTemplateItem[] }> {
+  return api.get('/pipeline/templates') as unknown as Promise<{ items: PipelineTemplateItem[] }>
+}
+
+export async function createPipelineTemplate(data: {
+  name: string
+  steps: { step: number; service: string; config: Record<string, unknown> }[]
+}): Promise<{ id: string; name: string }> {
+  return api.post('/pipeline/templates', data) as unknown as Promise<{ id: string; name: string }>
+}
+
+export async function deletePipelineTemplate(id: string): Promise<{ id: string; status: string }> {
+  return api.delete(`/pipeline/templates/${id}`) as unknown as Promise<{ id: string; status: string }>
+}

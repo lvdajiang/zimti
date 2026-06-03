@@ -271,6 +271,137 @@ router.post('/pipeline/production/:jobId/update-step', async (req: Request, res:
 })
 
 // ============================================================
+// POST /api/v1/pipeline/production/:jobId/rollback — 回退到指定步骤
+// ============================================================
+
+router.post('/pipeline/production/:jobId/rollback', async (req: Request, res: Response) => {
+  try {
+    const jobId = str(req.params.jobId)
+    const userId = getUserId(req as any)
+    const { step } = req.body as { step: number }
+
+    if (!step || step < 1 || step > 5) {
+      res.status(400).json({ error: 'step must be 1-5' })
+      return
+    }
+
+    const job = await prisma.pipelineJob.findUnique({
+      where: { id: jobId, userId },
+    })
+    if (!job) { res.status(404).json({ error: 'job not found' }); return }
+
+    // 清除该步骤及之后所有步骤的产出数据
+    const output = { ...((job.output ?? {}) as Record<string, unknown>) }
+    const fieldsToClear: Record<number, string[]> = {
+      1: ['segment_ids'],
+      2: ['audio_urls', 'audio_duration'],
+      3: ['video_product_id', 'video_url', 'render_job_id'],
+      4: ['subtitle_style'],
+      5: ['publish_records'],
+    }
+
+    for (let s = step; s <= 5; s++) {
+      for (const field of (fieldsToClear[s] || [])) {
+        delete output[field]
+      }
+    }
+
+    await prisma.pipelineJob.update({
+      where: { id: jobId },
+      data: { output: output as any, status: 'pending' },
+    })
+
+    res.json({ job_id: jobId, rolled_back_to: step, status: 'rolled_back' })
+  } catch (error) {
+    console.error('[POST /pipeline/production/:jobId/rollback]', error)
+    res.status(500).json({ error: 'Failed to rollback' })
+  }
+})
+
+// ============================================================
+// 模板 CRUD
+// ============================================================
+
+// GET /api/v1/pipeline/templates — 模板列表
+router.get('/pipeline/templates', async (req: Request, res: Response) => {
+  try {
+    const templates = await prisma.pipelineTemplate.findMany({
+      where: { userId: getUserId(req as any), isActive: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ items: templates })
+  } catch (error) {
+    console.error('[GET /pipeline/templates]', error)
+    res.status(500).json({ error: 'Failed to list templates' })
+  }
+})
+
+// POST /api/v1/pipeline/templates — 创建模板
+router.post('/pipeline/templates', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req as any)
+    const { name, steps } = req.body
+
+    if (!name) { res.status(400).json({ error: 'name is required' }); return }
+    if (!Array.isArray(steps)) { res.status(400).json({ error: 'steps must be an array' }); return }
+
+    const template = await prisma.pipelineTemplate.create({
+      data: { userId, name, mode: 'production', steps: steps as any },
+    })
+    res.status(201).json({ id: template.id, name: template.name })
+  } catch (error) {
+    console.error('[POST /pipeline/templates]', error)
+    res.status(500).json({ error: 'Failed to create template' })
+  }
+})
+
+// PUT /api/v1/pipeline/templates/:id — 更新模板
+router.put('/pipeline/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const userId = getUserId(req as any)
+    const { name, steps } = req.body
+
+    const existing = await prisma.pipelineTemplate.findFirst({
+      where: { id, userId },
+    })
+    if (!existing) { res.status(404).json({ error: 'template not found' }); return }
+
+    const data: Record<string, unknown> = {}
+    if (name) data.name = name
+    if (Array.isArray(steps)) data.steps = steps as any
+
+    await prisma.pipelineTemplate.update({ where: { id }, data })
+    res.json({ id, status: 'updated' })
+  } catch (error) {
+    console.error('[PUT /pipeline/templates/:id]', error)
+    res.status(500).json({ error: 'Failed to update template' })
+  }
+})
+
+// DELETE /api/v1/pipeline/templates/:id — 删除模板（软删除）
+router.delete('/pipeline/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const userId = getUserId(req as any)
+
+    const existing = await prisma.pipelineTemplate.findFirst({
+      where: { id, userId },
+    })
+    if (!existing) { res.status(404).json({ error: 'template not found' }); return }
+
+    await prisma.pipelineTemplate.update({
+      where: { id },
+      data: { isActive: false },
+    })
+    res.json({ id, status: 'deleted' })
+  } catch (error) {
+    console.error('[DELETE /pipeline/templates/:id]', error)
+    res.status(500).json({ error: 'Failed to delete template' })
+  }
+})
+
+// ============================================================
 // 步骤执行器
 // ============================================================
 

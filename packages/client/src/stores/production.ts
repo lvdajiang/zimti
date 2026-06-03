@@ -5,6 +5,9 @@ import {
   fetchProductionProgress,
   executeProductionStep,
   updateProductionStep,
+  rollbackProductionStep,
+  fetchPipelineTemplates,
+  type PipelineTemplateItem,
 } from '../api/production'
 import type { StepState } from '../api/production'
 
@@ -200,6 +203,39 @@ export const useProductionStore = defineStore('production', () => {
     ]
   }
 
+  // --- 回退 ---
+  const hasUnsavedChanges = computed(() =>
+    jobId.value !== null && steps.value.some(s => s.status === 'running'),
+  )
+
+  async function rollbackToStep(step: number): Promise<void> {
+    if (!jobId.value) return
+    await rollbackProductionStep(jobId.value, step)
+    // 将该步骤及之后的状态重置为 pending
+    for (let i = step - 1; i < 5; i++) {
+      steps.value[i].status = 'pending'
+      steps.value[i].data = {}
+    }
+    currentStep.value = step
+    // 清除对应的本地状态
+    if (step <= 2) { audioUrls.value = []; audioDuration.value = 0 }
+    if (step <= 3) { videoProductId.value = ''; renderJobId.value = ''; videoUrl.value = '' }
+    if (step <= 4) { subtitleStyle.value = { font_size: 48, color: '#FFFFFF', position: 'bottom', bg_color: '#000000', bg_opacity: 0.6 } }
+    if (step <= 5) { targetPlatforms.value = [] }
+  }
+
+  // --- 模板 ---
+  const templates = ref<PipelineTemplateItem[]>([])
+
+  async function loadTemplates(): Promise<void> {
+    try {
+      const res = await fetchPipelineTemplates()
+      templates.value = res.items || []
+    } catch {
+      templates.value = []
+    }
+  }
+
   // --- 内部方法 ---
 
   async function pollStepCompletion(step: number, maxAttempts = 30): Promise<void> {
@@ -221,8 +257,11 @@ export const useProductionStore = defineStore('production', () => {
     subtitleStyle,
     targetPlatforms,
     // Getters
-    isStepCompleted, canAdvanceTo, isAllCompleted,
+    isStepCompleted, canAdvanceTo, isAllCompleted, hasUnsavedChanges,
     // Actions
     createJob, loadJob, runStep, saveStepData, goToStep, refreshProgress, reset,
+    rollbackToStep, loadTemplates,
+    // Templates
+    templates,
   }
 })
