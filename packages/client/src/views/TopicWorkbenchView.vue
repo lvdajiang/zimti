@@ -56,7 +56,7 @@
 
           <div class="skeleton-preview">
             <div v-if="skeleton(p).hook" class="skeleton-item"><strong>钩子:</strong> {{ skeleton(p).hook }}</div>
-            <div v-if="skeleton(p).main_points.length > 0" class="skeleton-item">
+            <div v-if="skeleton(p).main_points?.length > 0" class="skeleton-item">
               <strong>要点:</strong>
               <span v-for="(pt, i) in skeleton(p).main_points.slice(0, 3)" :key="i">{{ pt }}{{ i < Math.min(skeleton(p).main_points.length, 3) - 1 ? '、' : '' }}</span>
             </div>

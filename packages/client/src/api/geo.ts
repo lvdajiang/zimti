@@ -3,7 +3,7 @@
  */
 
 import api from './client'
-import type { GeoQuestionCategory, GeoIntentType, GeoContentStatus } from '@zimti/shared'
+import type { GeoQuestionCategory, GeoIntentType, GeoContentStatus, BrandKnowledgeCategory, KeywordCompetition, KeywordDistillationStatus } from '@zimti/shared'
 
 // --- 类型定义 ---
 
@@ -218,4 +218,177 @@ export async function getCheckMentionsStatus(taskId: string): Promise<{ task_id:
 
 export async function fetchGeoDashboard(): Promise<GeoDashboard> {
   return api.get('/geo/dashboard') as unknown as Promise<GeoDashboard>
+}
+
+// --- 企业知识库 ---
+
+export interface BrandKnowledgeItem {
+  id: string
+  user_id: string
+  title: string
+  content: string
+  category: BrandKnowledgeCategory
+  source: string
+  tags: string[]
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export async function fetchGeoKnowledge(params?: {
+  category?: string
+  keyword?: string
+  page?: number
+  page_size?: number
+}): Promise<{ items: BrandKnowledgeItem[]; total: number }> {
+  const query = new URLSearchParams()
+  if (params?.category && params.category !== 'all') query.set('category', params.category)
+  if (params?.keyword) query.set('keyword', params.keyword)
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.page_size) query.set('page_size', String(params.page_size))
+  return api.get(`/geo/knowledge?${query}`) as unknown as Promise<{ items: BrandKnowledgeItem[]; total: number }>
+}
+
+export async function createGeoKnowledge(data: {
+  title: string
+  content: string
+  category: BrandKnowledgeCategory
+  tags?: string[]
+  source?: string
+}): Promise<BrandKnowledgeItem> {
+  return api.post('/geo/knowledge', data) as unknown as Promise<BrandKnowledgeItem>
+}
+
+export async function updateGeoKnowledge(id: string, data: {
+  title?: string
+  content?: string
+  category?: BrandKnowledgeCategory
+  tags?: string[]
+  is_active?: boolean
+  sort_order?: number
+}): Promise<BrandKnowledgeItem> {
+  return api.put(`/geo/knowledge/${id}`, data) as unknown as Promise<BrandKnowledgeItem>
+}
+
+export async function deleteGeoKnowledge(id: string): Promise<{ success: boolean }> {
+  return api.delete(`/geo/knowledge/${id}`) as unknown as Promise<{ success: boolean }>
+}
+
+export async function generateGeoKnowledge(data: {
+  domain?: string
+  category?: BrandKnowledgeCategory
+  count?: number
+}): Promise<{ task_id: string; status: string }> {
+  return api.post('/geo/knowledge/generate', data) as unknown as Promise<{ task_id: string; status: string }>
+}
+
+export async function getGenerateKnowledgeStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
+  return api.get(`/geo/knowledge/generate/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+}
+
+// --- 关键词蒸馏 ---
+
+export interface DistillKeyword {
+  id: string
+  user_id: string
+  batch_id: string
+  keyword: string
+  intent_type: GeoIntentType
+  competition: KeywordCompetition
+  brand_relevance: number
+  content_opportunity: number
+  total_score: number
+  recommendation: string | null
+  status: KeywordDistillationStatus
+  domain: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DistillBatch {
+  batch_id: string
+  domain: string | null
+  created_at: string
+  counts: Record<string, number>
+}
+
+export async function fetchDistillBatches(): Promise<{ batches: DistillBatch[] }> {
+  return api.get('/geo/distill/batches') as unknown as Promise<{ batches: DistillBatch[] }>
+}
+
+export async function fetchDistillResults(params?: {
+  batch_id?: string
+  status?: string
+  page?: number
+  page_size?: number
+}): Promise<{ items: DistillKeyword[]; total: number }> {
+  const query = new URLSearchParams()
+  if (params?.batch_id) query.set('batch_id', params.batch_id)
+  if (params?.status && params.status !== 'all') query.set('status', params.status)
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.page_size) query.set('page_size', String(params.page_size))
+  return api.get(`/geo/distill?${query}`) as unknown as Promise<{ items: DistillKeyword[]; total: number }>
+}
+
+export async function startDistill(data: {
+  keywords: string[]
+  domain?: string
+}): Promise<{ task_id: string; status: string }> {
+  return api.post('/geo/distill/start', data) as unknown as Promise<{ task_id: string; status: string }>
+}
+
+export async function getDistillStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
+  return api.get(`/geo/distill/start/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+}
+
+export async function importDistillToQuestions(ids: string[]): Promise<{ imported: number }> {
+  return api.post('/geo/distill/import', { ids }) as unknown as Promise<{ imported: number }>
+}
+
+export async function updateDistillResult(id: string, data: {
+  status: KeywordDistillationStatus
+}): Promise<DistillKeyword> {
+  return api.put(`/geo/distill/${id}`, data) as unknown as Promise<DistillKeyword>
+}
+
+export async function deleteDistillBatch(batchId: string): Promise<{ success: boolean }> {
+  return api.delete(`/geo/distill/batch/${batchId}`) as unknown as Promise<{ success: boolean }>
+}
+
+// --- 全网搜索知识建库 ---
+
+export interface WebKnowledgeBuildOutput {
+  search_results_count: number
+  knowledge_items: Array<{
+    title: string
+    content: string
+    category: BrandKnowledgeCategory
+    tags: string[]
+    source_url: string
+    confidence: number
+  }>
+  created_count: number
+}
+
+export async function searchAndBuildKnowledge(data: {
+  topic: string
+  category?: BrandKnowledgeCategory
+  count?: number
+}): Promise<{ task_id: string; status: string }> {
+  return api.post('/geo/knowledge/search-and-build', data) as unknown as Promise<{ task_id: string; status: string }>
+}
+
+export async function getSearchAndBuildStatus(taskId: string): Promise<{
+  task_id: string
+  status: string
+  output: WebKnowledgeBuildOutput | null
+  error?: string | null
+}> {
+  return api.get(`/geo/knowledge/search-and-build/${taskId}/status`) as unknown as Promise<{
+    task_id: string
+    status: string
+    output: WebKnowledgeBuildOutput | null
+    error?: string | null
+  }>
 }

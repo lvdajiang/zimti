@@ -67,6 +67,10 @@ model User {
   geoQuestions         GeoQuestion[]
   geoContents          GeoContent[]
   geoMentions          GeoMention[]
+  brandKnowledge       BrandKnowledge[]
+  keywordDistillations KeywordDistillation[]
+  knowledgeBuildJobs   KnowledgeBuildJob[]
+  knowledgeBuildSchedules KnowledgeBuildSchedule[]
 
   @@map("users")
 }
@@ -1178,4 +1182,124 @@ model GeoMention {
   @@index([searchEngine])
   @@index([checkedAt])
   @@map("geo_mentions")
+}
+
+// --- GEO: 企业知识库 ---
+model BrandKnowledge {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  title       String   @db.VarChar(200)
+  content     String   @db.Text
+  category    String   @db.VarChar(30)
+  source      String   @default("manual") @db.VarChar(500)
+  sourceUrl   String?  @map("source_url") @db.VarChar(1000)
+  credibility Float   @default(0)
+  tags        String[] @default([])
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  buildJobId  String?  @map("build_job_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user       User              @relation(fields: [userId], references: [id])
+  buildJob   KnowledgeBuildJob? @relation(fields: [buildJobId], references: [id])
+
+  @@index([userId])
+  @@index([category])
+  @@index([isActive])
+  @@index([buildJobId])
+  @@map("brand_knowledge")
+}
+
+// --- 知识库构建引擎 ---
+
+model KnowledgeBuildJob {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  topic       String   @db.VarChar(200)
+  mode        String   @default("auto") @db.VarChar(20)
+  status      String   @default("pending") @db.VarChar(20)
+  currentStep Int      @default(0) @map("current_step")
+  progress    Int      @default(0)
+  input       Json
+  output      Json?
+  error       String?  @db.Text
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user     User                  @relation(fields: [userId], references: [id])
+  steps    KnowledgeBuildStep[]
+  knowledge BrandKnowledge[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("knowledge_build_jobs")
+}
+
+model KnowledgeBuildStep {
+  id         String    @id @default(uuid()) @db.Uuid
+  jobId      String    @map("job_id") @db.Uuid
+  stepType   String    @map("step_type") @db.VarChar(30)
+  status     String    @default("pending") @db.VarChar(20)
+  progress   Int       @default(0)
+  input      Json?
+  output     Json?
+  error      String?   @db.Text
+  startedAt  DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  job KnowledgeBuildJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([stepType])
+  @@map("knowledge_build_steps")
+}
+
+model KnowledgeBuildSchedule {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  topic     String    @db.VarChar(200)
+  category  String?   @db.VarChar(30)
+  count     Int       @default(5)
+  cronExpr  String    @map("cron_expr") @db.VarChar(50)
+  isActive  Boolean   @default(true) @map("is_active")
+  lastRunAt DateTime? @map("last_run_at")
+  nextRunAt DateTime? @map("next_run_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("knowledge_build_schedules")
+}
+
+// --- GEO: 关键词蒸馏 ---
+model KeywordDistillation {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  batchId           String   @map("batch_id") @db.Uuid
+  keyword           String   @db.VarChar(200)
+  intentType        String   @map("intent_type") @db.VarChar(30)
+  competition       String   @db.VarChar(10)
+  brandRelevance    Int      @map("brand_relevance")
+  contentOpportunity Int     @map("content_opportunity")
+  totalScore        Int      @map("total_score")
+  recommendation    String?  @db.Text
+  status            String   @default("pending") @db.VarChar(20)
+  domain            String?  @db.VarChar(100)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user              User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([batchId])
+  @@index([totalScore])
+  @@index([status])
+  @@map("keyword_distillations")
 }

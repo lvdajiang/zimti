@@ -177,6 +177,12 @@ const router = createRouter({
       meta: { title: 'GEO 优化' },
     },
     {
+      path: '/geo/build',
+      name: 'GeoBuild',
+      component: () => import('@/views/KnowledgeBuildView.vue'),
+      meta: { title: '构建引擎' },
+    },
+    {
       path: '/auth',
       name: 'Auth',
       component: () => import('@/views/AuthView.vue'),

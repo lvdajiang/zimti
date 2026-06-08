@@ -8,6 +8,8 @@
 - [开发规则](project_rules.md) — 改已有页面/新增页面规则、安全底线、文档路径索引
 - [开发体系全貌](dev_system_overview.md) — 97个技能卡分类、Subagent模式、工作流、计划系统
 - [完整链路](full_pipeline.md) — 13个开发环节详解（输入→输出→规则→快捷路径）
+- [GEO知识库构建v2](geo-knowledge-keyword-synergy.md) — 关键词蒸馏与维度拆分互相增强方案
+- [递归知识树](recursive-knowledge-tree.md) — 自适应深度拆分策略，少量关键词挖透行业知识
 - [上下文重建记录](context_rebuild.md) — 2026-05-14 C盘重装后的恢复情况
 - [会话进度](session_progress.md) — 每次会话完成/进行中/待处理
 - [技术决策](decisions.md) — 重要决策及原因

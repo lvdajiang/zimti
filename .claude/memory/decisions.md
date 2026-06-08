@@ -9,7 +9,57 @@ metadata:
 
 # 技术决策
 
+## 2026-06-06
+- **决策**: 知识库构建去掉数量限制，改为 AI 先评估主题规模
+  - **原因**: 用户不应猜测建多少条，AI 应该评估主题需要多少覆盖
+  - **影响**: 新增 evaluation 步骤（Pipeline 6步变7步），前端评估方案面板
+
+- **决策**: 关键词蒸馏与维度拆分互相增强（不二选一）
+  - **原因**: 关键词→推断维度（基于真实数据），维度→发现盲区→补全关键词
+  - **影响**: stepEvaluate/stepDimensionSplit/stepMultiSearch 全部改造
+  - **关键**: 搜索用关键词（精准），展示用维度（结构化）
+
+- **决策**: 搜索步骤用关键词而非维度名
+  - **原因**: 维度名如"经典旅游线路"不够精准，真实关键词如"新疆自驾游路线推荐"搜索效果更好
+  - **向后兼容**: 无蒸馏关键词时回退到维度名搜索
+
+- **决策**: 递归知识树方向（待实现）— 自适应深度的维度拆分
+  - **原因**: 少量种子关键词通过递归拆分可以挖透整个行业知识
+  - **停止条件**: 搜索返回 5+ 条高质量结果时停止，而非固定层数
+  - **甜蜜点**: 2-3 层
+
+- **决策**: API 返回 camelCase 字段名时前端用兼容函数处理
+  - **原因**: Pipeline 的 getJobStatus() 直接返回 Prisma 原始对象（camelCase），不做映射
+  - **影响**: 前端 `getStepType()` 兼容 step_type/stepType
+
+## 2026-06-05
+- **决策**: 生产流水线改为看板式布局（借鉴竞品「爆款IP智能体」）
+  - **原因**: 竞品把所有步骤垂直排列一眼看全，比向导式分步切换更像生产线控制台
+  - **影响**: `ProductionPipelineView.vue` 模板+样式全面重写，5个Panel组件零改动
+  - **关键**: expandedSteps 用 `reactive(new Set())` 而非 `ref(new Set())`（Vue 3 Set响应性）
+
+- **决策**: GEO 知识库不复用已有的 KnowledgeItem 表，新建 BrandKnowledge 表
+  - **原因**: KnowledgeItem 是 AI Studio 的通用知识库，无 isActive 开关，分类不同（copy_template/hook等），用户认证不同
+  - **影响**: 新表 + 新AI生成器 + brandContext.ts 增强
+
+- **决策**: 关键词蒸馏结果按 batchId 分组管理
+  - **原因**: 每次蒸馏生成多个结果，按批次分组便于查看历史和对比
+  - **影响**: KeywordDistillation 表有 batchId 字段 + batches 聚合API
+
+- **决策**: AI 生成器 JSON 解析必须校验 Array.isArray
+  - **原因**: LLM 有时返回 `{ items: [...] }` 对象而非数组，JSON.parse 不报错但后续 .slice/.sort 崩溃
+  - **影响**: brandKnowledgeGenerate.ts + keywordDistillGenerate.ts
+
 ## 2026-06-03
+- **决策**: 生产流水线创建 Script 前先创建 TopicProposal 占位记录
+  - **原因**: Script.topicId 是必填外键关联 TopicProposal，不能用硬编码 0（外键约束报错 500）
+  - **影响**: `pipelineProduction.ts` 增加一步 create TopicProposal（status: 'pipeline_draft'）
+  - **替代方案**: 改 Schema 让 topicId 可选（影响面大，否决）
+
+- **决策**: Hotspot 查询不加 userId 过滤
+  - **原因**: Hotspot 模型没有 userId 字段，是全局共享资源
+  - **影响**: `topicSourceAggregator.ts` 的 loadHotspotHints() 不接受 userId 参数
+
 - **决策**: 借鉴旗博士设计，建设「生产流水线」单页面
   - **原因**: 旗博士把 文案→配音→数字人→字幕→发布 串在一个页面，效率极高；Zimti 现有 4 页面跳转体验差
   - **设计**: 不替代现有页面，新增聚合视图（类似 IDE 的 Run 视图）

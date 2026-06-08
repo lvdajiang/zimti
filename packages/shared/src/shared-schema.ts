@@ -396,6 +396,24 @@ export const GEO_MENTION_STATUS_LABELS: Record<GeoMentionStatus, string> = {
   found: '已引用', not_found: '未引用', partial: '部分引用', pending: '待检测',
 }
 
+// --- 1.58 企业知识库分类 ---
+export type BrandKnowledgeCategory = 'brand_intro' | 'route' | 'service' | 'case' | 'faq' | 'industry'
+export const BRAND_KNOWLEDGE_CATEGORY_LABELS: Record<BrandKnowledgeCategory, string> = {
+  brand_intro: '产品介绍', route: '路线特色', service: '服务承诺', case: '案例故事', faq: '常见问答', industry: '行业知识',
+}
+
+// --- 1.59 关键词竞争度 ---
+export type KeywordCompetition = 'low' | 'medium' | 'high'
+export const KEYWORD_COMPETITION_LABELS: Record<KeywordCompetition, string> = {
+  low: '低', medium: '中', high: '高',
+}
+
+// --- 1.60 关键词蒸馏状态 ---
+export type KeywordDistillationStatus = 'pending' | 'imported' | 'discarded'
+export const KEYWORD_DISTILLATION_STATUS_LABELS: Record<KeywordDistillationStatus, string> = {
+  pending: '待处理', imported: '已导入', discarded: '已丢弃',
+}
+
 
 // ============================================================
 // §2 核心数据结构
@@ -1068,6 +1086,142 @@ export interface GeoMentionRecord {
   created_at: string
 }
 
+// --- 3.N BrandKnowledge ---
+export type BrandKnowledgeSource = 'manual' | 'ai_generated' | 'web_search'
+
+export interface BrandKnowledgeRecord {
+  id: string
+  user_id: string
+  title: string
+  content: string
+  category: BrandKnowledgeCategory
+  source: string
+  source_url: string | null
+  credibility: number
+  tags: string[]
+  is_active: boolean
+  sort_order: number
+  build_job_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+1 知识库构建引擎 ---
+
+export type KnowledgeBuildMode = 'auto' | 'step' | 'scheduled'
+export type KnowledgeBuildStatus = 'pending' | 'running' | 'waiting_confirm' | 'completed' | 'failed' | 'cancelled'
+export type KnowledgeBuildStepType = 'evaluation' | 'dimension_split' | 'search' | 'credibility' | 'dedup' | 'refine' | 'persist'
+
+/** 维度-关键词映射（搜索用关键词，展示用维度） */
+export interface DimensionKeywordMapping {
+  dimension: string
+  keywords: string[]
+  searchQueries: string[]
+}
+
+/** 关键词覆盖分析 */
+export interface KeywordCoverage {
+  totalKeywordsProvided: number
+  coveredDimensions: number
+  blindSpotDimensions: string[]
+}
+
+/** 蒸馏关键词提示（从 KeywordDistillation 表提取） */
+export interface DistilledKeywordHint {
+  keyword: string
+  intentType: string
+  totalScore: number
+  competition: string
+}
+
+export const KNOWLEDGE_BUILD_MODE_LABELS: Record<KnowledgeBuildMode, string> = {
+  auto: '一键全自动',
+  step: '分步确认',
+  scheduled: '定时刷新',
+}
+
+export const KNOWLEDGE_BUILD_STATUS_LABELS: Record<KnowledgeBuildStatus, string> = {
+  pending: '等待中',
+  running: '运行中',
+  waiting_confirm: '等待确认',
+  completed: '已完成',
+  failed: '失败',
+  cancelled: '已取消',
+}
+
+export const KNOWLEDGE_BUILD_STEP_LABELS: Record<KnowledgeBuildStepType, string> = {
+  evaluation: '评估规划',
+  dimension_split: '维度拆分',
+  search: '多维搜索',
+  credibility: '可信度筛选',
+  dedup: '语义去重',
+  refine: 'AI 完善',
+  persist: '入库',
+}
+
+export interface KnowledgeBuildJobRecord {
+  id: string
+  user_id: string
+  topic: string
+  mode: KnowledgeBuildMode
+  status: KnowledgeBuildStatus
+  current_step: number
+  progress: number
+  input: Record<string, unknown>
+  output: Record<string, unknown> | null
+  error: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface KnowledgeBuildStepRecord {
+  id: string
+  job_id: string
+  step_type: KnowledgeBuildStepType
+  status: KnowledgeBuildStatus
+  progress: number
+  input: Record<string, unknown> | null
+  output: Record<string, unknown> | null
+  error: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface KnowledgeBuildScheduleRecord {
+  id: string
+  user_id: string
+  topic: string
+  category: string | null
+  count: number
+  cron_expr: string
+  is_active: boolean
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// --- 3.N+1 KeywordDistillation ---
+export interface KeywordDistillationRecord {
+  id: string
+  user_id: string
+  batch_id: string
+  keyword: string
+  intent_type: GeoIntentType
+  competition: KeywordCompetition
+  brand_relevance: number
+  content_opportunity: number
+  total_score: number
+  recommendation: string | null
+  status: KeywordDistillationStatus
+  domain: string | null
+  created_at: string
+  updated_at: string
+}
+
 
 // ============================================================
 // §4 API 端点常量
@@ -1439,6 +1593,19 @@ export const API = {
     MENTION_CHECK: '/geo/mentions/check',
     MENTION_CHECK_STATUS: (taskId: string) => `/geo/mentions/check/${taskId}/status`,
     DASHBOARD: '/geo/dashboard',
+    // --- 企业知识库 ---
+    KNOWLEDGE: '/geo/knowledge',
+    KNOWLEDGE_ITEM: (id: string) => `/geo/knowledge/${id}`,
+    KNOWLEDGE_GENERATE: '/geo/knowledge/generate',
+    KNOWLEDGE_GENERATE_STATUS: (taskId: string) => `/geo/knowledge/generate/${taskId}/status`,
+    // --- 关键词蒸馏 ---
+    DISTILL: '/geo/distill',
+    DISTILL_BATCHES: '/geo/distill/batches',
+    DISTILL_START: '/geo/distill/start',
+    DISTILL_STATUS: (taskId: string) => `/geo/distill/start/${taskId}/status`,
+    DISTILL_IMPORT: '/geo/distill/import',
+    DISTILL_ITEM: (id: string) => `/geo/distill/${id}`,
+    DISTILL_BATCH: (batchId: string) => `/geo/distill/batch/${batchId}`,
   },
 } as const
 
@@ -1475,6 +1642,37 @@ export const ROUTES = {
   DISTRIBUTION: '/distribution',
   GEO: '/geo',
 } as const
+
+
+// ============================================================
+// §5.补充 全网搜索知识建库
+// ============================================================
+
+export interface WebSearchResult {
+  title: string
+  url: string
+  snippet: string
+  source: 'glm' | 'searxng'
+}
+
+export interface WebKnowledgeBuildRequest {
+  topic: string
+  category?: BrandKnowledgeCategory
+  count?: number
+}
+
+export interface WebKnowledgeBuildOutput {
+  search_results_count: number
+  knowledge_items: Array<{
+    title: string
+    content: string
+    category: BrandKnowledgeCategory
+    tags: string[]
+    source_url: string
+    confidence: number
+  }>
+  created_count: number
+}
 
 
 // ============================================================

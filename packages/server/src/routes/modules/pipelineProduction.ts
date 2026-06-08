@@ -149,13 +149,23 @@ router.post('/pipeline/production', async (req: Request, res: Response) => {
 
 router.get('/pipeline/production/:jobId/progress', async (req: Request, res: Response) => {
   try {
+    const jobId = str(req.params.jobId)
+    // 防御：非 UUID 格式直接返回 404，避免 Prisma 报 500
+    if (!/^[0-9a-f-]{36}$/i.test(jobId)) {
+      res.status(404).json({ error: 'Invalid job ID' })
+      return
+    }
     const job = await prisma.pipelineJob.findUnique({
-      where: { id: str(req.params.jobId), userId: getUserId(req as any) },
+      where: { id: jobId, userId: getUserId(req as any) },
     })
     if (!job) { res.status(404).json({ error: 'job not found' }); return }
 
     const output = (job.output || {}) as ProductionOutput
     const steps = buildDefaultSteps()
+
+    // 从 job.error 中解析失败的步骤编号（格式: "Step N failed: ..."）
+    const failedStepMatch = job.error?.match(/^Step (\d+) failed:/)
+    const failedStep = failedStepMatch ? Number(failedStepMatch[1]) : null
 
     // 根据 output 中的字段推断各步骤状态
     if (output.segment_ids && output.segment_ids.length > 0) {
@@ -180,6 +190,15 @@ router.get('/pipeline/production/:jobId/progress', async (req: Request, res: Res
     if (output.publish_records && output.publish_records.length > 0) {
       steps[4].status = 'completed'
       steps[4].data = { publish_records: output.publish_records }
+    }
+
+    // 如果 job 整体失败，将失败步骤标记为 failed
+    if (job.status === 'failed' && failedStep && failedStep >= 1 && failedStep <= 5) {
+      const idx = failedStep - 1
+      if (steps[idx].status !== 'completed') {
+        steps[idx].status = 'failed'
+        steps[idx].data = { ...steps[idx].data, error: job.error }
+      }
     }
 
     // 找到当前步骤：第一个非 completed 的步骤
@@ -432,10 +451,11 @@ async function executeStep(
       case 5: await executePublishStep(jobId, userId, output, config); break
     }
   } catch (err) {
-    console.error(`[executeStep] step=${step} error:`, err)
+    const errMsg = err instanceof Error ? err.message : String(err)
+    console.error(`[executeStep] step=${step} error:`, errMsg)
     await prisma.pipelineJob.update({
       where: { id: jobId },
-      data: { status: 'failed', error: `Step ${step} failed: ${String(err)}` },
+      data: { status: 'failed', error: `Step ${step} failed: ${errMsg}` },
     })
   }
 }
@@ -611,19 +631,72 @@ async function executeSubtitleStep(
   })
 }
 
-/** 步骤5: 发布（占位，待集成 distribution 模块） */
+/** 步骤5: 发布 — 为每个目标平台创建 PublishRecord + DistributionRecord */
 async function executePublishStep(
   jobId: string,
-  _userId: string,
+  userId: string,
   output: ProductionOutput,
-  _config?: Record<string, unknown>,
+  config?: Record<string, unknown>,
 ): Promise<void> {
-  // TODO: 集成 distribution 模块的批量适配 + 发布
+  const videoProductId = output.video_product_id
+  if (!videoProductId) throw new Error('video_product_id not found — 请先完成视频渲染步骤')
+
+  // 读取目标平台列表（从 config 或 job input 获取）
+  const job = await prisma.pipelineJob.findUnique({ where: { id: jobId } })
+  const jobInput = (job?.input ?? {}) as Record<string, unknown>
+  const platforms = (config?.platforms ?? jobInput.platforms ?? ['douyin']) as string[]
+
+  // 获取视频作品和脚本信息
+  const vp = await prisma.videoProduct.findUnique({
+    where: { id: videoProductId },
+    include: { script: { include: { topicProposal: true } } },
+  })
+  if (!vp) throw new Error(`VideoProduct ${videoProductId} not found`)
+
+  const title = vp.title || vp.script?.topicProposal?.title || '未命名视频'
+  const description = vp.script?.fullText || ''
+
+  const publishRecords: Record<string, unknown>[] = []
+
+  for (const platform of platforms) {
+    // 1. 创建 PublishRecord
+    const publishRecord = await prisma.publishRecord.create({
+      data: {
+        videoProductId,
+        platform,
+        title,
+        description: description.slice(0, 500),
+        status: 'unpublished',
+        conversionType: 'awareness',
+      },
+    })
+
+    // 2. 创建 DistributionRecord（供后续内容适配 + 发布排期）
+    await prisma.distributionRecord.create({
+      data: {
+        userId,
+        sourceContentId: publishRecord.id,
+        sourceType: 'publish_record',
+        platform,
+        adaptedTitle: title,
+        adaptedContent: description.slice(0, 500),
+        characterCount: Math.min(description.length, 500),
+        status: 'draft',
+      },
+    })
+
+    publishRecords.push({
+      publish_record_id: publishRecord.id,
+      platform,
+      status: 'unpublished',
+    })
+  }
+
   await prisma.pipelineJob.update({
     where: { id: jobId },
     data: {
       status: 'completed',
-      output: { ...output, publish_records: [] } as any,
+      output: { ...output, publish_records: publishRecords } as any,
     },
   })
 }

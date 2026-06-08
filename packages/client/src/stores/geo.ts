@@ -11,9 +11,14 @@ import {
   deleteGeoContent, generateGeoContent, getGenerateContentStatus,
   batchGenerateGeoContent, getBatchGenerateStatus, fetchSchemaPreview,
   fetchGeoMentions, checkGeoMentions, getCheckMentionsStatus, fetchGeoDashboard,
+  fetchGeoKnowledge, createGeoKnowledge, updateGeoKnowledge, deleteGeoKnowledge,
+  generateGeoKnowledge, getGenerateKnowledgeStatus,
+  fetchDistillBatches, fetchDistillResults, startDistill, getDistillStatus,
+  importDistillToQuestions, updateDistillResult, deleteDistillBatch,
+  searchAndBuildKnowledge, getSearchAndBuildStatus,
 } from '../api/geo'
-import type { GeoQuestion, GeoContent, GeoMention, GeoDashboard } from '../api/geo'
-import type { GeoQuestionCategory, GeoIntentType } from '@zimti/shared'
+import type { GeoQuestion, GeoContent, GeoMention, GeoDashboard, BrandKnowledgeItem, DistillKeyword, DistillBatch, WebKnowledgeBuildOutput } from '../api/geo'
+import type { GeoQuestionCategory, GeoIntentType, BrandKnowledgeCategory, KeywordDistillationStatus } from '@zimti/shared'
 
 export const useGeoStore = defineStore('geo', () => {
   // --- 问题库 ---
@@ -197,6 +202,160 @@ export const useGeoStore = defineStore('geo', () => {
     dashboard.value = await fetchGeoDashboard()
   }
 
+  // --- 知识库 ---
+
+  const knowledgeItems = ref<BrandKnowledgeItem[]>([])
+  const knowledgeTotal = ref(0)
+  const knowledgeLoading = ref(false)
+  const knowledgeFilterCategory = ref<string>('all')
+  const generatingKnowledge = ref(false)
+
+  // --- 全网搜索建库 ---
+  const searchAndBuilding = ref(false)
+  const searchBuildTaskId = ref<string | null>(null)
+  const searchBuildResult = ref<WebKnowledgeBuildOutput | null>(null)
+
+  async function loadKnowledge(): Promise<void> {
+    knowledgeLoading.value = true
+    try {
+      const res = await fetchGeoKnowledge({
+        category: knowledgeFilterCategory.value,
+        keyword: searchKeyword.value || undefined,
+      })
+      knowledgeItems.value = res.items
+      knowledgeTotal.value = res.total
+    } finally {
+      knowledgeLoading.value = false
+    }
+  }
+
+  async function addKnowledge(data: {
+    title: string
+    content: string
+    category: BrandKnowledgeCategory
+    tags?: string[]
+  }): Promise<void> {
+    await createGeoKnowledge(data)
+    await loadKnowledge()
+  }
+
+  async function editKnowledge(id: string, data: {
+    title?: string
+    content?: string
+    category?: BrandKnowledgeCategory
+    tags?: string[]
+    is_active?: boolean
+    sort_order?: number
+  }): Promise<void> {
+    await updateGeoKnowledge(id, data)
+    await loadKnowledge()
+  }
+
+  async function removeKnowledge(id: string): Promise<void> {
+    await deleteGeoKnowledge(id)
+    await loadKnowledge()
+  }
+
+  async function startGenerateKnowledge(data: {
+    domain?: string
+    category?: BrandKnowledgeCategory
+    count?: number
+  }): Promise<string> {
+    generatingKnowledge.value = true
+    try {
+      const res = await generateGeoKnowledge(data)
+      return res.task_id
+    } finally {
+      generatingKnowledge.value = false
+    }
+  }
+
+  async function startSearchAndBuild(data: {
+    topic: string
+    category?: BrandKnowledgeCategory
+    count?: number
+  }): Promise<string> {
+    searchAndBuilding.value = true
+    searchBuildResult.value = null
+    try {
+      const res = await searchAndBuildKnowledge(data)
+      searchBuildTaskId.value = res.task_id
+      return res.task_id
+    } finally {
+      searchAndBuilding.value = false
+    }
+  }
+
+  async function pollSearchAndBuild(taskId: string): Promise<WebKnowledgeBuildOutput | null> {
+    const res = await getSearchAndBuildStatus(taskId)
+    if (res.status === 'completed' && res.output) {
+      searchBuildResult.value = res.output
+      searchBuildTaskId.value = null
+      await loadKnowledge() // 刷新知识库列表
+    }
+    return res.output
+  }
+
+  // --- 关键词蒸馏 ---
+
+  const distillResults = ref<DistillKeyword[]>([])
+  const distillResultsTotal = ref(0)
+  const distillLoading = ref(false)
+  const distillBatches = ref<DistillBatch[]>([])
+  const currentBatchId = ref<string | null>(null)
+  const distilling = ref(false)
+
+  async function loadDistillBatches(): Promise<void> {
+    const res = await fetchDistillBatches()
+    distillBatches.value = res.batches
+    // 默认选中最新批次
+    if (!currentBatchId.value && res.batches.length > 0) {
+      currentBatchId.value = res.batches[0].batch_id
+    }
+  }
+
+  async function loadDistillResults(): Promise<void> {
+    if (!currentBatchId.value) return
+    distillLoading.value = true
+    try {
+      const res = await fetchDistillResults({ batch_id: currentBatchId.value, page_size: 100 })
+      distillResults.value = res.items
+      distillResultsTotal.value = res.total
+    } finally {
+      distillLoading.value = false
+    }
+  }
+
+  async function startKeywordDistill(keywords: string[], domain?: string): Promise<string> {
+    distilling.value = true
+    try {
+      const res = await startDistill({ keywords, domain })
+      return res.task_id
+    } finally {
+      distilling.value = false
+    }
+  }
+
+  async function importSelectedToQuestions(ids: string[]): Promise<number> {
+    const res = await importDistillToQuestions(ids)
+    await loadDistillResults()
+    return res.imported
+  }
+
+  async function updateDistillStatus(id: string, status: KeywordDistillationStatus): Promise<void> {
+    await updateDistillResult(id, { status })
+    await loadDistillResults()
+  }
+
+  async function removeDistillBatch(batchId: string): Promise<void> {
+    await deleteDistillBatch(batchId)
+    if (currentBatchId.value === batchId) {
+      currentBatchId.value = null
+      distillResults.value = []
+    }
+    await loadDistillBatches()
+  }
+
   return {
     // 问题库
     questions, questionsTotal, questionsLoading, questionPage,
@@ -212,5 +371,18 @@ export const useGeoStore = defineStore('geo', () => {
     // 监测
     mentions, mentionsTotal, checkingMentions, dashboard,
     loadMentions, startCheckMentions, loadDashboard,
+    // 知识库
+    knowledgeItems, knowledgeTotal, knowledgeLoading,
+    knowledgeFilterCategory, generatingKnowledge,
+    loadKnowledge, addKnowledge, editKnowledge, removeKnowledge,
+    startGenerateKnowledge,
+    // 全网搜索建库
+    searchAndBuilding, searchBuildTaskId, searchBuildResult,
+    startSearchAndBuild, pollSearchAndBuild,
+    // 关键词蒸馏
+    distillResults, distillResultsTotal, distillLoading,
+    distillBatches, currentBatchId, distilling,
+    loadDistillBatches, loadDistillResults, startKeywordDistill,
+    importSelectedToQuestions, updateDistillStatus, removeDistillBatch,
   }
 })

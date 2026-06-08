@@ -238,14 +238,18 @@ export const useProductionStore = defineStore('production', () => {
 
   // --- 内部方法 ---
 
-  async function pollStepCompletion(step: number, maxAttempts = 30): Promise<void> {
+  async function pollStepCompletion(step: number, maxAttempts = 60): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 2000))
       await refreshProgress()
       if (steps.value[step - 1]?.status === 'completed') return
-      if (steps.value[step - 1]?.status === 'failed') throw new Error(`步骤 ${step} 执行失败`)
+      if (steps.value[step - 1]?.status === 'failed') {
+        const errData = steps.value[step - 1]?.data?.error as string | undefined
+        const detail = errData ? `：${errData}` : ''
+        throw new Error(`步骤 ${step} 执行失败${detail}`)
+      }
     }
-    throw new Error(`步骤 ${step} 超时`)
+    throw new Error(`步骤 ${step} 超时（等待了 ${maxAttempts * 2} 秒）`)
   }
 
   return {

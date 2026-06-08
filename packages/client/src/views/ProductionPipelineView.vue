@@ -10,7 +10,7 @@
       </div>
     </div>
 
-    <!-- 无任务：入口面板 -->
+    <!-- 无任务：入口面板（保持不变） -->
     <div v-if="!store.jobId" class="entry-panel">
       <div class="entry-card">
         <div class="entry-icon">🎬</div>
@@ -48,62 +48,82 @@
       </div>
     </div>
 
-    <!-- 有任务：步骤式工作区 -->
+    <!-- 有任务：看板区 -->
     <template v-else>
-      <!-- 步骤条 -->
-      <div class="stepper">
-        <div
-          v-for="(s, i) in stepList"
-          :key="s.step"
-          class="step-item"
-          :class="{
-            active: store.currentStep === s.step,
-            completed: store.isStepCompleted(s.step),
-            clickable: store.canAdvanceTo(s.step) || store.isStepCompleted(s.step),
-          }"
-          @click="handleStepClick(s.step)"
-        >
-          <div class="step-dot">
-            <span v-if="store.isStepCompleted(s.step)" class="step-check">✓</span>
-            <span v-else-if="store.steps[s.step - 1]?.status === 'running'" class="step-spinner">⏳</span>
-            <span v-else>{{ s.step }}</span>
-          </div>
-          <span class="step-label">{{ s.label }}</span>
-          <div v-if="i < stepList.length - 1" class="step-line" />
-        </div>
-      </div>
-
-      <!-- 面板区 -->
-      <div class="panel-area">
-        <ScriptPanel v-if="store.currentStep === 1" />
-        <TtsPanel v-else-if="store.currentStep === 2" />
-        <VisualPanel v-else-if="store.currentStep === 3" />
-        <SubtitlePanel v-else-if="store.currentStep === 4" />
-        <PublishPanel v-else-if="store.currentStep === 5" />
-      </div>
-
-      <!-- 底部操作栏 -->
-      <div class="bottom-bar">
-        <button class="btn" :disabled="store.currentStep <= 1" @click="prevStep">← 上一步</button>
-        <div class="bottom-bar-center">
-          <span class="status-text">
-            {{ statusLabel }}
-          </span>
-        </div>
+      <!-- 一键生产按钮 -->
+      <div class="auto-run-bar">
         <button
-          class="btn btn-primary"
-          :disabled="store.currentStep >= 5 || store.executing"
-          @click="nextStep"
+          class="auto-run-btn"
+          :class="{ completed: store.isAllCompleted, running: store.executing }"
+          :disabled="store.executing || store.isAllCompleted"
+          @click="handleAutoRun"
         >
-          下一步 →
+          <template v-if="store.isAllCompleted">✅ 全部完成</template>
+          <template v-else-if="store.executing">⏳ 生产中...</template>
+          <template v-else>🔥 一键生产</template>
         </button>
+        <div class="auto-run-progress">
+          {{ completedCount }}/5 步骤完成
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: (completedCount / 5 * 100) + '%' }" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 步骤卡片列表 -->
+      <div class="step-cards">
+        <div
+          v-for="s in stepList"
+          :key="s.step"
+          class="step-card"
+          :class="[
+            store.steps[s.step - 1]?.status || 'pending',
+            { expanded: expandedSteps.has(s.step) },
+          ]"
+        >
+          <!-- 卡片头部（始终可见） -->
+          <div class="step-card-header" @click="toggleStep(s.step)">
+            <div class="step-number" :class="store.steps[s.step - 1]?.status">
+              <span v-if="store.isStepCompleted(s.step)" class="check">✓</span>
+              <span v-else-if="store.steps[s.step - 1]?.status === 'running'" class="spinner">⟳</span>
+              <span v-else>{{ s.step }}</span>
+            </div>
+            <div class="step-meta">
+              <span class="step-title">{{ s.label }}</span>
+              <span class="step-subtitle">{{ getStepSubtitle(s.step) }}</span>
+            </div>
+            <div class="step-actions" @click.stop>
+              <button
+                class="btn btn-sm btn-execute"
+                :disabled="!canExecuteStep(s.step)"
+                @click="handleExecuteStep(s.step)"
+              >
+                {{ getExecuteLabel(s.step) }}
+              </button>
+              <button class="btn-toggle" :class="{ collapsed: !expandedSteps.has(s.step) }">
+                {{ expandedSteps.has(s.step) ? '▲' : '▼' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 卡片内容（折叠/展开） -->
+          <div class="step-card-body" :class="{ collapsed: !expandedSteps.has(s.step) }">
+            <div class="step-card-body-inner">
+              <ScriptPanel v-if="s.step === 1" />
+              <TtsPanel v-else-if="s.step === 2" />
+              <VisualPanel v-else-if="s.step === 3" />
+              <SubtitlePanel v-else-if="s.step === 4" />
+              <PublishPanel v-else-if="s.step === 5" />
+            </div>
+          </div>
+        </div>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useProductionStore } from '@/stores/production'
 import { PRODUCTION_STEPS } from '@zimti/shared'
@@ -124,25 +144,56 @@ const newVideoType = ref('knowledge')
 const newFullText = ref('')
 const selectedTemplateId = ref('')
 
-const statusLabel = computed(() => {
-  const cs = store.steps[store.currentStep - 1]
-  if (!cs) return ''
-  const labels: Record<string, string> = {
-    pending: '等待执行',
-    running: '执行中...',
-    completed: '已完成',
-    failed: '执行失败',
+// 展开/折叠状态（用 reactive 确保增删触发视图更新）
+const expandedSteps = reactive(new Set<number>())
+
+// 已完成步骤数
+const completedCount = computed(() =>
+  store.steps.filter(s => s.status === 'completed').length,
+)
+
+// 初始化展开状态：展开第一个未完成的步骤
+function initExpanded() {
+  const firstPending = store.steps.findIndex(s => s.status !== 'completed')
+  expandedSteps.clear()
+  if (firstPending >= 0) {
+    expandedSteps.add(firstPending + 1)
+  } else {
+    // 全部完成，展开最后一步
+    expandedSteps.add(5)
   }
-  return `步骤 ${store.currentStep}/5 · ${labels[cs.status] || cs.status}`
+}
+
+// 监听 currentStep 变化（runStep 完成后会自动推进），展开新步骤
+watch(() => store.currentStep, (newStep) => {
+  expandedSteps.add(newStep)
+})
+
+// 监听 jobId 变化，初始化展开状态
+watch(() => store.jobId, (id) => {
+  if (id) initExpanded()
 })
 
 onMounted(async () => {
   store.loadTemplates()
   const jobId = route.params.jobId as string
-  if (jobId) {
+  // 'new' 或非 UUID 格式不加载，避免 Prisma 报错
+  const isUuid = jobId && /^[0-9a-f-]{36}$/i.test(jobId)
+  if (isUuid) {
     await store.loadJob(jobId)
+    initExpanded()
   }
 })
+
+// --- 交互方法 ---
+
+function toggleStep(step: number) {
+  if (expandedSteps.has(step)) {
+    expandedSteps.delete(step)
+  } else {
+    expandedSteps.add(step)
+  }
+}
 
 function handleNewJob() {
   newTitle.value = ''
@@ -157,25 +208,73 @@ async function handleCreate() {
     full_text: newFullText.value || undefined,
     video_type: newVideoType.value,
   })
+  initExpanded()
 }
 
 function handleReset() {
   store.reset()
+  expandedSteps.clear()
 }
 
-function handleStepClick(step: number) {
-  if (step === store.currentStep) return
-  // 如果点击已完成步骤且回退会清除后续数据，需确认
-  if (store.isStepCompleted(step)) {
+// 判断某步骤是否可执行
+function canExecuteStep(step: number): boolean {
+  if (store.executing) return false
+  if (store.isStepCompleted(step)) return true // 已完成可重新执行
+  // 前置步骤必须全部完成
+  return store.canAdvanceTo(step)
+}
+
+// 获取执行按钮文字
+function getExecuteLabel(step: number): string {
+  const status = store.steps[step - 1]?.status
+  if (status === 'running') return '执行中...'
+  if (status === 'completed') return '重新执行'
+  if (!store.canAdvanceTo(step) && !store.isStepCompleted(step)) return '等待前置'
+  return '执行'
+}
+
+// 获取步骤副标题
+function getStepSubtitle(step: number): string {
+  const status = store.steps[step - 1]?.status
+  const labels: Record<string, string> = {
+    pending: '等待执行',
+    running: '执行中...',
+    completed: '已完成',
+    failed: '执行失败',
+  }
+  return labels[status] || ''
+}
+
+// 单步执行
+async function handleExecuteStep(step: number) {
+  // 如果已完成，需要确认是否重新执行
+  if (store.isStepCompleted(step) && step < 5) {
     const hasLaterCompleted = store.steps.slice(step).some(s => s.status === 'completed')
     if (hasLaterCompleted) {
-      if (!confirm(`回退到步骤 ${step} 会清除后续步骤的数据，确定要回退吗？`)) return
-      store.rollbackToStep(step)
-    } else {
-      store.goToStep(step)
+      if (!confirm('重新执行此步骤会清除后续步骤的数据，确定吗？')) return
+      await store.rollbackToStep(step)
     }
-  } else if (store.canAdvanceTo(step)) {
-    store.goToStep(step)
+  }
+  expandedSteps.add(step)
+  await store.runStep(step)
+}
+
+// 一键生产
+async function handleAutoRun() {
+  for (let step = 1; step <= 5; step++) {
+    if (store.isStepCompleted(step)) continue
+    expandedSteps.add(step)
+    try {
+      await store.runStep(step)
+    } catch {
+      expandedSteps.add(step)
+      alert(`步骤 ${step}（${stepList[step - 1].label}）执行失败，请检查后重试`)
+      break
+    }
+    if (store.steps[step - 1].status === 'failed') {
+      expandedSteps.add(step)
+      break
+    }
   }
 }
 
@@ -195,18 +294,6 @@ onBeforeRouteLeave(() => {
   }
   return true
 })
-
-function prevStep() {
-  if (store.currentStep > 1) {
-    store.goToStep(store.currentStep - 1)
-  }
-}
-
-function nextStep() {
-  if (store.currentStep < 5) {
-    store.goToStep(store.currentStep + 1)
-  }
-}
 </script>
 
 <style scoped>
@@ -240,7 +327,8 @@ function nextStep() {
   margin-left: auto;
 }
 
-/* 入口面板 */
+/* ===================== 入口面板（保持不变） ===================== */
+
 .entry-panel {
   display: flex;
   justify-content: center;
@@ -329,7 +417,7 @@ function nextStep() {
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--color-surface-hover, rgba(0,0,0,0.04));
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
 }
 
 .btn:disabled {
@@ -354,144 +442,337 @@ function nextStep() {
   margin-top: 8px;
 }
 
-/* 步骤条 */
-.stepper {
+/* ===================== 一键生产按钮 ===================== */
+
+.auto-run-bar {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  margin-bottom: 24px;
-  padding: 20px 0;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 20px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
+  margin-bottom: 16px;
 }
 
-.step-item {
+.auto-run-btn {
+  flex-shrink: 0;
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #FF6B35, #FF8C42);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+
+.auto-run-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.35);
+}
+
+.auto-run-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.auto-run-btn.running {
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
+}
+
+.auto-run-btn.completed {
+  background: linear-gradient(135deg, #10b981, #34d399);
+}
+
+.auto-run-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* ===================== 步骤卡片 ===================== */
+
+.step-cards {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.step-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  border-left: 3px solid var(--color-border);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.step-card.running {
+  border-left-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.step-card.completed {
+  border-left-color: #10b981;
+}
+
+.step-card.failed {
+  border-left-color: #ef4444;
+}
+
+.step-card.pending {
+  border-left-color: var(--color-border);
+}
+
+/* --- 卡片头部 --- */
+
+.step-card-header {
+  display: flex;
   align-items: center;
-  position: relative;
-  min-width: 80px;
-  cursor: default;
-}
-
-.step-item.clickable {
+  gap: 12px;
+  padding: 12px 16px;
   cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
 }
 
-.step-dot {
-  width: 36px;
-  height: 36px;
+.step-card-header:hover {
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.02));
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 2px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--color-text-secondary);
-  background: var(--color-background);
-  transition: all 0.2s;
-}
-
-.step-item.active .step-dot {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.08);
-}
-
-.step-item.completed .step-dot {
-  border-color: #10b981;
-  background: #10b981;
   color: #fff;
+  background: var(--color-primary);
+  transition: background 0.3s;
 }
 
-.step-check {
-  font-size: 16px;
+.step-number.completed {
+  background: #10b981;
 }
 
-.step-spinner {
-  font-size: 16px;
+.step-number.running {
+  background: var(--color-primary);
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-.step-label {
-  margin-top: 6px;
+.step-number.failed {
+  background: #ef4444;
+}
+
+.step-number.pending {
+  background: var(--color-primary);
+}
+
+.check {
+  font-size: 14px;
+}
+
+.spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.step-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-right: 8px;
+}
+
+.step-subtitle {
   font-size: 13px;
   color: var(--color-text-secondary);
 }
 
-.step-item.active .step-label {
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.step-item.completed .step-label {
+.step-card.completed .step-subtitle {
   color: #10b981;
 }
 
-.step-line {
-  position: absolute;
-  top: 18px;
-  left: calc(50% + 22px);
-  width: calc(100% - 44px);
-  height: 2px;
-  background: var(--color-border);
+.step-card.running .step-subtitle {
+  color: var(--color-primary);
 }
 
-.step-item.completed + .step-item .step-line,
-.step-item.completed .step-line {
-  background: #10b981;
+.step-card.failed .step-subtitle {
+  color: #ef4444;
 }
 
-/* 面板区 */
-.panel-area {
-  min-height: 400px;
-}
-
-/* 底部操作栏 */
-.bottom-bar {
+.step-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 0;
-  margin-top: 16px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.btn-execute {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.btn-execute:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.btn-execute:disabled {
+  background: var(--color-border);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  opacity: 1;
+}
+
+.btn-toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  transition: background 0.15s, transform 0.2s;
+}
+
+.btn-toggle:hover {
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+/* --- 卡片内容（折叠/展开） --- */
+
+.step-card-body {
+  max-height: 2000px;
+  overflow: hidden;
+  transition: max-height 0.4s ease, padding 0.3s ease;
   border-top: 1px solid var(--color-border);
 }
 
-.bottom-bar-center {
-  flex: 1;
-  text-align: center;
+.step-card-body.collapsed {
+  max-height: 0;
+  border-top-color: transparent;
+  transition: max-height 0.3s ease, padding 0.2s ease;
 }
 
-.status-text {
-  font-size: 14px;
-  color: var(--color-text-secondary);
+.step-card-body-inner {
+  padding: 16px;
 }
 
-/* 通用 */
-.loading-wrapper {
-  text-align: center;
-  padding: 40px;
-  color: var(--color-text-secondary);
+/* 让嵌入的 Panel 组件更紧凑 */
+.step-card-body-inner > :deep(.script-panel),
+.step-card-body-inner > :deep(.tts-panel),
+.step-card-body-inner > :deep(.visual-panel),
+.step-card-body-inner > :deep(.subtitle-panel),
+.step-card-body-inner > :deep(.publish-panel) {
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
+
+/* ===================== 移动端适配 ===================== */
 
 @media (max-width: 768px) {
-  .production-page { padding: 12px; }
-
-  .stepper {
-    overflow-x: auto;
-    justify-content: flex-start;
+  .production-page {
     padding: 12px;
   }
 
-  .step-item { min-width: 60px; }
-  .step-label { font-size: 11px; }
-  .step-dot { width: 30px; height: 30px; font-size: 12px; }
-  .step-line { top: 15px; left: calc(50% + 18px); width: calc(100% - 36px); }
+  .auto-run-bar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
 
-  .entry-card { padding: 24px; }
-  .form-row { flex-direction: column; gap: 0; }
+  .auto-run-btn {
+    width: 100%;
+    text-align: center;
+    padding: 12px 16px;
+  }
 
-  .bottom-bar { flex-wrap: wrap; gap: 8px; }
+  .step-card-header {
+    padding: 10px 12px;
+  }
+
+  .step-title {
+    font-size: 14px;
+  }
+
+  .step-subtitle {
+    font-size: 12px;
+  }
+
+  .step-number {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .btn-sm {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+
+  .step-card-body-inner {
+    padding: 12px;
+  }
+
+  .entry-card {
+    padding: 24px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
 }
 </style>

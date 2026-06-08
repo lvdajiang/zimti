@@ -9,6 +9,7 @@ import { stubHeaderMiddleware } from './middleware/stubMarker.js'
 import { router } from './routes/index.js'
 import { setAIProvider } from './services/ai/index.js'
 import { GLMProvider } from './services/ai/glmProvider.js'
+import { initKnowledgeScheduler } from './services/knowledgeScheduler.js'
 import { logger, setupLogger } from './logger.js'
 
 setupLogger()
@@ -53,6 +54,8 @@ async function main(): Promise<void> {
     await prisma.$connect()
     logger.info('[DB] Connected')
     await ensureDemoUser()
+    // 初始化知识库定时调度
+    initKnowledgeScheduler().catch(err => logger.warn('[Scheduler]', err))
   } catch {
     logger.warn('[DB] Connection failed — running without database')
   }
