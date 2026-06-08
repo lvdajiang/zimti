@@ -2037,7 +2037,7 @@ export interface ProhibitedCheckReport {
 export type VoiceProfileType = 'preset' | 'clone' | 'uploaded'
 
 /** TTS 引擎 */
-export type VoiceProfileEngine = 'edge_tts' | 'fish_audio' | 'uploaded'
+export type VoiceProfileEngine = 'edge_tts' | 'fish_audio' | 'cosyvoice' | 'uploaded'
 
 /** voice_profiles 表接口 */
 export interface VoiceProfileRecord {
