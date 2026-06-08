@@ -190,9 +190,19 @@ router.post('/publish-records/:id/seo-check', seoCheckHandler)
 // POST /api/v1/publish-records/:id/auto-save — 自动保存
 router.post('/publish-records/:id/auto-save', async (req: Request, res: Response) => {
   try {
+    const { title, description, tags } = req.body
+    // 输入校验：长度限制
+    if (title !== undefined && String(title).length > 200) {
+      res.status(400).json({ error: '标题不能超过200字' })
+      return
+    }
+    if (description !== undefined && String(description).length > 5000) {
+      res.status(400).json({ error: '描述不能超过5000字' })
+      return
+    }
     await prisma.publishRecord.update({
       where: { id: str(req.params.id) },
-      data: { title: req.body.title, description: req.body.description, tags: req.body.tags ?? [] },
+      data: { title, description, tags: tags ?? [] },
     })
     res.json({ success: true })
   } catch (error) {
@@ -332,6 +342,11 @@ router.post('/publish-records/:id/aigc-confirm', async (req: Request, res: Respo
 router.put('/publish-records/:id/conversion-type', async (req: Request, res: Response) => {
   try {
     const { conversion_type } = req.body
+    const VALID_TYPES = ['awareness', 'trust', 'conversion']
+    if (!conversion_type || !VALID_TYPES.includes(conversion_type)) {
+      res.status(400).json({ error: `conversion_type 必须是: ${VALID_TYPES.join(', ')}` })
+      return
+    }
     const record = await prisma.publishRecord.update({
       where: { id: str(req.params.id) },
       data: { conversionType: conversion_type },

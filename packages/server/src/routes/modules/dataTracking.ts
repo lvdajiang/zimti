@@ -33,16 +33,23 @@ router.post('/data-tracking/snapshots', async (req: Request, res: Response) => {
       return
     }
 
+    // 数值范围校验
+    const pc = Math.max(0, Math.floor(play_count ?? 0))
+    const cr = Math.min(100, Math.max(0, Number(completion_rate ?? 0)))
+    const br = Math.min(100, Math.max(0, Number(three_second_bounce_rate ?? 0)))
+    const cc = Math.max(0, Math.floor(comment_count ?? 0))
+    const pmc = Math.max(0, Math.floor(private_message_count ?? 0))
+
     const snapshot = await prisma.dataSnapshot.create({
       data: {
         userId: DEMO_USER_ID,
         publishRecordId: publish_record_id,
         snapshotAt: new Date(snapshot_at),
-        playCount: play_count ?? 0,
-        completionRate: completion_rate ?? 0,
-        threeSecondBounceRate: three_second_bounce_rate ?? 0,
-        commentCount: comment_count ?? 0,
-        privateMessageCount: private_message_count ?? 0,
+        playCount: pc,
+        completionRate: cr,
+        threeSecondBounceRate: br,
+        commentCount: cc,
+        privateMessageCount: pmc,
       },
     })
 
@@ -70,6 +77,11 @@ router.post('/data-tracking/snapshots/batch', async (req: Request, res: Response
 
     if (!Array.isArray(snapshots) || snapshots.length === 0) {
       res.status(400).json({ error: 'snapshots array is required' })
+      return
+    }
+
+    if (snapshots.length > 100) {
+      res.status(400).json({ error: 'snapshots array exceeds maximum of 100 items' })
       return
     }
 

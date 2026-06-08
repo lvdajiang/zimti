@@ -472,6 +472,8 @@ async function handlePublish() {
     }
 
     // 为每个平台创建/更新分发记录
+    let successCount = 0
+    let failCount = 0
     for (const item of adaptedPlatforms.value) {
       try {
         await api.post('/distribution/records', {
@@ -482,9 +484,16 @@ async function handlePublish() {
           adapted_content: item.content,
           adapted_tags: item.tags,
         })
+        successCount++
       } catch {
-        // 单个平台失败不阻塞其他平台
+        failCount++
       }
+    }
+
+    // 全部失败时不标记为已发布
+    if (successCount === 0 && failCount > 0) {
+      alert('发布失败：所有平台均创建失败，请检查网络后重试')
+      return
     }
 
     published.value = true

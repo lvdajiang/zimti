@@ -56,49 +56,59 @@ async function ensureSystemPresets(): Promise<void> {
 
 // ── 列表 ──────────────────────────────────────────────
 router.get('/voice-profiles', async (req: Request, res: Response) => {
-  const userId = getUserId(req as any)
+  try {
+    const userId = getUserId(req as any)
 
-  await ensureSystemPresets()
+    await ensureSystemPresets()
 
-  const list = await prisma.voiceProfile.findMany({
-    where: {
-      isActive: true,
-      OR: [
-        { userId: null },   // 系统预设
-        { userId },         // 用户的自定义音色
+    const list = await prisma.voiceProfile.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { userId: null },   // 系统预设
+          { userId },         // 用户的自定义音色
+        ],
+      },
+      orderBy: [
+        { userId: 'asc' },   // 系统预设排前面
+        { createdAt: 'desc' },
       ],
-    },
-    orderBy: [
-      { userId: 'asc' },   // 系统预设排前面
-      { createdAt: 'desc' },
-    ],
-  })
+    })
 
-  res.json(list)
+    res.json(list)
+  } catch (err) {
+    console.error('[GET /voice-profiles]', err)
+    res.status(500).json({ error: '获取音色列表失败' })
+  }
 })
 
 // ── 创建自定义音色 ──────────────────────────────────────
 router.post('/voice-profiles', async (req: Request, res: Response) => {
-  const userId = getUserId(req as any)
-  const { name, type, engine, engineRef, sampleUrl, config } = req.body
+  try {
+    const userId = getUserId(req as any)
+    const { name, type, engine, engineRef, sampleUrl, config } = req.body
 
-  if (!name || !type || !engine) {
-    res.status(400).json({ error: 'name, type, engine 为必填' })
-    return
+    if (!name || !type || !engine) {
+      res.status(400).json({ error: 'name, type, engine 为必填' })
+      return
+    }
+
+    const created = await prisma.voiceProfile.create({
+      data: {
+        userId,
+        name,
+        type,        // preset / clone / uploaded
+        engine,      // edge_tts / fish_audio / cosyvoice / uploaded
+        engineRef: engineRef || null,
+        sampleUrl: sampleUrl || null,
+        config: config || {},
+      },
+    })
+    res.status(201).json(created)
+  } catch (err) {
+    console.error('[POST /voice-profiles]', err)
+    res.status(500).json({ error: '创建音色失败' })
   }
-
-  const created = await prisma.voiceProfile.create({
-    data: {
-      userId,
-      name,
-      type,        // preset / clone / uploaded
-      engine,      // edge_tts / fish_audio / uploaded
-      engineRef: engineRef || null,
-      sampleUrl: sampleUrl || null,
-      config: config || {},
-    },
-  })
-  res.status(201).json(created)
 })
 
 // ── 上传录音 → Fish Audio 克隆 ──────────────────────────
@@ -144,18 +154,18 @@ router.post('/voice-profiles/clone', async (req: Request, res: Response) => {
 
 // ── 试听 ──────────────────────────────────────────────
 router.post('/voice-profiles/:id/preview', async (req: Request, res: Response) => {
-  const id = str(req.params.id)
-  const { text } = req.body as { text?: string }
-  const sampleText = text || '你好，这是一段试听样本，用于测试音色效果。'
-
-  const profile = await prisma.voiceProfile.findUnique({ where: { id } })
-  if (!profile) {
-    res.status(404).json({ error: '音色不存在' })
-    return
-  }
-
   try {
-    const engine: 'edge_tts' | 'fish_audio' | 'uploaded' = profile.engine as any
+    const id = str(req.params.id)
+    const { text } = req.body as { text?: string }
+    const sampleText = text || '你好，这是一段试听样本，用于测试音色效果。'
+
+    const profile = await prisma.voiceProfile.findUnique({ where: { id } })
+    if (!profile) {
+      res.status(404).json({ error: '音色不存在' })
+      return
+    }
+
+    const engine = profile.engine as 'edge_tts' | 'fish_audio' | 'cosyvoice' | 'uploaded'
     const filePath = await previewTTS(sampleText, profile.engineRef || '', engine)
     res.json({ filePath, url: `/static/${filePath.split(/[/\\]/).slice(-2).join('/')}` })
   } catch (err) {
@@ -212,28 +222,33 @@ router.post('/voice-profiles/upload', async (req: Request, res: Response) => {
 
 // ── 删除 ──────────────────────────────────────────────
 router.delete('/voice-profiles/:id', async (req: Request, res: Response) => {
-  const userId = getUserId(req as any)
-  const id = str(req.params.id)
+  try {
+    const userId = getUserId(req as any)
+    const id = str(req.params.id)
 
-  const profile = await prisma.voiceProfile.findUnique({ where: { id } })
-  if (!profile) {
-    res.status(404).json({ error: '音色不存在' })
-    return
-  }
-  if (!profile.userId) {
-    res.status(403).json({ error: '系统预设音色不可删除' })
-    return
-  }
-  if (profile.userId !== userId) {
-    res.status(403).json({ error: '只能删除自己的音色' })
-    return
-  }
+    const profile = await prisma.voiceProfile.findUnique({ where: { id } })
+    if (!profile) {
+      res.status(404).json({ error: '音色不存在' })
+      return
+    }
+    if (!profile.userId) {
+      res.status(403).json({ error: '系统预设音色不可删除' })
+      return
+    }
+    if (profile.userId !== userId) {
+      res.status(403).json({ error: '只能删除自己的音色' })
+      return
+    }
 
-  await prisma.voiceProfile.update({
-    where: { id },
-    data: { isActive: false },
-  })
-  res.status(204).send()
+    await prisma.voiceProfile.update({
+      where: { id },
+      data: { isActive: false },
+    })
+    res.status(204).send()
+  } catch (err) {
+    console.error('[DELETE /voice-profiles/:id]', err)
+    res.status(500).json({ error: '删除音色失败' })
+  }
 })
 
 export default router

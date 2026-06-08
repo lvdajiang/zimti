@@ -79,6 +79,7 @@
       <button class="btn btn-primary" :disabled="saving" @click="handleSave">
         {{ saving ? '保存中...' : '保存快照' }}
       </button>
+      <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
     </div>
   </div>
 </template>
@@ -94,6 +95,7 @@ const props = defineProps<{
 
 const trendData = ref<MetricsTrendResponse | null>(null)
 const saving = ref(false)
+const saveMsg = ref('')
 
 const form = ref({
   snapshot_at: new Date().toISOString().slice(0, 16),
@@ -123,11 +125,14 @@ async function loadTrend() {
     trendData.value = await fetchMetricsTrend(props.publishRecordId, 30)
   } catch (err) {
     console.error('[DataTrackingPanel] loadTrend failed:', err)
+    saveMsg.value = '⚠️ 加载趋势数据失败'
+    setTimeout(() => { saveMsg.value = '' }, 3000)
   }
 }
 
 async function handleSave() {
   saving.value = true
+  saveMsg.value = ''
   try {
     await createSnapshot({
       publish_record_id: props.publishRecordId,
@@ -140,6 +145,7 @@ async function handleSave() {
     })
     // 刷新趋势
     await loadTrend()
+    saveMsg.value = '✅ 保存成功'
     // 重置表单
     form.value = {
       snapshot_at: new Date().toISOString().slice(0, 16),
@@ -151,6 +157,8 @@ async function handleSave() {
     }
   } catch (err) {
     console.error('[DataTrackingPanel] save failed:', err)
+    saveMsg.value = '❌ 保存失败，请重试'
+    setTimeout(() => { saveMsg.value = '' }, 3000)
   } finally {
     saving.value = false
   }
@@ -282,6 +290,15 @@ onMounted(() => {
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+.save-msg {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  animation: fadeIn 0.2s;
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 
 @media (max-width: 768px) {
   .summary-row { grid-template-columns: repeat(2, 1fr); }
