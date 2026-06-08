@@ -218,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useProductionStore } from '@/stores/production'
 import { PLATFORM_LABELS } from '@zimti/shared'
 import api from '@/api/client'
@@ -271,6 +271,14 @@ const recordTags = ref<string[]>([])
 // 发布记录ID（用于数据追踪）
 const publishRecordIds = ref<string[]>([])
 
+// 从流水线步骤数据中提取发布记录ID
+watch(() => store.steps[4]?.data, (data) => {
+  if (data && Array.isArray(data.publish_records)) {
+    publishRecordIds.value = data.publish_records
+      .map((r: any) => r.publish_record_id || r.id)
+      .filter(Boolean)
+  }
+}, { immediate: true, deep: true })
 // 排期状态
 const showScheduleForm = ref(false)
 const scheduleSaving = ref(false)
@@ -482,7 +490,7 @@ async function handlePublish() {
           platform: item.platform,
           adapted_title: item.title,
           adapted_content: item.content,
-          adapted_tags: item.tags,
+          adapted_tags: item.tags ? item.tags.split(/\s+/).filter(Boolean) : [],
         })
         successCount++
       } catch {
@@ -494,6 +502,13 @@ async function handlePublish() {
     if (successCount === 0 && failCount > 0) {
       alert('发布失败：所有平台均创建失败，请检查网络后重试')
       return
+    }
+
+    // 更新发布记录状态为 published
+    for (const recordId of publishRecordIds.value) {
+      try {
+        await api.post(`/publish-records/${recordId}/publish`)
+      } catch { /* 状态更新失败不阻塞流程 */ }
     }
 
     published.value = true

@@ -95,7 +95,15 @@ async function pollTaskResult(resultUrl: string, apiKey: string, maxAttempts = 3
       headers: { 'Authorization': `Bearer ${apiKey}` },
     })
 
-    if (!response.ok) continue
+    if (!response.ok) {
+      // 4xx 客户端错误（认证失败、资源不存在等）不可恢复，立即失败
+      if (response.status >= 400 && response.status < 500) {
+        const body = await response.text().catch(() => '')
+        throw new Error(`CosyVoice 轮询失败 (${response.status}): ${body.slice(0, 200)}`)
+      }
+      // 5xx 服务端错误 → 继续重试
+      continue
+    }
 
     const data = await response.json() as any
     const status = data.output?.task_status

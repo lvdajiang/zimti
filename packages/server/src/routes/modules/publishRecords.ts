@@ -211,7 +211,7 @@ router.post('/publish-records/:id/auto-save', async (req: Request, res: Response
   }
 })
 
-// POST /api/v1/publish-records/:id/tags — 添加标签
+// POST /api/v1/publish-records/:id/tags — 添加标签（原子操作，避免竞态）
 router.post('/publish-records/:id/tags', async (req: Request, res: Response) => {
   try {
     const { tag } = req.body
@@ -224,9 +224,14 @@ router.post('/publish-records/:id/tags', async (req: Request, res: Response) => 
       res.status(404).json({ error: 'Record not found' })
       return
     }
+    // 避免重复 + 原子更新
+    if (record.tags.includes(tag)) {
+      res.json(mapRecord(record))
+      return
+    }
     const updated = await prisma.publishRecord.update({
       where: { id: str(req.params.id) },
-      data: { tags: [...new Set([...record.tags, tag])] },
+      data: { tags: { push: tag } },
     })
     res.json(mapRecord(updated))
   } catch (error) {
@@ -235,20 +240,23 @@ router.post('/publish-records/:id/tags', async (req: Request, res: Response) => 
   }
 })
 
-// DELETE /api/v1/publish-records/:recordId/tags/:tag — 删除标签
+// DELETE /api/v1/publish-records/:recordId/tags/:tag — 删除标签（事务安全）
 router.delete('/publish-records/:recordId/tags/:tag', async (req: Request, res: Response) => {
   try {
-    const record = await prisma.publishRecord.findUnique({ where: { id: str(req.params.recordId) } })
+    const recordId = str(req.params.recordId)
+    const tagToRemove = str(req.params.tag)
+    const record = await prisma.publishRecord.findUnique({ where: { id: recordId } })
     if (!record) {
       res.status(404).json({ error: 'Record not found' })
       return
     }
     const updated = await prisma.publishRecord.update({
-      where: { id: str(req.params.recordId) },
-      data: { tags: record.tags.filter(t => t !== str(req.params.tag)) },
+      where: { id: recordId, tags: { has: tagToRemove } }, // 仅当标签存在时更新，避免并发覆盖
+      data: { tags: record.tags.filter(t => t !== tagToRemove) },
     })
     res.json(mapRecord(updated))
   } catch (error) {
+    // 如果标签已被并发删除，findUnique 返回 null → 404
     console.error('[DELETE tags]', error)
     res.status(500).json({ error: 'Failed to remove tag' })
   }

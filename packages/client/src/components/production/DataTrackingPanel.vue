@@ -115,8 +115,10 @@ function barHeight(count: number): number {
   return Math.max(4, (count / maxPlays.value) * 100)
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '-'
   const d = new Date(iso)
+  if (isNaN(d.getTime())) return '-'
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 

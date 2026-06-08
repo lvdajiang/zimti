@@ -101,8 +101,9 @@ router.post('/data-tracking/snapshots/batch', async (req: Request, res: Response
           },
         })
         created++
-      } catch {
-        // 单条失败不阻塞
+      } catch (err) {
+        // 单条失败不阻塞，但记录日志以便排查
+        console.warn(`[batch snapshots] 创建失败 publish_record_id=${s.publish_record_id}:`, err instanceof Error ? err.message : err)
       }
     }
 

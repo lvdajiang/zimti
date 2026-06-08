@@ -18,6 +18,7 @@ import { optionalAuth } from '../../services/auth/authService.js'
 import { previewTTS } from '../../services/tts/index.js'
 import { FishAudioEngine } from '../../services/tts/fishAudioEngine.js'
 import { processRecording, isFFmpegAvailable } from '../../services/tts/recordingProcessor.js'
+import { generalUpload } from '../../middleware/upload.js'
 import type { Request, Response } from 'express'
 
 const router: Router = Router()
@@ -112,7 +113,7 @@ router.post('/voice-profiles', async (req: Request, res: Response) => {
 })
 
 // ── 上传录音 → Fish Audio 克隆 ──────────────────────────
-router.post('/voice-profiles/clone', async (req: Request, res: Response) => {
+router.post('/voice-profiles/clone', generalUpload.single('file'), async (req: Request, res: Response) => {
   const userId = getUserId(req as any)
   const { voiceName } = req.body as { voiceName?: string }
 
@@ -175,7 +176,7 @@ router.post('/voice-profiles/:id/preview', async (req: Request, res: Response) =
 })
 
 // ── 上传自己录音（模式 C）──────────────────────────────
-router.post('/voice-profiles/upload', async (req: Request, res: Response) => {
+router.post('/voice-profiles/upload', generalUpload.single('file'), async (req: Request, res: Response) => {
   const userId = getUserId(req as any)
   const { voiceName } = req.body as { voiceName?: string }
 
