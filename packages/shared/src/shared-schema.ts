@@ -696,7 +696,34 @@ export interface DataSnapshotRecord {
   created_at: string
 }
 
-// --- 3.18 experience_logs ---
+// --- 3.18 追踪趋势 ---
+export interface MetricsTrendPoint {
+  snapshot_at: string
+  play_count: number
+  completion_rate: number
+  three_second_bounce_rate: number
+  comment_count: number
+  private_message_count: number
+}
+
+export interface MetricsTrendSummary {
+  total_plays: number
+  avg_completion_rate: number
+  avg_bounce_rate: number
+  total_comments: number
+  total_messages: number
+  plays_trend: number | null
+  snapshot_count: number
+}
+
+export interface MetricsTrendResponse {
+  publish_record_id: string
+  platform: string
+  snapshots: MetricsTrendPoint[]
+  summary: MetricsTrendSummary
+}
+
+// --- 3.19 experience_logs ---
 export interface ExperienceLogRecord {
   id: number                        // SERIAL PK
   user_id: string                   // UUID FK→users NOT NULL
@@ -967,6 +994,8 @@ export interface OperationCalendarRecord {
     campaign_plan?: string
   } | null
   remind_at: string | null
+  ref_id: string | null
+  ref_type: string | null
   created_at: string
   updated_at: string
 }
@@ -1087,7 +1116,41 @@ export interface GeoMentionRecord {
 }
 
 // --- 3.N BrandKnowledge ---
-export type BrandKnowledgeSource = 'manual' | 'ai_generated' | 'web_search'
+export type BrandKnowledgeSource = 'manual' | 'ai_generated' | 'web_search' | 'fact_extract'
+
+export type KnowledgeContentType = 'article' | 'fact'
+export const KNOWLEDGE_CONTENT_TYPE_LABELS: Record<KnowledgeContentType, string> = {
+  article: '文章',
+  fact: '原子事实',
+}
+
+export type FactType = 'definition' | 'statistic' | 'procedure' | 'tip' | 'warning' | 'comparison'
+export const FACT_TYPE_LABELS: Record<FactType, string> = {
+  definition: '定义',
+  statistic: '统计数据',
+  procedure: '流程步骤',
+  tip: '实用建议',
+  warning: '注意事项',
+  comparison: '对比数据',
+}
+
+export type FactVerificationStatus = 'verified' | 'pending' | 'unverified' | 'rejected'
+export const FACT_VERIFICATION_STATUS_LABELS: Record<FactVerificationStatus, string> = {
+  verified: '已验证',
+  pending: '待验证',
+  unverified: '未验证',
+  rejected: '已否决',
+}
+
+export interface FactMetadata {
+  sourceUrls?: string[]
+  confidence?: number
+  factContext?: string
+  extractSource?: 'transcript' | 'web_search'
+  verifiedAt?: string
+  verifiedBy?: 'ai' | 'manual'
+  dimension?: string
+}
 
 export interface BrandKnowledgeRecord {
   id: string
@@ -1102,6 +1165,10 @@ export interface BrandKnowledgeRecord {
   is_active: boolean
   sort_order: number
   build_job_id: string | null
+  content_type: KnowledgeContentType | null
+  fact_type: FactType | null
+  verification_status: FactVerificationStatus | null
+  metadata: FactMetadata | null
   created_at: string
   updated_at: string
 }
@@ -1407,6 +1474,14 @@ export const API = {
     PUBLISH: (id: string) => `/publish-records/${id}/publish`,
     AIGC_CONFIRM: (id: string) => `/publish-records/${id}/aigc-confirm`,
     CONVERSION_TYPE: (id: string) => `/publish-records/${id}/conversion-type`,
+    // 阶段4：发布优化链
+    SUGGEST_KEYWORDS: (id: string) => `/publish-records/${id}/suggest-keywords`,
+    KEYWORD_TASK_STATUS: (id: string, taskId: string) => `/publish-records/${id}/suggest-keywords/${taskId}/status`,
+    MATCH_HOTSPOTS: (id: string) => `/publish-records/${id}/match-hotspots`,
+    HOTSPOT_TASK_STATUS: (id: string, taskId: string) => `/publish-records/${id}/match-hotspots/${taskId}/status`,
+    ADAPT_PLATFORMS: (id: string) => `/publish-records/${id}/adapt-platforms`,
+    ADAPT_TASK_STATUS: (id: string, taskId: string) => `/publish-records/${id}/adapt-platforms/${taskId}/status`,
+    ADAPTED_CONTENTS: (id: string) => `/publish-records/${id}/adapted-contents`,
   },
 
   // --- 内容资产 ---
@@ -1426,6 +1501,14 @@ export const API = {
   // --- 经验日志 ---
   EXPERIENCE_LOGS: {
     CREATE: '/experience-logs',
+  },
+
+  // --- 数据追踪（阶段4） ---
+  DATA_TRACKING: {
+    SNAPSHOTS: '/data-tracking/snapshots',
+    SNAPSHOT_BATCH: '/data-tracking/snapshots/batch',
+    VIDEO_METRICS: '/data-tracking/video-metrics',
+    METRICS_TREND: (publishRecordId: string) => `/data-tracking/publish-records/${publishRecordId}/metrics-trend`,
   },
 
   // --- 周报 ---
@@ -1510,6 +1593,8 @@ export const API = {
     EVENT: (id: string) => `/operation-calendar/events/${id}`,
     EVENTS_BY_MONTH: (year: number, month: number) => `/operation-calendar/events/${year}/${month}`,
     PRESET_HOLIDAYS: '/operation-calendar/preset-holidays',
+    // 支持按 refId 查询关联流水线的事件
+    EVENTS_BY_REF: (refId: string) => `/operation-calendar/events?ref_id=${refId}`,
   },
 
   // --- 触达 ---
@@ -1790,4 +1875,241 @@ export function calcInteractionRate(params: {
   return Number(
     ((params.like_count + params.comment_count + params.collect_count) / params.play_count * 100).toFixed(1)
   )
+}
+
+// ============================================================
+// §6. 提示词模板（Prompt Engine）
+// ============================================================
+
+/** 提示词步骤标识 */
+export type PromptStepKey =
+  | 'topic_generate'
+  | 'topic_merge'
+  | 'enhanced_topic_generate'
+  | 'storyboard_generate'
+  | 'ai_check'
+  | 'copy_generate'
+  | 'dashboard_analysis'
+  | 'persona_preview'
+  | 'viral_analyze'
+  | 'content_adapt'
+  | 'geo_question_generate'
+  | 'geo_content_generate'
+  | 'brand_knowledge_generate'
+  | 'keyword_distill'
+  | 'web_knowledge_build_search'
+  | 'web_knowledge_build_glm'
+  | 'copy_draft_generate'
+  | 'copy_refine'
+  | 'prohibited_check'
+
+/** 步骤中文名映射 */
+export const PROMPT_STEP_KEY_LABELS: Record<PromptStepKey, string> = {
+  topic_generate: '选题生成',
+  topic_merge: '选题合并',
+  enhanced_topic_generate: '增强版选题生成',
+  storyboard_generate: '分镜生成',
+  ai_check: 'AI风味检测',
+  copy_generate: '发布文案生成',
+  dashboard_analysis: '仪表盘分析',
+  persona_preview: '人设预览',
+  viral_analyze: '爆款视频分析',
+  content_adapt: '内容平台适配',
+  geo_question_generate: 'GEO问题生成',
+  geo_content_generate: 'GEO内容生成',
+  brand_knowledge_generate: '品牌知识生成',
+  keyword_distill: '关键词蒸馏',
+  web_knowledge_build_search: '全网知识搜索提取',
+  web_knowledge_build_glm: 'GLM一步知识生成',
+  copy_draft_generate: '文案初稿生成',
+  copy_refine: '文案润色改写',
+  prohibited_check: '违禁词AI语境检测',
+}
+
+/** 提示词变量定义 */
+export interface PromptVariableDef {
+  name: string
+  type: 'string' | 'number' | 'boolean'
+  required: boolean
+  description: string
+}
+
+/** prompt_templates 表接口 */
+export interface PromptTemplateRecord {
+  id: string
+  user_id: string | null
+  step_key: PromptStepKey
+  label: string
+  description: string | null
+  system_prompt: string | null
+  user_prompt_template: string
+  variable_defs: PromptVariableDef[]
+  is_active: boolean
+  version: number
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// §7. 文案创作（Copy Writing）
+// ============================================================
+
+/** 文案状态 */
+export type CopyWritingStatus = 'draft' | 'checking' | 'finalized'
+
+export const COPY_WRITING_STATUS_LABELS: Record<CopyWritingStatus, string> = {
+  draft: '草稿',
+  checking: '违禁词检测中',
+  finalized: '已定稿',
+}
+
+/** copy_writings 表接口 */
+export interface CopyWritingRecord {
+  id: string
+  user_id: string
+  topic_id: number | null
+  hotspot_ids: number[]
+  title: string
+  content: string
+  structure: {
+    hook?: string
+    body?: string
+    cta?: string
+    style_notes?: string
+  }
+  version: number
+  parent_id: string | null
+  status: CopyWritingStatus
+  prohibited_report: ProhibitedCheckReport | null
+  prompt_snapshot: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// §8. 违禁词库（Prohibited Words）
+// ============================================================
+
+/** 违禁词风险等级 */
+export type ProhibitedCategory = 'absolute' | 'high_risk' | 'medium_risk' | 'sensitive'
+
+export const PROHIBITED_CATEGORY_LABELS: Record<ProhibitedCategory, string> = {
+  absolute: '绝对违禁',
+  high_risk: '高风险',
+  medium_risk: '中风险',
+  sensitive: '敏感词',
+}
+
+/** 违禁词平台 */
+export type ProhibitedPlatform = 'douyin' | 'xiaohongshu' | 'weixin' | 'bilibili' | 'all'
+
+/** prohibited_words 表接口 */
+export interface ProhibitedWordRecord {
+  id: number
+  word: string
+  category: ProhibitedCategory
+  platform: ProhibitedPlatform
+  replacement: string | null
+  is_active: boolean
+  created_at: string
+}
+
+/** 违禁词检测报告中的单项 */
+export interface ProhibitedCheckItem {
+  word: string
+  position: number
+  category: ProhibitedCategory
+  risk: 'high' | 'medium' | 'low'
+  suggestion: string
+  platform: ProhibitedPlatform[]
+}
+
+/** 违禁词检测报告 */
+export interface ProhibitedCheckReport {
+  items: ProhibitedCheckItem[]
+  checked_at: string
+  total_risks: number
+}
+
+// ── 6.NN voice_profiles 表 ──────────────────────────────────
+
+/** 音色类型 */
+export type VoiceProfileType = 'preset' | 'clone' | 'uploaded'
+
+/** TTS 引擎 */
+export type VoiceProfileEngine = 'edge_tts' | 'fish_audio' | 'uploaded'
+
+/** voice_profiles 表接口 */
+export interface VoiceProfileRecord {
+  id: string
+  user_id: string | null
+  name: string
+  type: VoiceProfileType
+  engine: VoiceProfileEngine
+  engine_ref: string | null
+  sample_url: string | null
+  config: Record<string, unknown>
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ── 6.NN shooting_plans 表 ──────────────────────────────────
+
+/** 拍摄计划状态 */
+export type ShootingPlanStatus = 'pending' | 'shot' | 'matched' | 'skipped'
+
+/** 运镜方式 */
+export type CameraMovement = 'static' | 'pan_left' | 'pan_right' | 'tracking' | 'close_up' | 'wide_shot' | 'aerial'
+
+/** shooting_plans 表接口 */
+export interface ShootingPlanRecord {
+  id: string
+  script_id: number
+  segment_index: number
+  scene: string
+  props: string[]
+  camera_movement: CameraMovement | null
+  duration: number
+  notes: string | null
+  status: ShootingPlanStatus
+  material_ids: string[]
+  source: 'ai' | 'manual'
+  created_at: string
+  updated_at: string
+}
+
+// ── 6.NN timelines 表 ──────────────────────────────────
+
+/** 时间轴状态 */
+export type TimelineStatus = 'draft' | 'confirmed' | 'rendering' | 'completed'
+
+/** timelines 表接口 */
+export interface TimelineRecord {
+  id: string
+  video_product_id: string
+  tracks: {
+    video: TrackItemRecord[]
+    audio: TrackItemRecord[]
+    subtitle: TrackItemRecord[]
+  }
+  total_duration: number
+  fps: number
+  resolution: string
+  status: TimelineStatus
+  jianying_draft: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TrackItemRecord {
+  segment_index: number
+  segment_id: number
+  segment_type: string
+  material_id: string | null
+  start_time: number
+  end_time: number
+  transition: string | null
+  trim_start: number | null
+  trim_end: number | null
 }

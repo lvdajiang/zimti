@@ -30,6 +30,7 @@ export async function getEvents(
   page = 1,
   limit = 20,
   eventType?: CalendarEventType,
+  refId?: string,
 ) {
   const ps = Math.min(limit, 100)
 
@@ -37,6 +38,9 @@ export async function getEvents(
   const where: Record<string, any> = { userId }
   if (eventType && VALID_EVENT_TYPES.includes(eventType)) {
     where.eventType = eventType
+  }
+  if (refId) {
+    where.refId = refId
   }
 
   const [items, total] = await Promise.all([
@@ -61,6 +65,8 @@ export async function createEvent(
     eventType: CalendarEventType
     content?: object
     remindAt?: string
+    refId?: string
+    refType?: string
   },
 ) {
   if (!data.title) throw new Error('事件标题不能为空')
@@ -77,6 +83,8 @@ export async function createEvent(
       eventType: data.eventType,
       content: (data.content ?? undefined) as any,
       remindAt: data.remindAt ? new Date(data.remindAt) : null,
+      refId: data.refId ?? null,
+      refType: data.refType ?? null,
     },
   })
 

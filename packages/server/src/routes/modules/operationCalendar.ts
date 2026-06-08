@@ -8,15 +8,17 @@ import type { CalendarEventType } from '@zimti/shared'
 const router: Router = Router()
 router.use(optionalAuth)
 
-// GET /api/v1/operation-calendar/events — 列出所有事件（分页）
+// GET /api/v1/operation-calendar/events — 列出所有事件（分页，支持 refId 查询）
 router.get('/operation-calendar/events', async (req: Request, res: Response) => {
   try {
     const eventType = str(req.query.event_type) as CalendarEventType | ''
+    const refId = str(req.query.ref_id)
     const result = await calService.getEvents(
       getUserId(req as any),
       toInt(req.query.page, 1),
       toInt(req.query.page_size, 20),
       eventType || undefined,
+      refId || undefined,
     )
     res.json(result)
   } catch (err) {
@@ -53,10 +55,10 @@ router.get('/operation-calendar/preset-holidays', async (req: Request, res: Resp
   }
 })
 
-// POST /api/v1/operation-calendar/events — 创建事件
+// POST /api/v1/operation-calendar/events — 创建事件（支持 refId 关联）
 router.post('/operation-calendar/events', async (req: Request, res: Response) => {
   try {
-    const { event_date, title, event_type, content, remind_at } = req.body
+    const { event_date, title, event_type, content, remind_at, ref_id, ref_type } = req.body
     if (!title || !event_date || !event_type) {
       res.status(400).json({ error: 'title, event_date, event_type 为必填项' })
       return
@@ -68,6 +70,8 @@ router.post('/operation-calendar/events', async (req: Request, res: Response) =>
       eventType: event_type,
       content,
       remindAt: remind_at,
+      refId: ref_id,
+      refType: ref_type,
     })
     res.status(201).json({ id: event.id })
   } catch (err) {

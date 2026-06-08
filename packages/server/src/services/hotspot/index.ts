@@ -1,4 +1,5 @@
 import { prisma } from '../../db.js'
+import { getAIProvider } from '../ai/provider.js'
 
 interface HotspotItem {
   title: string
@@ -131,4 +132,48 @@ export async function refreshHotspots(platform?: string): Promise<{ total: numbe
   }
 
   return { total, created, updated }
+}
+
+/**
+ * 用 AI 为关键词为空的热点提取关键词
+ * 在热点匹配前调用，确保热点有可匹配的关键词
+ */
+export async function enrichHotspotKeywords(): Promise<{ enriched: number }> {
+  // 查询有效但无关键词的热点
+  const hotspots = await prisma.hotspot.findMany({
+    where: {
+      validUntil: { gte: new Date() },
+      keywords: { isEmpty: true },
+    },
+    take: 30,
+  })
+
+  if (hotspots.length === 0) return { enriched: 0 }
+
+  const provider = getAIProvider()
+  let enriched = 0
+
+  for (const hotspot of hotspots) {
+    try {
+      const prompt = `从以下热点标题中提取3-5个关键词/标签词，用于内容匹配。
+标题：${hotspot.title}
+来源：${hotspot.source}
+
+返回 JSON 数组：["关键词1", "关键词2", "关键词3"]`
+
+      const result = await provider.generate(prompt)
+      const keywords = JSON.parse(result)
+      if (Array.isArray(keywords) && keywords.length > 0) {
+        await prisma.hotspot.update({
+          where: { id: hotspot.id },
+          data: { keywords: keywords.map(String) },
+        })
+        enriched++
+      }
+    } catch {
+      // 单条失败不阻塞
+    }
+  }
+
+  return { enriched }
 }

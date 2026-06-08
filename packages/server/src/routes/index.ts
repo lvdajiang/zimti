@@ -34,6 +34,13 @@ import referral from './modules/referral.js'
 import distribution from './modules/distribution.js'
 import geo from './modules/geo.js'
 import pipelineProduction from './modules/pipelineProduction.js'
+import bridge from './modules/bridge.js'
+import promptTemplates from './modules/promptTemplates.js'
+import copyWritings from './modules/copyWritings.js'
+import prohibitedWords from './modules/prohibitedWords.js'
+import voiceProfiles from './modules/voiceProfiles.js'
+import productionVisual from './modules/productionVisual.js'
+import dataTracking from './modules/dataTracking.js'
 
 export const router: Router = Router()
 
@@ -72,3 +79,10 @@ router.use(referral)
 router.use(distribution)
 router.use(geo)
 router.use(pipelineProduction)
+router.use(bridge)
+router.use(promptTemplates)
+router.use(copyWritings)
+router.use(prohibitedWords)
+router.use(voiceProfiles)
+router.use(productionVisual)
+router.use(dataTracking)

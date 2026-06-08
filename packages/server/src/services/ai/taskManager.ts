@@ -34,6 +34,11 @@ export type AITaskType =
   | 'jimeng_t2v'
   | 'jimeng_edit'
   | 'jimeng_digital_human'
+  | 'fact_extract'
+  | 'fact_verify'
+  | 'publish_keyword_extract'
+  | 'publish_hotspot_match'
+  | 'publish_platform_adapt'
 
 export interface AITaskCreate {
   type: AITaskType

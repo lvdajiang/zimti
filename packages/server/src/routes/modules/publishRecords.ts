@@ -4,6 +4,10 @@ import type { Request, Response } from 'express'
 import { DEMO_USER_ID, str, toInt } from '../../constants.js'
 import { runTask, getTask, getAIProvider } from '../../services/ai/index.js'
 import { generateCopy } from '../../services/ai/generators/copyGenerate.js'
+import { extractPublishKeywords } from '../../services/ai/generators/publishKeywordExtract.js'
+import { matchHotspotsForPublish } from '../../services/publish/hotspotMatcher.js'
+import { batchAdaptContent } from '../../services/ai/generators/contentAdapt.js'
+import type { Platform } from '@zimti/shared'
 
 const router: Router = Router()
 
@@ -336,6 +340,215 @@ router.put('/publish-records/:id/conversion-type', async (req: Request, res: Res
   } catch (error) {
     console.error('[PUT conversion-type]', error)
     res.status(500).json({ error: 'Failed to update conversion type' })
+  }
+})
+
+// ─── 4.1 关键词优化端点 ───
+
+// POST /api/v1/publish-records/:id/suggest-keywords — AI 推荐关键词
+router.post('/publish-records/:id/suggest-keywords', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+    // 获取关联的脚本文本
+    const vp = await prisma.videoProduct.findUnique({
+      where: { id: record.videoProductId },
+      include: { script: { select: { fullText: true } } },
+    })
+    const task = await runTask(
+      { type: 'publish_keyword_extract', input: { record_id: id }, refId: id, refType: 'publish_record' },
+      () => extractPublishKeywords({
+        title: record.title ?? '',
+        description: record.description ?? '',
+        script_text: vp?.script?.fullText ?? '',
+        existing_tags: record.tags ?? [],
+        domain: req.body.domain,
+      }),
+    )
+    res.json({ task_id: task.id, status: task.status })
+  } catch (error) {
+    console.error('[POST suggest-keywords]', error)
+    res.status(500).json({ error: 'Failed to suggest keywords' })
+  }
+})
+
+// GET /api/v1/publish-records/:id/suggest-keywords/:taskId/status
+router.get('/publish-records/:id/suggest-keywords/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET suggest-keywords/status]', error)
+    res.status(500).json({ error: 'Failed to get keyword task status' })
+  }
+})
+
+// ─── 4.2 热点标签匹配端点 ───
+
+// POST /api/v1/publish-records/:id/match-hotspots — AI 匹配热点标签
+router.post('/publish-records/:id/match-hotspots', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+    const vp = await prisma.videoProduct.findUnique({
+      where: { id: record.videoProductId },
+      include: { script: { select: { fullText: true } } },
+    })
+    const task = await runTask(
+      { type: 'publish_hotspot_match', input: { record_id: id }, refId: id, refType: 'publish_record' },
+      () => matchHotspotsForPublish({
+        title: record.title ?? '',
+        description: record.description ?? '',
+        script_text: vp?.script?.fullText ?? '',
+        existing_tags: record.tags ?? [],
+        top_n: req.body.top_n,
+      }),
+    )
+    res.json({ task_id: task.id, status: task.status })
+  } catch (error) {
+    console.error('[POST match-hotspots]', error)
+    res.status(500).json({ error: 'Failed to match hotspots' })
+  }
+})
+
+// GET /api/v1/publish-records/:id/match-hotspots/:taskId/status
+router.get('/publish-records/:id/match-hotspots/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET match-hotspots/status]', error)
+    res.status(500).json({ error: 'Failed to get hotspot match status' })
+  }
+})
+
+// ─── 4.3 多平台内容适配端点 ───
+
+// POST /api/v1/publish-records/:id/adapt-platforms — 从发布记录触发多平台适配
+router.post('/publish-records/:id/adapt-platforms', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const { platforms } = req.body as { platforms: Platform[] }
+    if (!Array.isArray(platforms) || platforms.length === 0) {
+      res.status(400).json({ error: 'platforms array is required' })
+      return
+    }
+    const record = await prisma.publishRecord.findUnique({ where: { id } })
+    if (!record) {
+      res.status(404).json({ error: 'Record not found' })
+      return
+    }
+
+    const task = await runTask(
+      { type: 'publish_platform_adapt', input: { record_id: id, platforms }, refId: id, refType: 'publish_record' },
+      async () => {
+        const results = await batchAdaptContent({
+          source_title: record.title ?? '',
+          source_content: record.description ?? '',
+          source_tags: record.tags ?? [],
+          platforms,
+        })
+
+        // 为每个平台创建/更新 DistributionRecord
+        const adapted = []
+        for (const [platform, adaptResult] of Object.entries(results)) {
+          const existing = await prisma.distributionRecord.findFirst({
+            where: { sourceContentId: id, sourceType: 'publish_record', platform },
+          })
+          if (existing) {
+            await prisma.distributionRecord.update({
+              where: { id: existing.id },
+              data: {
+                adaptedTitle: adaptResult.adapted_title,
+                adaptedContent: adaptResult.adapted_content,
+                adaptedTags: adaptResult.adapted_tags,
+                characterCount: adaptResult.character_count,
+                status: 'draft',
+              },
+            })
+          } else {
+            await prisma.distributionRecord.create({
+              data: {
+                userId: DEMO_USER_ID,
+                sourceContentId: id,
+                sourceType: 'publish_record',
+                platform,
+                adaptedTitle: adaptResult.adapted_title,
+                adaptedContent: adaptResult.adapted_content,
+                adaptedTags: adaptResult.adapted_tags,
+                characterCount: adaptResult.character_count,
+                status: 'draft',
+              },
+            })
+          }
+          adapted.push({ platform, ...adaptResult })
+        }
+        return { adapted }
+      },
+    )
+    res.json({ task_id: task.id, status: task.status })
+  } catch (error) {
+    console.error('[POST adapt-platforms]', error)
+    res.status(500).json({ error: 'Failed to adapt platforms' })
+  }
+})
+
+// GET /api/v1/publish-records/:id/adapt-platforms/:taskId/status
+router.get('/publish-records/:id/adapt-platforms/:taskId/status', async (req: Request, res: Response) => {
+  try {
+    const result = await getTask(req.params.taskId as string)
+    if (!result) {
+      res.status(404).json({ error: 'Task not found' })
+      return
+    }
+    res.json({ task_id: result.id, status: result.status, progress: result.progress, output: result.output })
+  } catch (error) {
+    console.error('[GET adapt-platforms/status]', error)
+    res.status(500).json({ error: 'Failed to get adapt task status' })
+  }
+})
+
+// GET /api/v1/publish-records/:id/adapted-contents — 获取已适配的内容
+router.get('/publish-records/:id/adapted-contents', async (req: Request, res: Response) => {
+  try {
+    const id = str(req.params.id)
+    const records = await prisma.distributionRecord.findMany({
+      where: { sourceContentId: id, sourceType: 'publish_record' },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({
+      items: records.map(r => ({
+        id: r.id,
+        platform: r.platform,
+        adapted_title: r.adaptedTitle,
+        adapted_content: r.adaptedContent,
+        adapted_tags: r.adaptedTags,
+        character_count: r.characterCount,
+        status: r.status,
+        scheduled_at: r.scheduledAt?.toISOString() ?? null,
+        published_at: r.publishedAt?.toISOString() ?? null,
+        publish_url: r.publishUrl,
+      })),
+    })
+  } catch (error) {
+    console.error('[GET adapted-contents]', error)
+    res.status(500).json({ error: 'Failed to get adapted contents' })
   }
 })
 

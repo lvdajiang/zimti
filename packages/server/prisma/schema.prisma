@@ -71,6 +71,9 @@ model User {
   keywordDistillations KeywordDistillation[]
   knowledgeBuildJobs   KnowledgeBuildJob[]
   knowledgeBuildSchedules KnowledgeBuildSchedule[]
+  promptTemplates      PromptTemplate[]
+  copyWritings         CopyWriting[]
+  voiceProfiles        VoiceProfile[]
 
   @@map("users")
 }
@@ -223,6 +226,7 @@ model TopicProposal {
 
   task    Task     @relation(fields: [taskId], references: [id])
   scripts Script[]
+  copyWritings CopyWriting[]
 
   @@index([taskId])
   @@map("topic_proposals")
@@ -237,12 +241,15 @@ model Script {
   videoType    String?  @map("video_type") @db.VarChar(20)
   oralRatio    Decimal  @default(0.6) @map("oral_ratio") @db.Decimal(3, 2)
   status       String   @default("draft") @db.VarChar(20)
+  copyWritingId String?  @map("copy_writing_id") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   topicProposal     TopicProposal       @relation(fields: [topicId], references: [id])
   task              Task                @relation(fields: [taskId], references: [id])
+  copyWriting       CopyWriting?        @relation(fields: [copyWritingId], references: [id])
   storyboardSegments StoryboardSegment[]
+  shootingPlans      ShootingPlan[]
   videoProducts     VideoProduct[]
 
   @@index([taskId])
@@ -333,6 +340,7 @@ model VideoProduct {
   publishRecords  PublishRecord[]
   contentAssets   ContentAsset[]
   renderTasks     RenderTask[]
+  timeline        Timeline?
 
   @@index([taskId])
   @@index([scriptId])
@@ -988,6 +996,8 @@ model OperationCalendar {
   eventType  String    @map("event_type") @db.VarChar(20) // holiday/campaign/content_plan/reminder
   content    Json?     @map("content") // { moments_plan, chat_script, campaign_plan }
   remindAt   DateTime? @map("remind_at")
+  refId      String?   @map("ref_id") @db.VarChar(100) // 关联外部对象（如 PipelineJob ID）
+  refType    String?   @map("ref_type") @db.VarChar(50) // 外部对象类型（如 pipeline_job）
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
@@ -995,6 +1005,7 @@ model OperationCalendar {
 
   @@index([userId])
   @@index([eventDate])
+  @@index([refId, refType])
   @@map("operation_calendars")
 }
 
@@ -1198,6 +1209,11 @@ model BrandKnowledge {
   isActive    Boolean  @default(true) @map("is_active")
   sortOrder   Int      @default(0) @map("sort_order")
   buildJobId  String?  @map("build_job_id") @db.Uuid
+  // 原子事实扩展字段（NULL = 文章/legacy，'fact' = 原子事实）
+  contentType         String?  @map("content_type") @db.VarChar(20)
+  factType            String?  @map("fact_type") @db.VarChar(20)
+  verificationStatus  String?  @map("verification_status") @db.VarChar(20)
+  metadata            Json?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -1208,6 +1224,7 @@ model BrandKnowledge {
   @@index([category])
   @@index([isActive])
   @@index([buildJobId])
+  @@index([contentType])
   @@map("brand_knowledge")
 }
 
@@ -1302,4 +1319,134 @@ model KeywordDistillation {
   @@index([totalScore])
   @@index([status])
   @@map("keyword_distillations")
+}
+
+// --- 提示词模板（Prompt Engine） ---
+model PromptTemplate {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String?  @map("user_id") @db.Uuid   // null = 系统预设
+  stepKey            String   @map("step_key") @db.VarChar(50)
+  label              String   @db.VarChar(200)
+  description        String?  @db.Text
+  systemPrompt       String?  @map("system_prompt") @db.Text
+  userPromptTemplate String   @map("user_prompt_template") @db.Text
+  variableDefs       Json     @default("[]") @map("variable_defs")  // [{name, type, required, description}]
+  isActive           Boolean  @default(true) @map("is_active")
+  version            Int      @default(1)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user               User?    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, stepKey])
+  @@index([userId])
+  @@index([stepKey])
+  @@index([isActive])
+  @@map("prompt_templates")
+}
+
+// --- 文案（Copy Writing）---
+model CopyWriting {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  topicId          Int?     @map("topic_id")
+  hotspotIds       Int[]    @map("hotspot_ids")
+  title            String   @db.VarChar(200)
+  content          String   @db.Text
+  structure        Json     @default("{}")  // {hook, body, cta, style_notes}
+  version          Int      @default(1)
+  parentId         String?  @map("parent_id") @db.Uuid
+  status           String   @default("draft") @db.VarChar(20)  // draft/checking/finalized
+  prohibitedReport Json?
+  promptSnapshot   Json?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user             User           @relation(fields: [userId], references: [id])
+  topic            TopicProposal? @relation(fields: [topicId], references: [id])
+  parent           CopyWriting?   @relation("CopyVersions", fields: [parentId], references: [id])
+  children         CopyWriting[]  @relation("CopyVersions")
+  scripts          Script[]
+
+  @@index([userId])
+  @@index([topicId])
+  @@index([status])
+  @@map("copy_writings")
+}
+
+// --- 违禁词库（Prohibited Words）---
+model ProhibitedWord {
+  id          Int      @id @default(autoincrement())
+  word        String   @db.VarChar(100)
+  category    String   @db.VarChar(30)   // absolute/high_risk/medium_risk/sensitive
+  platform    String   @db.VarChar(20)   // douyin/xiaohongshu/weixin/all
+  replacement String?  @db.VarChar(200)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([word, platform])
+  @@map("prohibited_words")
+}
+
+// --- 音色配置（Voice Profiles） ---
+model VoiceProfile {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  type        String   @db.VarChar(20)    // preset/clone/uploaded
+  engine      String   @db.VarChar(20)    // edge_tts/fish_audio/uploaded
+  engineRef   String?  @map("engine_ref") @db.VarChar(200)
+  sampleUrl   String?  @map("sample_url") @db.Text
+  config      Json     @default("{}")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@map("voice_profiles")
+}
+
+// --- 拍摄计划（Shooting Plans） ---
+model ShootingPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  scriptId        Int      @map("script_id")
+  segmentIndex    Int      @map("segment_index")
+  scene           String   @db.Text
+  props           String[] @default([])
+  cameraMovement  String?  @map("camera_movement") @db.VarChar(50)
+  duration        Decimal  @default(3.0) @db.Decimal(5, 2)
+  notes           String?  @db.Text
+  status          String   @default("pending") @db.VarChar(20)
+  materialIds     String[] @default([]) @map("material_ids")
+  source          String   @default("ai") @db.VarChar(20)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  script          Script   @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  @@index([scriptId])
+  @@index([status])
+  @@map("shooting_plans")
+}
+
+// --- 时间轴（Timelines） ---
+model Timeline {
+  id              String   @id @default(uuid()) @db.Uuid
+  videoProductId  String   @unique @map("video_product_id") @db.Uuid
+  tracks          Json     @default("{}")
+  totalDuration   Decimal  @default(0) @map("total_duration") @db.Decimal(8, 2)
+  fps             Int      @default(30)
+  resolution      String   @default("1080x1920") @db.VarChar(20)
+  status          String   @default("draft") @db.VarChar(20)
+  jianyingDraft   Json?    @map("jianying_draft")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  videoProduct    VideoProduct @relation(fields: [videoProductId], references: [id], onDelete: Cascade)
+
+  @@index([videoProductId])
+  @@map("timelines")
 }
