@@ -1,0 +1,30 @@
+{
+  "_comment": "GET /api/v1/resources/{resource_id}/season-prices 的响应结构",
+  "_direction": "Zimti → 智派",
+  "_endpoint": "GET /resources/{resource_id}/season-prices",
+  "_zimti_consumer": "bridge/productProxy.ts:100-118",
+  "_zhipai_producer": "api/v1/endpoints/resources.py:1470-1508",
+  "required_fields": {
+    "id": "number — 季节价格记录ID",
+    "season_name": "string — 季节名称（旺季/淡季/平季等）",
+    "season_type": "string — 季节类型（注意：此字段在Zimti端存在，需确认智派是否返回）",
+    "start_date": "string | null — 开始日期",
+    "end_date": "string | null — 结束日期",
+    "price": "number — 价格"
+  },
+  "sample": {
+    "id": 3,
+    "resource_id": "RES20260601001",
+    "season_name": "旺季",
+    "agreement_price": 480.00,
+    "retail_price": 680.00,
+    "months": "7,8",
+    "start_date": "2026-07-01",
+    "end_date": "2026-08-31",
+    "is_default": false,
+    "notes": null,
+    "created_at": "2026-06-01T10:00:00",
+    "updated_at": "2026-06-01T10:00:00"
+  },
+  "_drift_warning": "Zimti SimpleSeasonPrice 期望 season_type 字段，但智派 SeasonPriceResponse 不包含此字段。同时 Zimti 期望 price 字段，但智派返回的是 agreement_price。这是一个潜在的 schema drift。"
+}

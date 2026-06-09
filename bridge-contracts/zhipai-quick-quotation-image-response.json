@@ -1,0 +1,37 @@
+{
+  "_comment": "报价图片导出接口 — 存在路径和响应格式的 schema drift",
+  "_direction": "Zimti → 智派",
+  "_zimti_consumer": "bridge/quotation.ts:163-170",
+  "_zhipai_producer": "api/v1/endpoints/excel_exports.py:596-628",
+  "zimti_expects": {
+    "endpoint": "POST /export/quick-quotation-image",
+    "request_body": {
+      "quotation_id": "string — 报价单ID"
+    },
+    "expected_response": {
+      "download_url": "string? — 下载地址",
+      "url": "string? — 图片URL"
+    }
+  },
+  "zhipai_actual": {
+    "endpoint": "POST /exports/quick-quotation-image",
+    "request_body": {
+      "route_name": "string — 路线名称",
+      "tour_date": "string — 出行日期",
+      "people_count": "string — 人数",
+      "hotel_grade": "string — 酒店等级",
+      "costs": "array — 费用明细",
+      "itinerary": "array — 行程明细",
+      "total_per_person": "number — 人均总价",
+      "total_amount": "number — 总金额",
+      "company_name": "string — 公司名称",
+      "company_contact": "string — 联系方式"
+    },
+    "actual_response": "Content-Type: image/png — 直接返回 PNG 二进制数据",
+    "headers": "Content-Disposition: attachment; filename=quotation.png"
+  },
+  "sample": {
+    "quotation_id": "QUO20260609001"
+  },
+  "_drift_warning": "重大 drift：(1) 路径不同 /export/ vs /exports/；(2) 请求体结构完全不同；(3) 响应格式不同（Zimti 期望 JSON URL，智派返回 PNG 二进制）。Zimti 端已有 try/catch 容错处理（图片生成失败不影响主流程），但需要确认实际运行时是否有中间层（如 Nginx/文件服务）转换了响应。"
+}

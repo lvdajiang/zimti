@@ -1,0 +1,26 @@
+{
+  "_comment": "POST /api/v1/tourists/ 的响应结构 — Zimti sync.ts 调用",
+  "_direction": "Zimti → 智派",
+  "_endpoint": "POST /tourists/",
+  "_zimti_consumer": "bridge/sync.ts:51-63",
+  "_zhipai_producer": "api/v1/endpoints/tourists.py + schemas/tourist.py",
+  "required_fields": {
+    "tourist_id": "string | int — 智派自动生成的游客ID",
+    "name": "string — 游客姓名"
+  },
+  "sample": {
+    "tourist_id": "TOU20260609001",
+    "name": "张三",
+    "phone": "13800138000",
+    "gender": "未知",
+    "age": 0,
+    "tourist_type": "成人",
+    "group_id": "",
+    "source": "自媒体-manual",
+    "arrival_time": "2026-07-01",
+    "status": "待派单",
+    "sales_stage": "询价",
+    "id": 42
+  },
+  "_notes": "Zimti 只读取 tourist_id 和 name，其他字段用于调试。智派响应包含远多于 required 的字段。"
+}

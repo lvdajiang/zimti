@@ -1,0 +1,81 @@
+# Zimti × 智派 统一 Docker 部署
+# 用法: docker-compose -f docker-compose.unified.yml up -d
+#
+# 包含:
+#   - PostgreSQL 17 (共享数据库，zimti + zhipai 两个库)
+#   - Zimti Server (内容营销平台)
+#   - 智派 Backend (旅行社派单系统)
+#
+# 桥接通信通过 Docker 内部网络:
+#   Zimti → 智派: http://zhipai-backend:8000
+#   智派 → Zimti: http://zimti-server:3000
+
+services:
+  # ── 共享 PostgreSQL ──
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: zimti123
+      POSTGRES_DB: zimti
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 初始化脚本：创建智派数据库
+      - ./deploy/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Zimti 内容营销平台 ──
+  zimti-server:
+    build:
+      context: .
+      target: server
+    environment:
+      DATABASE_URL: postgresql://postgres:zimti123@postgres:5432/zimti
+      PORT: 3000
+      # 桥接配置（Docker 内部网络）
+      ZHIPAI_API_URL: http://zhipai-backend:8000
+      ZHIPAI_USERNAME: ${ZHIPAI_USERNAME:-admin}
+      ZHIPAI_PASSWORD: ${ZHIPAI_PASSWORD:-admin123}
+      ZHIPAI_SYNC_ENABLED: "true"
+      ZHIPAI_WEBHOOK_SECRET: ${ZHIPAI_WEBHOOK_SECRET:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── 智派旅行社系统 ──
+  zhipai-backend:
+    build:
+      context: ../project-lvyou
+      dockerfile: Dockerfile
+    environment:
+      DB_TYPE: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: zhipai
+      DB_USER: postgres
+      DB_PASSWORD: zimti123
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_PORT: 8000
+      SECRET_KEY: ${ZHIPAI_SECRET_KEY:?ZHIPAI_SECRET_KEY 未设置}
+      # 桥接配置（Docker 内部网络）
+      WEBHOOK_URL: http://zimti-server:3000/api/v1/bridge/webhook/zhipai
+      WEBHOOK_SECRET: ${ZHIPAI_WEBHOOK_SECRET:-}
+      # 高德地图
+      AMAP_API_KEY: ${AMAP_API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

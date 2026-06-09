@@ -1,0 +1,154 @@
+{
+  "_comment": "智派 → Zimti Webhook 的 6 种事件 payload 结构",
+  "_direction": "智派 → Zimti",
+  "_endpoint": "POST /api/v1/bridge/webhook/zhipai",
+  "_zimti_consumer": "routes/modules/bridge.ts:233-401",
+  "_zhipai_producer": "services/webhook.py + 各 endpoint",
+  "_auth": "HMAC-SHA256 签名 (X-Zhipai-Signature header)",
+  "common_fields": {
+    "event": "string — 事件类型",
+    "ref_id": "string — 关联ID（报价单ID/订单号/游客ID等）",
+    "data": "object — 事件数据（每种事件不同）",
+    "timestamp": "string — ISO8601 时间戳"
+  },
+  "events": {
+    "quotation_confirmed": {
+      "_trigger": "智派报价单标记为成交",
+      "_zhipai_source": "api/v1/endpoints/quotations.py:65",
+      "_zimti_handler": "bridge.ts:262-276 → CRM阶段推到 ordered",
+      "data": {
+        "customer_name": "string — 客户姓名",
+        "customer_phone": "string — 客户电话",
+        "product_name": "string — 产品名称",
+        "total_price": "number — 总价"
+      },
+      "sample": {
+        "event": "quotation_confirmed",
+        "ref_id": "QUO20260609001",
+        "data": {
+          "customer_name": "张三",
+          "customer_phone": "13800138000",
+          "product_name": "乌鲁木齐5天游",
+          "total_price": 6800.00
+        },
+        "timestamp": "2026-06-09T14:30:00Z"
+      }
+    },
+    "order_created": {
+      "_trigger": "智派创建订单",
+      "_zhipai_source": "api/v1/endpoints/orders.py:341-351",
+      "_zimti_handler": "bridge.ts:277-293 → 记录订单号到备注",
+      "data": {
+        "quotation_id": "string — 关联报价单ID",
+        "main_guest_name": "string — 主客姓名",
+        "main_guest_phone": "string — 主客电话",
+        "order_amount": "number — 订单金额",
+        "tour_start_date": "string — 出行开始日期",
+        "tour_end_date": "string — 出行结束日期"
+      },
+      "sample": {
+        "event": "order_created",
+        "ref_id": "ORD20260609001",
+        "data": {
+          "quotation_id": "QUO20260609001",
+          "main_guest_name": "张三",
+          "main_guest_phone": "13800138000",
+          "order_amount": 6800.00,
+          "tour_start_date": "2026-07-01",
+          "tour_end_date": "2026-07-05"
+        },
+        "timestamp": "2026-06-09T15:00:00Z"
+      }
+    },
+    "tour_started": {
+      "_trigger": "行程开始（⚠️ 注意：智派端可能尚未实现推送）",
+      "_zhipai_source": "未确认 — 可能需在调度模块中实现",
+      "_zimti_handler": "bridge.ts:295-310 → CRM阶段推到 traveling",
+      "data": {
+        "main_guest_name": "string — 主客姓名",
+        "main_guest_phone": "string — 主客电话"
+      },
+      "sample": {
+        "event": "tour_started",
+        "ref_id": "ORD20260609001",
+        "data": {
+          "main_guest_name": "张三",
+          "main_guest_phone": "13800138000"
+        },
+        "timestamp": "2026-07-01T08:00:00Z"
+      },
+      "_drift_warning": "此事件的智派推送端可能未实现，需确认。Zimti 已有处理逻辑。"
+    },
+    "tour_completed": {
+      "_trigger": "行程结束（⚠️ 注意：智派端可能尚未实现推送）",
+      "_zhipai_source": "未确认 — 可能需在调度模块中实现",
+      "_zimti_handler": "bridge.ts:312-326 → CRM阶段推到 completed",
+      "data": {
+        "main_guest_name": "string — 主客姓名",
+        "main_guest_phone": "string — 主客电话"
+      },
+      "sample": {
+        "event": "tour_completed",
+        "ref_id": "ORD20260609001",
+        "data": {
+          "main_guest_name": "张三",
+          "main_guest_phone": "13800138000"
+        },
+        "timestamp": "2026-07-05T18:00:00Z"
+      },
+      "_drift_warning": "此事件的智派推送端可能未实现，需确认。Zimti 已有处理逻辑。"
+    },
+    "tourist_registered": {
+      "_trigger": "小程序游客注册（SMS或微信登录）",
+      "_zhipai_source": "api/v1/endpoints/auth.py:557-566 (SMS) + 749-758 (WX)",
+      "_zimti_handler": "bridge.ts:325-361 → 创建 CRM 客户卡片",
+      "data": {
+        "name": "string — 游客姓名",
+        "phone": "string — 手机号",
+        "source": "string — 来源（miniprogram_sms / miniprogram_wx）",
+        "wx_openid": "string? — 微信OpenID（仅微信登录）",
+        "partner_agency_id": "number? — 旅行社ID"
+      },
+      "sample": {
+        "event": "tourist_registered",
+        "ref_id": "TOU20260609001",
+        "data": {
+          "name": "张三",
+          "phone": "13800138000",
+          "source": "miniprogram_sms",
+          "partner_agency_id": 1
+        },
+        "timestamp": "2026-06-09T16:00:00Z"
+      }
+    },
+    "tourist_inquiry": {
+      "_trigger": "小程序游客发起询价",
+      "_zhipai_source": "api/v1/endpoints/quotations.py:473-482",
+      "_zimti_handler": "bridge.ts:363-391 → 更新客户标签和意向",
+      "data": {
+        "name": "string — 游客姓名",
+        "phone": "string — 手机号",
+        "inquiry_topic": "string — 询价主题（目的地/路线名）",
+        "product_name": "string — 产品名称",
+        "partner_agency_id": "number — 旅行社ID"
+      },
+      "sample": {
+        "event": "tourist_inquiry",
+        "ref_id": "INQ20260609001",
+        "data": {
+          "name": "张三",
+          "phone": "13800138000",
+          "inquiry_topic": "乌鲁木齐5日游",
+          "product_name": "乌鲁木齐5天游",
+          "partner_agency_id": 1
+        },
+        "timestamp": "2026-06-09T16:30:00Z"
+      }
+    }
+  },
+  "_known_drifts": [
+    "tour_started 和 tour_completed 事件：Zimti 有处理逻辑，但智派 webhook.py 可能未实现推送",
+    "所有事件 payload 缺少 event_id 字段（P1-2 阶段将添加，用于去重）",
+    "webhook 签名验证是可选的（ZHIPAI_WEBHOOK_SECRET 未配置时跳过验证）"
+  ]
+}

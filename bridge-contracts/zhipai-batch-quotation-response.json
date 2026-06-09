@@ -1,0 +1,17 @@
+{
+  "_comment": "POST /api/v1/quotations/batch-create 的响应结构",
+  "_direction": "智派 → Zimti",
+  "_endpoint": "POST /quotations/batch-create",
+  "_zimti_consumer": "bridge/quotation.ts:141",
+  "_zhipai_producer": "api/v1/endpoints/quotations.py",
+  "required_fields": {
+    "message": "string — 操作结果消息",
+    "quotation_id": "string — 报价单ID",
+    "detail_count": "number — 明细条数"
+  },
+  "sample": {
+    "message": "批量创建报价成功",
+    "quotation_id": "QUO20260609001",
+    "detail_count": 12
+  }
+}

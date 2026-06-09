@@ -1,0 +1,27 @@
+{
+  "_comment": "POST /api/v1/fleet/messages/push 的请求结构 — Zimti 推送消息到智派小程序",
+  "_direction": "Zimti → 智派",
+  "_endpoint": "POST /fleet/messages/push",
+  "_zimti_producer": "routes/modules/bridge.ts:162-171",
+  "_zhipai_consumer": "api/v1/endpoints/fleet.py:1143-1168",
+  "required_fields": {
+    "user_id": "number — 智派用户ID（从 sourceRefId 解析）",
+    "title": "string — 消息标题（max 200）",
+    "content": "string — 消息内容（max 500）",
+    "msg_type": "string — 消息类型（sales/system，默认 sales）",
+    "icon": "string — 图标（emoji）"
+  },
+  "sample": {
+    "user_id": 42,
+    "title": "新疆旅游推荐",
+    "content": "尊敬的张先生，为您推荐乌鲁木齐5日精品游...",
+    "msg_type": "sales",
+    "icon": "💬",
+    "related_id": null
+  },
+  "response": {
+    "success": true,
+    "message_id": 156
+  },
+  "_notes": "Zimti 从 customer.sourceRefId 中解析 user_id（去掉 'zhipai:' 前缀后转数字）。智派还接受 related_id 可选字段用于关联报价。"
+}

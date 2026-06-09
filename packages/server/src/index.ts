@@ -49,6 +49,40 @@ async function ensureDemoUser(): Promise<void> {
   }
 }
 
+/**
+ * 初始化桥接定时任务
+ * - 每分钟处理重试队列
+ * - 每天凌晨 3 点自动对账
+ */
+function initBridgeSchedulers(): void {
+  const { processRetryQueue } = require('./bridge/retryQueue.js')
+  const { reconcile } = require('./bridge/reconciliation.js')
+
+  // 每分钟处理重试队列
+  setInterval(() => {
+    processRetryQueue().catch(err => logger.warn('[BridgeScheduler] 重试队列处理失败:', err))
+  }, 60_000)
+
+  // 每天凌晨 3 点对账
+  const THREE_AM_MS = 3 * 60 * 60 * 1000
+  function scheduleReconciliation() {
+    const now = new Date()
+    const next3am = new Date(now)
+    next3am.setHours(3, 0, 0, 0)
+    if (next3am <= now) next3am.setDate(next3am.getDate() + 1)
+    const delay = next3am.getTime() - now.getTime()
+    setTimeout(() => {
+      reconcile().then(report => {
+        logger.info(`[BridgeScheduler] 自动对账: 检查=${report.checked}, 一致=${report.consistent}, 不一致=${report.inconsistent}`)
+      }).catch(err => logger.warn('[BridgeScheduler] 对账失败:', err))
+      scheduleReconciliation() // 调度下一次
+    }, delay)
+  }
+  scheduleReconciliation()
+
+  logger.info('[BridgeScheduler] 已启动（重试队列: 每分钟, 对账: 每天03:00）')
+}
+
 async function main(): Promise<void> {
   initAIProvider()
 
@@ -58,6 +92,8 @@ async function main(): Promise<void> {
     await ensureDemoUser()
     // 初始化知识库定时调度
     initKnowledgeScheduler().catch(err => logger.warn('[Scheduler]', err))
+    // 初始化桥接定时任务（重试队列 + 对账）
+    initBridgeSchedulers()
     // 播种提示词模板
     seedPromptTemplates().catch(err => logger.warn('[PromptEngine]', err))
     // 初始化 TTS 引擎

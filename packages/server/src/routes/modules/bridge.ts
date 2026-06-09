@@ -15,15 +15,33 @@ import { optionalAuth } from '../../services/auth/authService.js'
 import { createQuotationFromCustomer } from '../../bridge/quotation.js'
 import { searchResources, getSeasonPrices, searchTemplateResources } from '../../bridge/productProxy.js'
 import { zhiPaiClient } from '../../bridge/client.js'
+import { zhiPaiCircuitBreaker } from '../../bridge/circuitBreaker.js'
 import { touristToCustomer } from '../../bridge/mappings.js'
+import { recordWebhookEvent, markEventProcessed, markEventFailed } from '../../bridge/eventLog.js'
+import { getDeadLetterItems, retryDeadLetter } from '../../bridge/retryQueue.js'
+import { reconcile } from '../../bridge/reconciliation.js'
 import { logger } from '../../logger.js'
 import { prisma } from '../../db.js'
 import { DEMO_USER_ID } from '../../constants.js'
-import type { Request, Response } from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import { createHmac } from 'crypto'
 
 const router: Router = Router()
 router.use(optionalAuth)
+
+/**
+ * 捕获原始 body 的中间件 — webhook 签名验证需要原始 body bytes
+ * 必须在 express.json() 之前挂载（但本 router 已在 json() 之后），
+ * 所以用 req.body 重序列化时保持确定性 key 顺序。
+ */
+function verifyWebhookSignature(req: Request, secret: string): boolean {
+  const signature = req.headers['x-zhipai-signature'] as string
+  if (!signature) return false
+  // 使用确定性 JSON 序列化（sorted keys + 无空格）
+  const body = JSON.stringify(req.body, Object.keys(req.body).sort())
+  const expected = createHmac('sha256', secret).update(body).digest('hex')
+  return signature === expected
+}
 
 // ============ 报价 ============
 
@@ -56,8 +74,8 @@ router.post('/bridge/quotation', async (req: Request, res: Response) => {
       const service = await import('../../services/crm/customerService.js')
       const crm = new service.CustomerService(getUserId(req as any))
       await crm.updateStage(customer_id, 'hesitating', `已生成报价 ${result.quotation_id}`)
-    } catch {
-      // 阶段推送失败不影响报价结果
+    } catch (err) {
+      logger.warn(`桥接报价: CRM阶段推送失败 ${err instanceof Error ? err.message : err}`)
     }
 
     res.status(201).json(result)
@@ -231,31 +249,39 @@ router.get('/bridge/knowledge', async (req: Request, res: Response) => {
 
 // POST /api/v1/bridge/webhook/zhipai — 接收智派状态变更推送
 router.post('/bridge/webhook/zhipai', async (req: Request, res: Response) => {
+  let logId = ''  // 提前声明，确保 catch 块安全访问
   try {
     // 1. 验证签名
     const secret = process.env.ZHIPAI_WEBHOOK_SECRET
-    if (secret) {
-      const signature = req.headers['x-zhipai-signature'] as string
-      if (!signature) {
-        res.status(401).json({ error: '缺少签名' })
-        return
-      }
-      const body = JSON.stringify(req.body)
-      const expected = createHmac('sha256', secret).update(body).digest('hex')
-      if (signature !== expected) {
-        res.status(401).json({ error: '签名验证失败' })
-        return
-      }
+    if (secret && !verifyWebhookSignature(req, secret)) {
+      res.status(401).json({ error: '签名验证失败' })
+      return
     }
 
     // 2. 处理事件
-    const { event, ref_id, data } = req.body as {
+    const { event, ref_id, data, event_id } = req.body as {
       event: string
       ref_id: string
       data: Record<string, unknown>
+      event_id?: string
+      timestamp?: string
     }
 
-    logger.info(`桥接Webhook：收到事件 ${event}，ref_id=${ref_id}`)
+    logger.info(`桥接Webhook：收到事件 ${event}，ref_id=${ref_id}${event_id ? `，event_id=${event_id}` : ''}`)
+
+    // 2.1 事件去重
+    const { shouldProcess, logId } = await recordWebhookEvent({
+      eventId: event_id,
+      eventType: event,
+      refId: ref_id,
+      payload: req.body,
+      signature: req.headers['x-zhipai-signature'] as string | undefined,
+    })
+
+    if (!shouldProcess) {
+      res.json({ ok: true, deduplicated: true })
+      return
+    }
 
     // 根据事件类型更新CRM客户阶段
     switch (event) {
@@ -355,6 +381,7 @@ router.post('/bridge/webhook/zhipai', async (req: Request, res: Response) => {
           } catch (err) {
             logger.error(`桥接Webhook：创建客户失败 ${err instanceof Error ? err.message : err}`)
           }
+          }
         } else {
           logger.info(`桥接Webhook：游客${ref_id}已存在CRM客户${existing.id}，跳过`)
         }
@@ -394,9 +421,13 @@ router.post('/bridge/webhook/zhipai', async (req: Request, res: Response) => {
     }
 
     res.json({ ok: true })
+    await markEventProcessed(logId).catch((e) => logger.warn(`标记事件已处理失败: ${e instanceof Error ? e.message : e}`))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'webhook处理失败'
     logger.error(`桥接Webhook错误: ${message}`)
+    if (logId) {
+      await markEventFailed(logId, message).catch((e) => logger.warn(`标记事件失败: ${e instanceof Error ? e.message : e}`))
+    }
     res.status(500).json({ error: message })
   }
 })
@@ -425,5 +456,117 @@ async function findCustomerBySourceRef(sourceRefId: string) {
   })
   return customers[0] || null
 }
+
+// ============ 对账 ============
+
+// POST /api/v1/bridge/reconcile — 手动触发对账
+router.post('/bridge/reconcile', async (_req: Request, res: Response) => {
+  try {
+    const report = await reconcile()
+    res.json(report)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '对账失败'
+    logger.error(`桥接对账失败: ${message}`)
+    res.status(500).json({ error: message })
+  }
+})
+
+// ============ 健康检查 ============
+
+// GET /api/v1/bridge/health — 桥接健康状态
+router.get('/bridge/health', async (_req: Request, res: Response) => {
+  try {
+    const circuitInfo = zhiPaiCircuitBreaker.getInfo()
+    const enabled = zhiPaiClient.isEnabled()
+
+    // 查询最近一次同步时间
+    const lastSync = await prisma.bridgeSyncLog.findFirst({
+      where: { status: 'success' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    })
+
+    const status = !enabled ? 'disabled'
+      : circuitInfo.state === 'OPEN' ? 'down'
+      : circuitInfo.state === 'HALF_OPEN' ? 'degraded'
+      : 'healthy'
+
+    // 实际检测数据库连接
+    let dbConnected = false
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      dbConnected = true
+    } catch {
+      dbConnected = false
+    }
+
+    res.json({
+      status,
+      enabled,
+      circuit_breaker: circuitInfo,
+      last_sync: lastSync?.createdAt ?? null,
+      db_connected: dbConnected,
+    })
+  } catch (err) {
+    res.json({
+      status: 'degraded',
+      enabled: zhiPaiClient.isEnabled(),
+      db_connected: false,
+      error: err instanceof Error ? err.message : 'unknown',
+    })
+  }
+})
+
+// ============ 死信队列 ============
+
+// GET /api/v1/bridge/dead-letter — 列出死信记录
+router.get('/bridge/dead-letter', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(toInt(req.query.limit, 50), 200)
+    const offset = toInt(req.query.offset, 0)
+    const result = await getDeadLetterItems(limit, offset)
+    res.json(result)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '查询死信队列失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// POST /api/v1/bridge/dead-letter/:id/retry — 手动重试死信
+router.post('/bridge/dead-letter/:id/retry', async (req: Request, res: Response) => {
+  try {
+    const ok = await retryDeadLetter(req.params.id)
+    if (!ok) {
+      res.status(404).json({ error: '死信记录不存在或状态不对' })
+      return
+    }
+    res.json({ ok: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '重试失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// ============ 统计 ============
+
+// GET /api/v1/bridge/stats — 桥接统计
+router.get('/bridge/stats', async (_req: Request, res: Response) => {
+  try {
+    const [successCount, failedCount, deadCount, pendingRetry] = await Promise.all([
+      prisma.bridgeSyncLog.count({ where: { status: 'success' } }),
+      prisma.bridgeSyncLog.count({ where: { status: 'failed' } }),
+      prisma.bridgeRetryQueue.count({ where: { status: 'dead' } }),
+      prisma.bridgeRetryQueue.count({ where: { status: 'pending' } }),
+    ])
+
+    res.json({
+      sync: { success: successCount, failed: failedCount },
+      retry: { pending: pendingRetry, dead: deadCount },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '统计查询失败'
+    res.status(500).json({ error: message })
+  }
+})
 
 export default router

@@ -772,6 +772,7 @@ model Customer {
   @@index([userId])
   @@index([stage])
   @@index([intentLevel])
+  @@index([sourceRefId])
   @@map("customers")
 }
 
@@ -1449,4 +1450,68 @@ model Timeline {
 
   @@index([videoProductId])
   @@map("timelines")
+}
+
+// --- 桥接同步日志 ---
+model BridgeSyncLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  syncType       String   @map("sync_type") @db.VarChar(30)
+  direction      String   @db.VarChar(10)
+  sourceRefId    String?  @map("source_ref_id") @db.VarChar(100)
+  targetRefId    String?  @map("target_ref_id") @db.VarChar(100)
+  status         String   @default("pending") @db.VarChar(20)
+  requestBody    Json?    @map("request_body")
+  responseBody   Json?    @map("response_body")
+  errorMessage   String?  @map("error_message") @db.Text
+  retryCount     Int      @default(0) @map("retry_count")
+  idempotencyKey String?  @unique @map("idempotency_key") @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([syncType])
+  @@index([status])
+  @@index([sourceRefId])
+  @@index([createdAt])
+  @@map("bridge_sync_logs")
+}
+
+// --- Webhook 事件接收日志 ---
+model WebhookEvent {
+  id           String    @id @default(uuid()) @db.Uuid
+  eventId      String?   @unique @map("event_id") @db.VarChar(64)
+  eventType    String    @map("event_type") @db.VarChar(50)
+  refId        String    @map("ref_id") @db.VarChar(100)
+  payload      Json
+  signature    String?   @db.VarChar(128)
+  status       String    @default("received") @db.VarChar(20)
+  errorMessage String?   @map("error_message") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  processedAt  DateTime? @map("processed_at")
+
+  @@index([eventType])
+  @@index([refId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("webhook_events")
+}
+
+// --- 桥接重试队列 ---
+model BridgeRetryQueue {
+  id           String   @id @default(uuid()) @db.Uuid
+  syncLogId    String   @map("sync_log_id") @db.Uuid
+  syncType     String   @map("sync_type") @db.VarChar(30)
+  direction    String   @db.VarChar(10)
+  payload      Json
+  retryCount   Int      @default(0) @map("retry_count")
+  maxRetries   Int      @default(5) @map("max_retries")
+  nextRetryAt  DateTime @map("next_retry_at")
+  status       String   @default("pending") @db.VarChar(20)
+  lastError    String?  @map("last_error") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([nextRetryAt])
+  @@index([syncType])
+  @@map("bridge_retry_queue")
 }

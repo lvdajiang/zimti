@@ -1,0 +1,46 @@
+{
+  "_comment": "GET /api/v1/resources/search-template 的响应结构 — 报价匹配用",
+  "_direction": "Zimti → 智派",
+  "_endpoint": "GET /resources/search-template",
+  "_zimti_consumer": "bridge/productProxy.ts:124-157",
+  "_zhipai_producer": "api/v1/endpoints/resources.py (search-template endpoint)",
+  "required_fields": {
+    "resource_id": "string",
+    "entity_name": "string",
+    "specification": "string",
+    "resource_type": "string",
+    "resource_grade": "string",
+    "agreement_price": "number",
+    "retail_price": "number | null",
+    "unit": "string",
+    "season": "string",
+    "status": "string"
+  },
+  "sample": [
+    {
+      "resource_id": "RES20260601001",
+      "entity_name": "乌鲁木齐天缘酒店",
+      "resource_type": "住宿",
+      "resource_grade": "4钻",
+      "specification": "标准双人间",
+      "agreement_price": 380.00,
+      "retail_price": 520.00,
+      "unit": "间/晚",
+      "season": "旺季",
+      "status": "可用"
+    },
+    {
+      "resource_id": "RES20260601010",
+      "entity_name": "老城区烤肉王",
+      "resource_type": "餐饮",
+      "resource_grade": "4钻",
+      "specification": "特色烤肉套餐",
+      "agreement_price": 120.00,
+      "retail_price": 180.00,
+      "unit": "人/顿",
+      "season": "",
+      "status": "可用"
+    }
+  ],
+  "_notes": "响应格式与 GET /resources/ 相同（数组），Zimti 用相同的字段映射逻辑处理。"
+}

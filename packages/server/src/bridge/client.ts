@@ -1,11 +1,12 @@
 /**
  * 智派API客户端 — 桥接层认证与请求封装
  *
- * 职责：JWT认证（登录/自动刷新）、HTTP请求封装（Bearer Header、超时、重试）
+ * 职责：JWT认证（登录/自动刷新）、HTTP请求封装（Bearer Header、超时、重试、熔断器）
  * 环境变量：ZHIPAI_API_URL, ZHIPAI_USERNAME, ZHIPAI_PASSWORD
  */
 
 import { logger } from '../logger.js'
+import { zhiPaiCircuitBreaker, CircuitBreakerOpenError } from './circuitBreaker.js'
 
 /** 智派API响应中的登录结果 */
 interface LoginResponse {
@@ -86,19 +87,42 @@ class ZhiPaiClient {
   /**
    * 发送请求到智派API
    * 自动附加Bearer Header，失败重试1次
+   * 支持幂等键（避免重复请求）
    */
   async request<T = unknown>(
     method: string,
     path: string,
     body?: unknown,
-    options?: { timeout?: number },
+    options?: { timeout?: number; idempotencyKey?: string },
   ): Promise<T> {
     if (!this.enabled) {
       throw new Error('智派桥接未启用')
     }
 
+    // 幂等键检查：如果之前已成功执行，直接返回缓存结果
+    const idempotencyKey = options?.idempotencyKey
+    if (idempotencyKey) {
+      const { prisma: db } = await import('../db.js')
+      const cached = await db.bridgeSyncLog.findUnique({
+        where: { idempotencyKey },
+      })
+      if (cached?.status === 'success' && cached.responseBody) {
+        logger.info(`桥接幂等命中: ${idempotencyKey}`)
+        return cached.responseBody as T
+      }
+    }
+
+    // 熔断器检查：OPEN 时直接拒绝
+    if (zhiPaiCircuitBreaker.isOpen()) {
+      throw new CircuitBreakerOpenError(zhiPaiCircuitBreaker.getState())
+    }
+
     const timeout = options?.timeout ?? 30_000
     const url = `${this.baseUrl}${path}`
+
+    // 附加 Correlation ID header（跨服务追踪）
+    const { getCorrelationId } = await import('./correlation.js')
+    const correlationId = getCorrelationId()
 
     // 最多重试1次（token过期后重新登录再试）
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -107,6 +131,9 @@ class ZhiPaiClient {
       const headers: Record<string, string> = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
+      }
+      if (correlationId) {
+        headers['X-Correlation-ID'] = correlationId
       }
 
       const fetchOptions: RequestInit = {
@@ -138,9 +165,13 @@ class ZhiPaiClient {
         // 204 No Content
         if (res.status === 204) return undefined as T
 
+        zhiPaiCircuitBreaker.recordSuccess()
         return (await res.json()) as T
       } catch (err) {
-        if (err instanceof ZhiPaiApiError) throw err
+        if (err instanceof ZhiPaiApiError) {
+          zhiPaiCircuitBreaker.recordFailure()
+          throw err
+        }
         if (attempt === 1) throw err
         // 网络错误，重试一次
         logger.warn(`智派桥接：请求失败，重试中... ${err instanceof Error ? err.message : err}`)

@@ -1,0 +1,69 @@
+{
+  "_comment": "POST /api/v1/quotations/batch-create 的请求结构 — Zimti 发送",
+  "_direction": "Zimti → 智派",
+  "_endpoint": "POST /quotations/batch-create",
+  "_zimti_producer": "bridge/quotation.ts:141-155",
+  "_zhipai_consumer": "api/v1/endpoints/quotations.py:357-511 + schemas/quotation.py",
+  "required_fields": {
+    "header": {
+      "product_name": "string — 产品名称",
+      "group_id": "string — 团号（可为空）",
+      "tour_date": "string — 出发日期 YYYY-MM-DD",
+      "customer_name": "string — 客户姓名",
+      "customer_phone": "string — 客户电话",
+      "salesperson": "string — 销售员",
+      "notes": "string — 备注"
+    },
+    "details": [
+      {
+        "day_number": "number — 天数（1-based）",
+        "time": "string — 时间",
+        "action": "string — 行为（住宿/午餐/晚餐/游览/用车/导游）",
+        "start_point": "string — 起点",
+        "end_point": "string — 终点",
+        "resource_id": "string — 资源ID",
+        "resource_name": "string — 资源名称",
+        "resource_type": "string — 资源类型",
+        "adult_unit_price": "number — 成人单价",
+        "child_unit_price": "number — 儿童单价",
+        "adult_count": "number — 成人数量",
+        "child_count": "number — 儿童数量",
+        "adult_negotiated_price": "number — 成人成交价",
+        "child_negotiated_price": "number — 儿童成交价",
+        "amount": "number — 金额"
+      }
+    ]
+  },
+  "sample": {
+    "header": {
+      "product_id": "",
+      "product_name": "乌鲁木齐5天游",
+      "group_id": "",
+      "tour_date": "2026-07-01",
+      "customer_name": "张三",
+      "customer_phone": "13800138000",
+      "salesperson": "Zimti桥接",
+      "notes": "来自自媒体CRM | 目的地:乌鲁木齐 | 5天2人 | 4钻"
+    },
+    "details": [
+      {
+        "day_number": 1,
+        "time": "",
+        "action": "住宿",
+        "start_point": "",
+        "end_point": "乌鲁木齐",
+        "resource_id": "RES20260601001",
+        "resource_name": "标准双人间",
+        "resource_type": "住宿",
+        "adult_unit_price": 380,
+        "child_unit_price": 190,
+        "adult_count": 2,
+        "child_count": 0,
+        "adult_negotiated_price": 380,
+        "child_negotiated_price": 190,
+        "amount": 760
+      }
+    ]
+  },
+  "_notes": "智派 schema 的 header 还接受 product_id 字段，Zimti 未传递。智派 detail 还接受 operation_notes, tourist_type, age, special_certificate, customer_attribute 字段，Zimti 仅在空壳报价时传递 operation_notes。"
+}
