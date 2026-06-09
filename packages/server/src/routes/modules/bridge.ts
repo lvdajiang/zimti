@@ -381,7 +381,6 @@ router.post('/bridge/webhook/zhipai', async (req: Request, res: Response) => {
           } catch (err) {
             logger.error(`桥接Webhook：创建客户失败 ${err instanceof Error ? err.message : err}`)
           }
-          }
         } else {
           logger.info(`桥接Webhook：游客${ref_id}已存在CRM客户${existing.id}，跳过`)
         }
