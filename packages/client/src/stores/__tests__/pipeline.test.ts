@@ -25,9 +25,9 @@ const mockedFetchPipelineJobs = vi.mocked(fetchPipelineJobs)
 const mockedFetchPipelineJob = vi.mocked(fetchPipelineJob)
 
 const mockJobs = [
-  { id: 'j1', mode: 'viral_remind', status: 'completed' },
-  { id: 'j2', mode: 'hotspot_rush', status: 'running' },
-]
+  { id: 'j1', mode: 'viral_remind', status: 'completed', input: {}, output: {}, error: null, created_at: '2026-01-01', updated_at: '2026-01-01' },
+  { id: 'j2', mode: 'hotspot_rush', status: 'running', input: {}, output: {}, error: null, created_at: '2026-01-01', updated_at: '2026-01-01' },
+] as any[]
 
 const mockJobDetail = { id: 'j1', mode: 'viral_remind', status: 'completed', result: '执行成功' }
 
@@ -97,7 +97,7 @@ describe('usePipelineStore', () => {
     it('期间 loading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchPipelineJobs.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = usePipelineStore()
@@ -105,7 +105,7 @@ describe('usePipelineStore', () => {
 
       expect(store.loading).toBe(true)
 
-      resolveFn!({ items: mockJobs, total: 2 })
+      resolveFn!({ items: mockJobs, total: 2 } as any)
       await promise
 
       expect(store.loading).toBe(false)
@@ -126,7 +126,7 @@ describe('usePipelineStore', () => {
     it('期间 dailyLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchDailyStatus.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = usePipelineStore()
@@ -134,7 +134,7 @@ describe('usePipelineStore', () => {
 
       expect(store.dailyLoading).toBe(true)
 
-      resolveFn!(mockDailyStatus)
+      resolveFn!(mockDailyStatus as any)
       await promise
 
       expect(store.dailyLoading).toBe(false)
@@ -156,7 +156,7 @@ describe('usePipelineStore', () => {
     it('期间 jobLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchPipelineJob.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = usePipelineStore()
@@ -164,7 +164,7 @@ describe('usePipelineStore', () => {
 
       expect(store.jobLoading).toBe(true)
 
-      resolveFn!(mockJobDetail)
+      resolveFn!(mockJobDetail as any)
       await promise
 
       expect(store.jobLoading).toBe(false)
@@ -174,7 +174,7 @@ describe('usePipelineStore', () => {
   describe('startViralRemind', () => {
     it('调用 createViralRemindJob 后刷新 loadJobs 并返回 id', async () => {
       mockedCreateViralRemindJob.mockResolvedValue({ id: 'j3' } as any)
-      mockedFetchPipelineJobs.mockResolvedValue({ items: mockJobs, total: 3 })
+      mockedFetchPipelineJobs.mockResolvedValue({ items: mockJobs as any, total: 3 })
 
       const store = usePipelineStore()
       const resultId = await store.startViralRemind({
@@ -194,7 +194,7 @@ describe('usePipelineStore', () => {
   describe('startHotspotRush', () => {
     it('调用 createHotspotRushJob 后刷新 loadJobs 并返回 id', async () => {
       mockedCreateHotspotRushJob.mockResolvedValue({ id: 'j4' } as any)
-      mockedFetchPipelineJobs.mockResolvedValue({ items: mockJobs, total: 4 })
+      mockedFetchPipelineJobs.mockResolvedValue({ items: mockJobs as any, total: 4 })
 
       const store = usePipelineStore()
       const resultId = await store.startHotspotRush({
@@ -214,7 +214,7 @@ describe('usePipelineStore', () => {
   describe('startCustomerQuestion', () => {
     it('调用 createCustomerQuestionJob 后刷新 loadJobs 并返回 id', async () => {
       mockedCreateCustomerQuestionJob.mockResolvedValue({ id: 'j5' } as any)
-      mockedFetchPipelineJobs.mockResolvedValue({ items: mockJobs, total: 5 })
+      mockedFetchPipelineJobs.mockResolvedValue({ items: mockJobs as any, total: 5 })
 
       const store = usePipelineStore()
       const resultId = await store.startCustomerQuestion({

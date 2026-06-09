@@ -26,13 +26,13 @@ const mockedFetchEvolutionLogs = vi.mocked(fetchEvolutionLogs)
 
 const mockProfile = { name: '测试品牌', industry: '科技' }
 const mockItems = [
-  { id: '1', category: 'core', key: '定位', value: '高端科技品牌' },
+  { id: '1', category: 'profile' as const, key: '定位', value: '高端科技品牌', created_at: '2026-01-01', updated_at: '2026-01-01' },
 ]
 const mockRecommendations = [
-  { id: 'r1', title: '建议一', content: '优化品牌调性' },
+  { type: 'content', priority: 'high' as const, title: '建议一', reason: '优化品牌调性', action: '更新定位描述' },
 ]
 const mockLogs = [
-  { id: 'l1', type: 'strategy', summary: '策略演进记录' },
+  { id: 'l1', evolution_type: 'content' as const, trigger: '内容更新', finding: '发现风格偏移', action: '调整内容策略', created_at: '2026-01-01' },
 ]
 
 beforeEach(() => {
@@ -59,7 +59,7 @@ describe('useAiHubStore', () => {
     it('期间 memoriesLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchBrandMemory.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = useAiHubStore()
@@ -76,14 +76,14 @@ describe('useAiHubStore', () => {
 
   describe('saveBrandMemory', () => {
     it('调用 upsertBrandMemory 后刷新 loadBrandMemory', async () => {
-      mockedUpsertBrandMemory.mockResolvedValue(undefined)
+      mockedUpsertBrandMemory.mockResolvedValue(undefined as any)
       mockedFetchBrandMemory.mockResolvedValue({
         profile: mockProfile,
         items: mockItems,
       })
 
       const store = useAiHubStore()
-      const data = { category: 'core' as const, key: '定位', value: '新值' }
+      const data = { category: 'profile' as const, key: '定位', value: '新值' }
       await store.saveBrandMemory(data)
 
       expect(mockedUpsertBrandMemory).toHaveBeenCalledWith(data)
@@ -94,7 +94,7 @@ describe('useAiHubStore', () => {
 
   describe('removeBrandMemory', () => {
     it('调用 deleteBrandMemory 后刷新 loadBrandMemory', async () => {
-      mockedDeleteBrandMemory.mockResolvedValue(undefined)
+      mockedDeleteBrandMemory.mockResolvedValue(undefined as any)
       mockedFetchBrandMemory.mockResolvedValue({
         profile: mockProfile,
         items: [],
@@ -105,7 +105,7 @@ describe('useAiHubStore', () => {
       store.brandMemories = mockItems as any
       store.brandProfile = mockProfile
 
-      const data = { category: 'core' as const, key: '定位' }
+      const data = { category: 'profile' as const, key: '定位' }
       await store.removeBrandMemory(data)
 
       expect(mockedDeleteBrandMemory).toHaveBeenCalledWith(data)
@@ -118,7 +118,7 @@ describe('useAiHubStore', () => {
     it('调用 learnBrandMemory，learningLoading 期间为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedLearnBrandMemory.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = useAiHubStore()
@@ -151,7 +151,7 @@ describe('useAiHubStore', () => {
     it('期间 recommendationsLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchStrategyRecommendations.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = useAiHubStore()
@@ -173,10 +173,10 @@ describe('useAiHubStore', () => {
       })
 
       const store = useAiHubStore()
-      await store.loadEvolutionLogs({ type: 'strategy', limit: 10 })
+      await store.loadEvolutionLogs({ type: 'content', limit: 10 })
 
       expect(mockedFetchEvolutionLogs).toHaveBeenCalledWith({
-        type: 'strategy',
+        type: 'content',
         limit: 10,
       })
       expect(store.evolutionLogs).toEqual(mockLogs)
@@ -186,7 +186,7 @@ describe('useAiHubStore', () => {
     it('期间 evolutionLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchEvolutionLogs.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = useAiHubStore()

@@ -3,6 +3,7 @@
  */
 
 import api from './client'
+import { API } from '@zimti/shared'
 import type { GeoQuestionCategory, GeoIntentType, GeoContentStatus, BrandKnowledgeCategory, KeywordCompetition, KeywordDistillationStatus } from '@zimti/shared'
 
 // --- 类型定义 ---
@@ -75,7 +76,7 @@ export async function fetchGeoQuestions(params?: {
   if (params?.keyword) query.set('keyword', params.keyword)
   if (params?.page) query.set('page', String(params.page))
   if (params?.page_size) query.set('page_size', String(params.page_size))
-  return api.get(`/geo/questions?${query}`) as unknown as Promise<{ items: GeoQuestion[]; total: number }>
+  return api.get(`${API.GEO.QUESTIONS}?${query}`) as unknown as Promise<{ items: GeoQuestion[]; total: number }>
 }
 
 export async function createGeoQuestion(data: {
@@ -84,7 +85,7 @@ export async function createGeoQuestion(data: {
   intent_type?: GeoIntentType
   tags?: string[]
 }): Promise<GeoQuestion> {
-  return api.post('/geo/questions', data) as unknown as Promise<GeoQuestion>
+  return api.post(API.GEO.QUESTIONS, data) as unknown as Promise<GeoQuestion>
 }
 
 export async function updateGeoQuestion(id: string, data: {
@@ -93,11 +94,11 @@ export async function updateGeoQuestion(id: string, data: {
   intent_type?: GeoIntentType
   tags?: string[]
 }): Promise<GeoQuestion> {
-  return api.put(`/geo/questions/${id}`, data) as unknown as Promise<GeoQuestion>
+  return api.put(API.GEO.QUESTION(id), data) as unknown as Promise<GeoQuestion>
 }
 
 export async function deleteGeoQuestion(id: string): Promise<{ ok: boolean }> {
-  return api.delete(`/geo/questions/${id}`) as unknown as Promise<{ ok: boolean }>
+  return api.delete(API.GEO.QUESTION(id)) as unknown as Promise<{ ok: boolean }>
 }
 
 export async function generateGeoQuestions(data: {
@@ -105,11 +106,11 @@ export async function generateGeoQuestions(data: {
   category?: GeoQuestionCategory
   count?: number
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/questions/generate', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.GENERATE_QUESTIONS, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getGenerateQuestionsStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
-  return api.get(`/geo/questions/generate/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+  return api.get(API.GEO.GENERATE_STATUS(taskId)) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
 }
 
 export async function batchCreateGeoQuestions(questions: Array<{
@@ -118,7 +119,7 @@ export async function batchCreateGeoQuestions(questions: Array<{
   intent_type?: string
   tags?: string[]
 }>): Promise<{ created: number }> {
-  return api.post('/geo/questions/batch', { questions }) as unknown as Promise<{ created: number }>
+  return api.post(API.GEO.BATCH_CREATE, { questions }) as unknown as Promise<{ created: number }>
 }
 
 // --- GEO 内容 ---
@@ -134,11 +135,11 @@ export async function fetchGeoContents(params?: {
   if (params?.question_id) query.set('question_id', params.question_id)
   if (params?.page) query.set('page', String(params.page))
   if (params?.page_size) query.set('page_size', String(params.page_size))
-  return api.get(`/geo/contents?${query}`) as unknown as Promise<{ items: GeoContent[]; total: number }>
+  return api.get(`${API.GEO.CONTENTS}?${query}`) as unknown as Promise<{ items: GeoContent[]; total: number }>
 }
 
 export async function fetchGeoContent(id: string): Promise<GeoContent> {
-  return api.get(`/geo/contents/${id}`) as unknown as Promise<GeoContent>
+  return api.get(API.GEO.CONTENT(id)) as unknown as Promise<GeoContent>
 }
 
 export async function createGeoContent(data: {
@@ -147,7 +148,7 @@ export async function createGeoContent(data: {
   content: string
   keywords?: string[]
 }): Promise<GeoContent> {
-  return api.post('/geo/contents', data) as unknown as Promise<GeoContent>
+  return api.post(API.GEO.CONTENTS, data) as unknown as Promise<GeoContent>
 }
 
 export async function updateGeoContent(id: string, data: {
@@ -156,21 +157,21 @@ export async function updateGeoContent(id: string, data: {
   keywords?: string[]
   status?: GeoContentStatus
 }): Promise<GeoContent> {
-  return api.put(`/geo/contents/${id}`, data) as unknown as Promise<GeoContent>
+  return api.put(API.GEO.CONTENT(id), data) as unknown as Promise<GeoContent>
 }
 
 export async function deleteGeoContent(id: string): Promise<{ ok: boolean }> {
-  return api.delete(`/geo/contents/${id}`) as unknown as Promise<{ ok: boolean }>
+  return api.delete(API.GEO.CONTENT(id)) as unknown as Promise<{ ok: boolean }>
 }
 
 export async function generateGeoContent(data: {
   question_id: string
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/contents/generate', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.GENERATE_CONTENT, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getGenerateContentStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
-  return api.get(`/geo/contents/generate/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+  return api.get(API.GEO.GENERATE_CONTENT_STATUS(taskId)) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
 }
 
 export async function batchGenerateGeoContent(data: {
@@ -178,15 +179,15 @@ export async function batchGenerateGeoContent(data: {
   domain?: string
   brand_context?: string
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/contents/batch-generate', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.BATCH_GENERATE, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getBatchGenerateStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
-  return api.get(`/geo/contents/batch-generate/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+  return api.get(API.GEO.BATCH_GENERATE_STATUS(taskId)) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
 }
 
 export async function fetchSchemaPreview(id: string): Promise<{ schema_markup: Record<string, unknown> }> {
-  return api.get(`/geo/contents/${id}/schema-preview`) as unknown as Promise<{ schema_markup: Record<string, unknown> }>
+  return api.get(API.GEO.SCHEMA_PREVIEW(id)) as unknown as Promise<{ schema_markup: Record<string, unknown> }>
 }
 
 // --- GEO 提及 ---
@@ -202,22 +203,22 @@ export async function fetchGeoMentions(params?: {
   if (params?.content_id) query.set('content_id', params.content_id)
   if (params?.page) query.set('page', String(params.page))
   if (params?.page_size) query.set('page_size', String(params.page_size))
-  return api.get(`/geo/mentions?${query}`) as unknown as Promise<{ items: GeoMention[]; total: number }>
+  return api.get(`${API.GEO.MENTIONS}?${query}`) as unknown as Promise<{ items: GeoMention[]; total: number }>
 }
 
 export async function checkGeoMentions(data: {
   content_ids: string[]
   search_engines?: string[]
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/mentions/check', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.MENTION_CHECK, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getCheckMentionsStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
-  return api.get(`/geo/mentions/check/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+  return api.get(API.GEO.MENTION_CHECK_STATUS(taskId)) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
 }
 
 export async function fetchGeoDashboard(): Promise<GeoDashboard> {
-  return api.get('/geo/dashboard') as unknown as Promise<GeoDashboard>
+  return api.get(API.GEO.DASHBOARD) as unknown as Promise<GeoDashboard>
 }
 
 // --- 企业知识库 ---
@@ -247,7 +248,7 @@ export async function fetchGeoKnowledge(params?: {
   if (params?.keyword) query.set('keyword', params.keyword)
   if (params?.page) query.set('page', String(params.page))
   if (params?.page_size) query.set('page_size', String(params.page_size))
-  return api.get(`/geo/knowledge?${query}`) as unknown as Promise<{ items: BrandKnowledgeItem[]; total: number }>
+  return api.get(`${API.GEO.KNOWLEDGE}?${query}`) as unknown as Promise<{ items: BrandKnowledgeItem[]; total: number }>
 }
 
 export async function createGeoKnowledge(data: {
@@ -257,7 +258,7 @@ export async function createGeoKnowledge(data: {
   tags?: string[]
   source?: string
 }): Promise<BrandKnowledgeItem> {
-  return api.post('/geo/knowledge', data) as unknown as Promise<BrandKnowledgeItem>
+  return api.post(API.GEO.KNOWLEDGE, data) as unknown as Promise<BrandKnowledgeItem>
 }
 
 export async function updateGeoKnowledge(id: string, data: {
@@ -268,11 +269,11 @@ export async function updateGeoKnowledge(id: string, data: {
   is_active?: boolean
   sort_order?: number
 }): Promise<BrandKnowledgeItem> {
-  return api.put(`/geo/knowledge/${id}`, data) as unknown as Promise<BrandKnowledgeItem>
+  return api.put(API.GEO.KNOWLEDGE_ITEM(id), data) as unknown as Promise<BrandKnowledgeItem>
 }
 
 export async function deleteGeoKnowledge(id: string): Promise<{ success: boolean }> {
-  return api.delete(`/geo/knowledge/${id}`) as unknown as Promise<{ success: boolean }>
+  return api.delete(API.GEO.KNOWLEDGE_ITEM(id)) as unknown as Promise<{ success: boolean }>
 }
 
 export async function generateGeoKnowledge(data: {
@@ -280,11 +281,11 @@ export async function generateGeoKnowledge(data: {
   category?: BrandKnowledgeCategory
   count?: number
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/knowledge/generate', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.KNOWLEDGE_GENERATE, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getGenerateKnowledgeStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
-  return api.get(`/geo/knowledge/generate/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+  return api.get(API.GEO.KNOWLEDGE_GENERATE_STATUS(taskId)) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
 }
 
 // --- 关键词蒸馏 ---
@@ -314,7 +315,7 @@ export interface DistillBatch {
 }
 
 export async function fetchDistillBatches(): Promise<{ batches: DistillBatch[] }> {
-  return api.get('/geo/distill/batches') as unknown as Promise<{ batches: DistillBatch[] }>
+  return api.get(API.GEO.DISTILL_BATCHES) as unknown as Promise<{ batches: DistillBatch[] }>
 }
 
 export async function fetchDistillResults(params?: {
@@ -328,32 +329,32 @@ export async function fetchDistillResults(params?: {
   if (params?.status && params.status !== 'all') query.set('status', params.status)
   if (params?.page) query.set('page', String(params.page))
   if (params?.page_size) query.set('page_size', String(params.page_size))
-  return api.get(`/geo/distill?${query}`) as unknown as Promise<{ items: DistillKeyword[]; total: number }>
+  return api.get(`${API.GEO.DISTILL}?${query}`) as unknown as Promise<{ items: DistillKeyword[]; total: number }>
 }
 
 export async function startDistill(data: {
   keywords: string[]
   domain?: string
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/distill/start', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.DISTILL_START, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getDistillStatus(taskId: string): Promise<{ task_id: string; status: string; output: unknown }> {
-  return api.get(`/geo/distill/start/${taskId}/status`) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
+  return api.get(API.GEO.DISTILL_STATUS(taskId)) as unknown as Promise<{ task_id: string; status: string; output: unknown }>
 }
 
 export async function importDistillToQuestions(ids: string[]): Promise<{ imported: number }> {
-  return api.post('/geo/distill/import', { ids }) as unknown as Promise<{ imported: number }>
+  return api.post(API.GEO.DISTILL_IMPORT, { ids }) as unknown as Promise<{ imported: number }>
 }
 
 export async function updateDistillResult(id: string, data: {
   status: KeywordDistillationStatus
 }): Promise<DistillKeyword> {
-  return api.put(`/geo/distill/${id}`, data) as unknown as Promise<DistillKeyword>
+  return api.put(API.GEO.DISTILL_ITEM(id), data) as unknown as Promise<DistillKeyword>
 }
 
 export async function deleteDistillBatch(batchId: string): Promise<{ success: boolean }> {
-  return api.delete(`/geo/distill/batch/${batchId}`) as unknown as Promise<{ success: boolean }>
+  return api.delete(API.GEO.DISTILL_BATCH(batchId)) as unknown as Promise<{ success: boolean }>
 }
 
 // --- 全网搜索知识建库 ---
@@ -376,7 +377,7 @@ export async function searchAndBuildKnowledge(data: {
   category?: BrandKnowledgeCategory
   count?: number
 }): Promise<{ task_id: string; status: string }> {
-  return api.post('/geo/knowledge/search-and-build', data) as unknown as Promise<{ task_id: string; status: string }>
+  return api.post(API.GEO.KNOWLEDGE_SEARCH_AND_BUILD, data) as unknown as Promise<{ task_id: string; status: string }>
 }
 
 export async function getSearchAndBuildStatus(taskId: string): Promise<{
@@ -385,7 +386,7 @@ export async function getSearchAndBuildStatus(taskId: string): Promise<{
   output: WebKnowledgeBuildOutput | null
   error?: string | null
 }> {
-  return api.get(`/geo/knowledge/search-and-build/${taskId}/status`) as unknown as Promise<{
+  return api.get(API.GEO.KNOWLEDGE_SEARCH_AND_BUILD_STATUS(taskId)) as unknown as Promise<{
     task_id: string
     status: string
     output: WebKnowledgeBuildOutput | null

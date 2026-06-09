@@ -147,26 +147,26 @@
           </div>
           <div v-if="isStepDone(step.status) && step.output" class="step-card-body">
             <div v-if="getStepType(step) === 'evaluation'" class="step-summary">
-              评估完成：{{ (step.output as any).totalDimensions || 0 }} 个维度，预计 {{ (step.output as any).totalEstimatedItems || 0 }} 条知识
+              评估完成：{{ out(step).totalDimensions || 0 }} 个维度，预计 {{ out(step).totalEstimatedItems || 0 }} 条知识
             </div>
             <div v-else-if="getStepType(step) === 'dimension_split'" class="step-summary">
-              拆分出 {{ step.output.dimensions?.length || 0 }} 个维度：
-              <span v-for="d in step.output.dimensions" :key="d" class="tag">{{ d }}</span>
+              拆分出 {{ out(step).dimensions?.length || 0 }} 个维度：
+              <span v-for="d in out(step).dimensions" :key="d" class="tag">{{ d }}</span>
             </div>
             <div v-else-if="getStepType(step) === 'search'" class="step-summary">
-              搜索到 {{ step.output.total || 0 }} 条结果
+              搜索到 {{ out(step).total || 0 }} 条结果
             </div>
             <div v-else-if="getStepType(step) === 'credibility'" class="step-summary">
-              保留 {{ step.output.report?.passed || 0 }} 条，过滤 {{ step.output.report?.filtered || 0 }} 条
+              保留 {{ out(step).report?.passed || 0 }} 条，过滤 {{ out(step).report?.filtered || 0 }} 条
             </div>
             <div v-else-if="getStepType(step) === 'dedup'" class="step-summary">
-              合并为 {{ step.output.merged?.length || 0 }} 条（去重 {{ getDedupCount(step) }} 条）
+              合并为 {{ out(step).merged?.length || 0 }} 条（去重 {{ getDedupCount(step) }} 条）
             </div>
             <div v-else-if="getStepType(step) === 'refine'" class="step-summary">
-              完善 {{ step.output.refined?.length || 0 }} 条知识
+              提取 {{ out(step).refined?.length || 0 }} 条原子事实
             </div>
             <div v-else-if="getStepType(step) === 'persist'" class="step-summary">
-              成功入库 {{ step.output.createdIds?.length || 0 }} 条
+              成功入库 {{ out(step).createdIds?.length || 0 }} 条事实
             </div>
           </div>
           <!-- 分步确认：等待确认时显示确认按钮 -->
@@ -253,7 +253,7 @@ import {
   KNOWLEDGE_BUILD_MODE_LABELS,
   BRAND_KNOWLEDGE_CATEGORY_LABELS,
 } from '@zimti/shared'
-import type { KnowledgeBuildStepType, KnowledgeBuildMode } from '@zimti/shared'
+import type { KnowledgeBuildStepType, KnowledgeBuildMode, KnowledgeBuildStepRecord } from '@zimti/shared'
 
 interface DimensionPlan {
   dimension: string
@@ -261,6 +261,14 @@ interface DimensionPlan {
   estimatedItems: number
   infoDensity: 'high' | 'medium' | 'low'
   priority: number
+  keywords?: string[]
+  supplementaryKeywords?: string[]
+}
+
+interface KeywordCoverage {
+  totalKeywordsProvided: number
+  coveredDimensions: number
+  uncoveredDimensions: number
 }
 
 interface BuildPlan {
@@ -273,6 +281,7 @@ interface BuildPlan {
   dimensions: DimensionPlan[]
   coverageGaps: string[]
   suggestions: string[]
+  keywordCoverage?: KeywordCoverage
 }
 
 const router = useRouter()
@@ -355,23 +364,30 @@ function getStepClass(status: string): string {
   return 'pending'
 }
 
+/** 步骤 output 类型安全访问（Record<string,unknown> → any） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function out(step: KnowledgeBuildStepRecord): any {
+  return step.output ?? {}
+}
+
 // 判断步骤是否已完成（用于显示摘要）
 function isStepDone(status: string): boolean {
   return status === 'completed'
 }
 
 // 获取去重数量
-function getDedupCount(step: { output: Record<string, unknown> | null }): number {
-  if (!step.output) return 0
-  const total = (step.output.total as number) || 0
-  const merged = step.output.merged?.length || 0
+function getDedupCount(step: KnowledgeBuildStepRecord): number {
+  const o = out(step)
+  if (!o) return 0
+  const total = (o.total as number) || 0
+  const merged = o.merged?.length || 0
   return total - merged
 }
 
 // 获取最终入库数量
 function getFinalPersistCount(): number {
   const persistStep = store.jobSteps.find(s => getStepType(s) === 'persist')
-  return persistStep?.output?.createdIds?.length || 0
+  return out(persistStep!).createdIds?.length || 0
 }
 
 // 一键构建（启动评估）

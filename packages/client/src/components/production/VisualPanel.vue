@@ -1,103 +1,108 @@
 <template>
   <div class="visual-panel">
-    <div class="panel-grid">
-      <!-- 左侧：视频画面 -->
-      <div class="video-section">
-        <div class="section-header">
-          <h3>视频画面</h3>
-          <div class="mode-switch">
-            <button class="mode-btn" :class="{ active: mode === 'material' }" @click="mode = 'material'">素材拼接</button>
-            <button class="mode-btn" :class="{ active: mode === 'digital_human' }" @click="mode = 'digital_human'">数字人</button>
-          </div>
-        </div>
+    <!-- 标签页导航 -->
+    <div class="tab-bar">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.key }"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.icon }} {{ tab.label }}
+      </button>
+    </div>
 
-        <!-- 素材拼接模式 -->
-        <template v-if="mode === 'material'">
-          <div v-if="segments.length === 0" class="empty-hint">请先在「脚本」步骤中生成分镜</div>
-          <div v-else class="segment-materials">
-            <div v-for="(seg, i) in segments" :key="seg.id" class="seg-material-card">
-              <div class="seg-info">
-                <span class="seg-index">{{ i + 1 }}</span>
-                <span class="seg-type-badge">{{ seg.segment_type === 'oral' ? '口播' : seg.segment_type === 'visual' ? '画面' : '转场' }}</span>
-                <span class="seg-desc">{{ (seg.visual_description || seg.oral_text || '').slice(0, 50) }}</span>
-              </div>
-              <div class="seg-material-slot">
-                <div v-if="seg.material_ids && seg.material_ids.length > 0" class="material-preview">
-                  已选 {{ seg.material_ids.length }} 个素材
-                  <button class="btn btn-sm" @click="openMaterialPicker(seg.id, seg.material_ids)">更换</button>
+    <!-- 标签页内容 -->
+    <div class="tab-content">
+      <!-- 素材拼接（原有功能） -->
+      <template v-if="activeTab === 'material'">
+        <div class="panel-grid">
+          <div class="video-section">
+            <div class="section-header">
+              <h3>视频画面</h3>
+            </div>
+            <div v-if="segments.length === 0" class="empty-hint">请先在「脚本」步骤中生成分镜</div>
+            <div v-else class="segment-materials">
+              <div v-for="(seg, i) in segments" :key="seg.id" class="seg-material-card">
+                <div class="seg-info">
+                  <span class="seg-index">{{ i + 1 }}</span>
+                  <span class="seg-type-badge">{{ seg.segment_type === 'oral' ? '口播' : seg.segment_type === 'visual' ? '画面' : '转场' }}</span>
+                  <span class="seg-desc">{{ (seg.visual_description || seg.oral_text || '').slice(0, 50) }}</span>
                 </div>
-                <div v-else class="material-empty">
-                  <span>暂无素材</span>
-                  <button class="btn btn-sm btn-primary" @click="openMaterialPicker(seg.id, [])">选择素材</button>
+                <div class="seg-material-slot">
+                  <div v-if="seg.material_ids && seg.material_ids.length > 0" class="material-preview">
+                    已选 {{ seg.material_ids.length }} 个素材
+                    <button class="btn btn-sm" @click="openMaterialPicker(seg.id, seg.material_ids)">更换</button>
+                  </div>
+                  <div v-else class="material-empty">
+                    <span>暂无素材</span>
+                    <button class="btn btn-sm btn-primary" @click="openMaterialPicker(seg.id, [])">选择素材</button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </template>
 
-        <!-- 数字人模式（占位） -->
-        <template v-else>
-          <div class="digital-human-placeholder">
-            <div class="placeholder-icon">🤖</div>
-            <h4>数字人视频生成</h4>
-            <p>数字人 API 正在对接中，敬请期待</p>
-            <p class="hint">当前可使用「素材拼接」模式制作视频</p>
-          </div>
-        </template>
+            <!-- 渲染进度 -->
+            <div v-if="rendering" class="render-progress">
+              <div class="progress-header">
+                <span>渲染中</span>
+                <span class="progress-pct">{{ renderProgress }}%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" :style="{ width: renderProgress + '%' }" />
+              </div>
+            </div>
 
-        <!-- 渲染进度 -->
-        <div v-if="rendering" class="render-progress">
-          <div class="progress-header">
-            <span>渲染中</span>
-            <span class="progress-pct">{{ renderProgress }}%</span>
+            <!-- 视频预览 -->
+            <div v-if="store.videoUrl" class="video-preview">
+              <h4>✅ 视频已生成</h4>
+              <video controls :src="videoPath" class="preview-player" />
+            </div>
           </div>
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: renderProgress + '%' }" />
+
+          <div class="config-section">
+            <div class="config-card">
+              <h4>渲染设置</h4>
+              <div class="form-group">
+                <label>分辨率</label>
+                <select v-model="resolution" class="input">
+                  <option value="1080x1920">竖屏 1080×1920（抖音/小红书）</option>
+                  <option value="1920x1080">横屏 1920×1080（B站/YouTube）</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              class="btn btn-primary btn-block"
+              :disabled="segments.length === 0 || rendering || store.executing"
+              @click="handleRender"
+            >
+              <template v-if="rendering">渲染中 {{ renderProgress }}%...</template>
+              <template v-else-if="store.videoUrl">重新渲染</template>
+              <template v-else>开始渲染</template>
+            </button>
+
+            <button v-if="rendering" class="btn btn-block" @click="handleCancelRender">取消渲染</button>
+
+            <div v-if="store.steps[2]?.status === 'completed'" class="config-card success-card">
+              <span class="success-icon">✅</span> 视频已生成，可以进入下一步
+            </div>
           </div>
         </div>
+      </template>
 
-        <!-- 视频预览 -->
-        <div v-if="store.videoUrl" class="video-preview">
-          <h4>✅ 视频已生成</h4>
-          <video controls :src="videoPath" class="preview-player" />
-        </div>
-      </div>
+      <!-- 拍摄清单 -->
+      <ShootingPlanPanel v-if="activeTab === 'plan'" :job-id="store.jobId || ''" />
 
-      <!-- 右侧：操作 -->
-      <div class="config-section">
-        <div class="config-card">
-          <h4>渲染设置</h4>
-          <div class="form-group">
-            <label>分辨率</label>
-            <select v-model="resolution" class="input">
-              <option value="1080x1920">竖屏 1080×1920（抖音/小红书）</option>
-              <option value="1920x1080">横屏 1920×1080（B站/YouTube）</option>
-            </select>
-          </div>
-        </div>
+      <!-- AI 生成 -->
+      <AiGeneratePanel v-if="activeTab === 'generate'" :job-id="store.jobId || ''" :script-id="store.scriptId" />
 
-        <button
-          class="btn btn-primary btn-block"
-          :disabled="segments.length === 0 || rendering || store.executing"
-          @click="handleRender"
-        >
-          <template v-if="rendering">渲染中 {{ renderProgress }}%...</template>
-          <template v-else-if="store.videoUrl">重新渲染</template>
-          <template v-else>开始渲染</template>
-        </button>
+      <!-- 时间轴 -->
+      <TimelinePanel v-if="activeTab === 'timeline'" :job-id="store.jobId || ''" />
 
-        <button
-          v-if="rendering"
-          class="btn btn-block"
-          @click="handleCancelRender"
-        >
-          取消渲染
-        </button>
-
-        <div v-if="store.steps[2]?.status === 'completed'" class="config-card success-card">
-          <span class="success-icon">✅</span> 视频已生成，可以进入下一步
-        </div>
-      </div>
+      <!-- 导出 -->
+      <ExportPanel v-if="activeTab === 'export'" :job-id="store.jobId || ''" />
     </div>
 
     <!-- 素材选择弹窗 -->
@@ -148,6 +153,10 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useProductionStore } from '@/stores/production'
 import api from '@/api/client'
+import ShootingPlanPanel from './visual/ShootingPlanPanel.vue'
+import AiGeneratePanel from './visual/AiGeneratePanel.vue'
+import TimelinePanel from './visual/TimelinePanel.vue'
+import ExportPanel from './visual/ExportPanel.vue'
 
 interface SegmentItem {
   id: number
@@ -168,11 +177,19 @@ interface MaterialItem {
 
 const store = useProductionStore()
 const segments = ref<SegmentItem[]>([])
-const mode = ref<'material' | 'digital_human'>('material')
 const resolution = ref('1080x1920')
 const rendering = ref(false)
 const renderProgress = ref(0)
+const activeTab = ref('material')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const tabs = [
+  { key: 'material', label: '素材拼接', icon: '🖼' },
+  { key: 'plan', label: '拍摄清单', icon: '📋' },
+  { key: 'generate', label: 'AI 生成', icon: '🤖' },
+  { key: 'timeline', label: '时间轴', icon: '🎬' },
+  { key: 'export', label: '导出', icon: '📤' },
+]
 
 // 素材选择
 const showMaterialPicker = ref(false)
@@ -205,14 +222,10 @@ async function loadSegments() {
 async function handleRender() {
   rendering.value = true
   renderProgress.value = 0
-
   await store.runStep(3, { resolution: resolution.value })
-
-  // 如果有 video_product_id，开始轮询渲染状态
   if (store.videoProductId) {
     startPolling()
   } else {
-    // runStep 内部轮询可能已完成
     await store.refreshProgress()
     rendering.value = false
   }
@@ -225,10 +238,8 @@ function startPolling() {
     try {
       const res = await api.get(`/video-products/${store.videoProductId}/render-status`) as any
       renderProgress.value = res.progress || 0
-
       if (res.status === 'completed') {
         stopPolling()
-        // 获取视频 URL
         const vp = await api.get(`/video-products/${store.videoProductId}/preview`) as any
         if (vp?.video_product?.video_url) {
           store.videoUrl = vp.video_product.video_url
@@ -236,7 +247,6 @@ function startPolling() {
         }
         store.steps[2].status = 'completed'
         rendering.value = false
-        // 自动前进
         if (store.currentStep === 3) store.currentStep = 4
       } else if (res.status === 'failed') {
         stopPolling()
@@ -251,25 +261,17 @@ function startPolling() {
 }
 
 function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
 async function handleCancelRender() {
   if (!store.videoProductId) return
   stopPolling()
-  try {
-    await api.post(`/video-products/${store.videoProductId}/render-cancel`)
-  } catch {
-    // 静默
-  }
+  try { await api.post(`/video-products/${store.videoProductId}/render-cancel`) } catch { /* 静默 */ }
   rendering.value = false
   renderProgress.value = 0
 }
 
-// 素材选择
 function openMaterialPicker(segmentId: number, currentIds: string[]) {
   currentSegmentId.value = segmentId
   selectedMaterialIds.value = currentIds.map(Number)
@@ -285,11 +287,7 @@ async function loadMaterials() {
     params.set('page_size', '50')
     const res = await api.get(`/materials?${params}`) as any
     materials.value = res.items || []
-  } catch {
-    // 静默
-  } finally {
-    materialsLoading.value = false
-  }
+  } catch { /* 静默 */ } finally { materialsLoading.value = false }
 }
 
 function toggleMaterialSelection(id: number) {
@@ -300,16 +298,12 @@ function toggleMaterialSelection(id: number) {
 
 async function confirmMaterialSelection() {
   if (!currentSegmentId.value) return
-  // 更新分镜的素材
   try {
     await api.put(`/scripts/${store.scriptId}/segments/${currentSegmentId.value}/materials`, {
       material_ids: selectedMaterialIds.value,
     })
-    // 重新加载分镜
     await loadSegments()
-  } catch {
-    // 静默
-  }
+  } catch { /* 静默 */ }
   showMaterialPicker.value = false
 }
 </script>
@@ -322,6 +316,35 @@ async function confirmMaterialSelection() {
   padding: 20px;
 }
 
+/* 标签页 */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.tab-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover { color: var(--color-primary); }
+.tab-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.tab-content { min-height: 300px; }
+
+/* 素材拼接面板 */
 .panel-grid {
   display: grid;
   grid-template-columns: 1fr 280px;
@@ -336,29 +359,6 @@ async function confirmMaterialSelection() {
 }
 
 .section-header h3 { margin: 0; font-size: 16px; }
-
-.mode-switch {
-  display: flex;
-  gap: 4px;
-  background: var(--color-background);
-  border-radius: 6px;
-  padding: 2px;
-}
-
-.mode-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.mode-btn.active {
-  background: var(--color-primary);
-  color: #fff;
-}
 
 .segment-materials {
   display: flex;
@@ -375,131 +375,45 @@ async function confirmMaterialSelection() {
   padding: 10px 12px;
 }
 
-.seg-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
+.seg-info { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .seg-index {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--color-primary); color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; flex-shrink: 0;
 }
-
 .seg-type-badge {
-  font-size: 12px;
-  color: var(--color-primary);
+  font-size: 12px; color: var(--color-primary);
   background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px 6px; border-radius: 4px;
 }
-
 .seg-desc {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 13px; color: var(--color-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .seg-material-slot { padding-left: 28px; }
-
-.material-preview {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #10b981;
-}
-
-.material-empty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.digital-human-placeholder {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--color-text-secondary);
-}
-
-.placeholder-icon { font-size: 48px; margin-bottom: 12px; }
-.digital-human-placeholder h4 { margin: 0 0 8px; color: var(--color-text); }
-.digital-human-placeholder p { margin: 0 0 4px; font-size: 14px; }
-.hint { font-size: 13px; color: var(--color-text-secondary); }
+.material-preview { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #10b981; }
+.material-empty { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-secondary); }
 
 .render-progress { margin-top: 16px; }
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
+.progress-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; color: var(--color-text-secondary); }
 .progress-pct { color: var(--color-primary); font-weight: 600; }
-.progress-bar {
-  height: 6px;
-  background: var(--color-border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--color-primary);
-  border-radius: 3px;
-  transition: width 0.5s;
-}
+.progress-bar { height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--color-primary); border-radius: 3px; transition: width 0.5s; }
 
 .video-preview { margin-top: 16px; }
 .video-preview h4 { margin: 0 0 8px; font-size: 14px; color: #10b981; }
-.preview-player {
-  width: 100%;
-  max-height: 360px;
-  border-radius: 8px;
-  background: #000;
-}
+.preview-player { width: 100%; max-height: 360px; border-radius: 8px; background: #000; }
 
-.config-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.config-card {
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 14px;
-}
+.config-section { display: flex; flex-direction: column; gap: 12px; }
+.config-card { background: var(--color-background); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; }
 .config-card h4 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
-
 .form-group { margin-bottom: 10px; }
 .form-group label { display: block; font-size: 13px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.input { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font-size: 14px; box-sizing: border-box; }
 
-.input {
-  width: 100%; padding: 6px 10px;
-  border: 1px solid var(--color-border); border-radius: 6px;
-  background: var(--color-surface); color: var(--color-text);
-  font-size: 14px; box-sizing: border-box;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text);
-  cursor: pointer;
-  font-size: 14px;
-}
+.btn { padding: 8px 16px; border: 1px solid var(--color-border); border-radius: 6px; background: transparent; color: var(--color-text); cursor: pointer; font-size: 14px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .btn-block { width: 100%; }
@@ -507,109 +421,27 @@ async function confirmMaterialSelection() {
 
 .success-card { text-align: center; color: #10b981; font-size: 14px; }
 .success-icon { margin-right: 4px; }
-
 .empty-hint { text-align: center; padding: 40px; color: var(--color-text-secondary); font-size: 14px; }
 .loading-wrapper { text-align: center; padding: 20px; color: var(--color-text-secondary); }
 
 /* 弹窗 */
-.overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 100;
-}
-
-.dialog {
-  background: var(--color-surface);
-  border-radius: 10px;
-  width: 90%;
-  max-width: 640px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
-}
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dialog { background: var(--color-surface); border-radius: 10px; width: 90%; max-width: 640px; max-height: 80vh; display: flex; flex-direction: column; }
+.dialog-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--color-border); }
 .dialog-header h3 { margin: 0; font-size: 16px; }
-.dialog-close {
-  background: none; border: none;
-  font-size: 20px; cursor: pointer;
-  color: var(--color-text-secondary);
-}
-
-.dialog-body {
-  padding: 16px 20px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.dialog-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--color-border);
-}
-.selected-count {
-  flex: 1;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.material-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
-}
-
-.material-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px;
-  border: 2px solid var(--color-border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
+.dialog-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-text-secondary); }
+.dialog-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+.dialog-footer { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--color-border); }
+.selected-count { flex: 1; font-size: 13px; color: var(--color-text-secondary); }
+.filter-bar { display: flex; gap: 8px; margin-bottom: 12px; }
+.material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+.material-item { display: flex; flex-direction: column; align-items: center; padding: 8px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
 .material-item:hover { border-color: var(--color-primary); }
-.material-item.selected {
-  border-color: var(--color-primary);
-  background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.06);
-}
-
-.material-thumb {
-  width: 64px; height: 64px;
-  background: var(--color-background);
-  border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
+.material-item.selected { border-color: var(--color-primary); background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.06); }
+.material-thumb { width: 64px; height: 64px; background: var(--color-background); border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 4px; }
 .material-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .thumb-icon { font-size: 24px; }
-
-.material-name {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 80px;
-}
+.material-name { font-size: 11px; color: var(--color-text-secondary); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; }
 
 @media (max-width: 768px) {
   .panel-grid { grid-template-columns: 1fr; }

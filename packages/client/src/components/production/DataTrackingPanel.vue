@@ -87,7 +87,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { createSnapshot, fetchMetricsTrend } from '@/api/dataTracking'
-import type { MetricsTrendResponse } from '@zimti/shared'
+import type { MetricsTrendResponse, MetricsTrendPoint } from '@/api/dataTracking'
 
 const props = defineProps<{
   publishRecordId: string
@@ -108,7 +108,7 @@ const form = ref({
 
 const maxPlays = computed(() => {
   if (!trendData.value || trendData.value.snapshots.length === 0) return 1
-  return Math.max(...trendData.value.snapshots.map(s => s.play_count), 1)
+  return Math.max(...trendData.value.snapshots.map((s: MetricsTrendPoint) => s.play_count), 1)
 })
 
 function barHeight(count: number): number {

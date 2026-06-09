@@ -3,7 +3,33 @@
  */
 
 import api from './client'
-import type { MetricsTrendResponse } from '@zimti/shared'
+
+/** 趋势数据响应（与 shared-schema.ts 同步） */
+export interface MetricsTrendPoint {
+  snapshot_at: string
+  play_count: number
+  completion_rate: number
+  three_second_bounce_rate: number
+  comment_count: number
+  private_message_count: number
+}
+
+export interface MetricsTrendSummary {
+  total_plays: number
+  avg_completion_rate: number
+  avg_bounce_rate: number
+  total_comments: number
+  total_messages: number
+  plays_trend: number | null
+  snapshot_count: number
+}
+
+export interface MetricsTrendResponse {
+  publish_record_id: string
+  platform: string
+  snapshots: MetricsTrendPoint[]
+  summary: MetricsTrendSummary
+}
 
 /** 创建单条数据快照 */
 export async function createSnapshot(data: {

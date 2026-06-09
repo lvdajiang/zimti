@@ -266,7 +266,7 @@ export const INTENT_LEVEL_LABELS: Record<IntentLevel, string> = {
 }
 
 // --- 1.46 客户来源 ---
-export type CustomerSourceType = 'manual' | 'video' | 'referral' | 'group_chat' | 'poster' | 'group_invite'
+export type CustomerSourceType = 'manual' | 'video' | 'referral' | 'group_chat' | 'poster' | 'group_invite' | 'miniprogram' | 'miniprogram_wx'
 
 // --- 1.46a 客户标签分类 ---
 export type CustomerTagCategory = 'basic' | 'interest' | 'consume' | 'status'
@@ -1616,6 +1616,17 @@ export const API = {
     GENERATE_CODE: (customerId: string) => `/referral/generate-code/${customerId}`,
   },
 
+  // --- 智派桥接 ---
+  BRIDGE: {
+    QUOTATION: '/bridge/quotation',
+    RESOURCES: '/bridge/resources',
+    PRODUCTS: '/bridge/products',
+    PRICES: '/bridge/prices',
+    WEBHOOK_ZHIPAI: '/bridge/webhook/zhipai',
+    KNOWLEDGE: '/bridge/knowledge',
+    PUSH_MESSAGE: '/bridge/push-message',
+  },
+
   // --- 流水线 ---
   PIPELINE: {
     VIRAL_REMIND: '/pipeline/viral-remind',
@@ -1683,6 +1694,8 @@ export const API = {
     KNOWLEDGE_ITEM: (id: string) => `/geo/knowledge/${id}`,
     KNOWLEDGE_GENERATE: '/geo/knowledge/generate',
     KNOWLEDGE_GENERATE_STATUS: (taskId: string) => `/geo/knowledge/generate/${taskId}/status`,
+    KNOWLEDGE_SEARCH_AND_BUILD: '/geo/knowledge/search-and-build',
+    KNOWLEDGE_SEARCH_AND_BUILD_STATUS: (taskId: string) => `/geo/knowledge/search-and-build/${taskId}/status`,
     // --- 关键词蒸馏 ---
     DISTILL: '/geo/distill',
     DISTILL_BATCHES: '/geo/distill/batches',

@@ -23,15 +23,15 @@ const mockedFetchGroupContents = vi.mocked(fetchGroupContents)
 const mockedGenerateGroupContent = vi.mocked(generateGroupContent)
 
 const mockMoments = [
-  { id: 'm1', content: '今日感悟', scheduled_time: '2026-05-25T09:00:00Z' },
-  { id: 'm2', content: '产品分享', scheduled_time: '2026-05-25T12:00:00Z' },
+  { id: 'm1', content_type: 'professional' as const, content: '今日感悟', image_suggestion: null, status: 'draft', scheduled_at: '2026-05-25T09:00:00Z', sent_at: null, engagement_data: null, created_at: '2026-01-01' },
+  { id: 'm2', content_type: 'life' as const, content: '产品分享', image_suggestion: null, status: 'draft', scheduled_at: '2026-05-25T12:00:00Z', sent_at: null, engagement_data: null, created_at: '2026-01-01' },
 ]
 
 const mockGroupContents = [
-  { id: 'g1', group_type: 'customer', content: '客户群文案' },
+  { id: 'g1', group_type: 'intent' as const, title: '意向客户群文案', content: '客户群文案', created_at: '2026-01-01' },
 ]
 
-const mockGeneratedGroup = { id: 'g2', group_type: 'vip', content: 'VIP群文案' }
+const mockGeneratedGroup = { id: 'g2', group_type: 'loyalty' as const, title: '老客复购群文案', content: 'VIP群文案', created_at: '2026-01-01' }
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -53,7 +53,7 @@ describe('usePrivateDomainStore', () => {
     it('期间 momentsLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchDailyMoments.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = usePrivateDomainStore()
@@ -70,7 +70,7 @@ describe('usePrivateDomainStore', () => {
 
   describe('markSent', () => {
     it('调用 markMomentSent 后刷新 loadDailyMoments', async () => {
-      mockedMarkMomentSent.mockResolvedValue(undefined)
+      mockedMarkMomentSent.mockResolvedValue(undefined as any)
       mockedFetchDailyMoments.mockResolvedValue({ items: mockMoments })
 
       const store = usePrivateDomainStore()
@@ -84,7 +84,7 @@ describe('usePrivateDomainStore', () => {
 
   describe('recordEngagement', () => {
     it('调用 recordMomentEngagement 并传递参数', async () => {
-      mockedRecordMomentEngagement.mockResolvedValue(undefined)
+      mockedRecordMomentEngagement.mockResolvedValue(undefined as any)
 
       const store = usePrivateDomainStore()
       const engagementData = { likes: 12, comments: 3, screenshot: null }
@@ -110,16 +110,16 @@ describe('usePrivateDomainStore', () => {
       mockedFetchGroupContents.mockResolvedValue({ items: mockGroupContents })
 
       const store = usePrivateDomainStore()
-      await store.loadGroupContents('customer')
+      await store.loadGroupContents('intent')
 
-      expect(mockedFetchGroupContents).toHaveBeenCalledWith({ group_type: 'customer' })
+      expect(mockedFetchGroupContents).toHaveBeenCalledWith({ group_type: 'intent' })
       expect(store.groupContents).toEqual(mockGroupContents)
     })
 
     it('期间 groupContentsLoading 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedFetchGroupContents.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = usePrivateDomainStore()
@@ -140,10 +140,10 @@ describe('usePrivateDomainStore', () => {
       mockedFetchGroupContents.mockResolvedValue({ items: [mockGeneratedGroup] })
 
       const store = usePrivateDomainStore()
-      const resultId = await store.generateGroup('vip')
+      const resultId = await store.generateGroup('loyalty')
 
-      expect(mockedGenerateGroupContent).toHaveBeenCalledWith({ group_type: 'vip' })
-      expect(mockedFetchGroupContents).toHaveBeenCalledWith({ group_type: 'vip' })
+      expect(mockedGenerateGroupContent).toHaveBeenCalledWith({ group_type: 'loyalty' })
+      expect(mockedFetchGroupContents).toHaveBeenCalledWith({ group_type: 'loyalty' })
       expect(resultId).toBe('g2')
       expect(store.groupContents).toEqual([mockGeneratedGroup])
     })
@@ -151,11 +151,11 @@ describe('usePrivateDomainStore', () => {
     it('期间 generatingGroup 为 true', async () => {
       let resolveFn: (v: unknown) => void
       mockedGenerateGroupContent.mockReturnValue(
-        new Promise((resolve) => { resolveFn = resolve })
+        new Promise((resolve) => { resolveFn = resolve as (v: unknown) => void })
       )
 
       const store = usePrivateDomainStore()
-      const promise = store.generateGroup('customer')
+      const promise = store.generateGroup('intent')
 
       expect(store.generatingGroup).toBe(true)
 

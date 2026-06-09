@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { toInt } from '../../constants.js'
+import { DEMO_USER_ID, toInt } from '../../constants.js'
 import { runTask } from '../../services/ai/taskManager.js'
 import { analyzeViralVideo } from '../../services/ai/generators/videoAnalyze.js'
 
@@ -259,6 +259,63 @@ router.put('/viral-videos/:id/transcript', async (req: Request, res: Response) =
   } catch (error) {
     console.error('[PUT transcript]', error)
     res.status(500).json({ error: 'Failed to save transcript' })
+  }
+})
+
+// POST /api/v1/viral-videos/:id/benchmark — 用作对标
+router.post('/viral-videos/:id/benchmark', async (req: Request, res: Response) => {
+  try {
+    const videoId = toInt(req.params.id)
+    const video = await prisma.viralVideo.findUnique({
+      where: { id: videoId },
+      include: { account: { select: { accountName: true, platform: true } } },
+    })
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    // 检查是否已标记
+    const existing = await prisma.contentAsset.findFirst({
+      where: {
+        userId: DEMO_USER_ID,
+        type: 'benchmark',
+        videoProductId: null,
+        title: `[对标] ${video.title}`,
+      },
+    })
+    if (existing) {
+      res.json({ success: true, message: 'already_marked', asset_id: existing.id })
+      return
+    }
+
+    const asset = await prisma.contentAsset.create({
+      data: {
+        userId: DEMO_USER_ID,
+        title: `[对标] ${video.title}`,
+        type: 'benchmark',
+        platforms: [video.platform],
+        status: 'published',
+        coreMetrics: {
+          source: 'viral_video',
+          video_id: videoId,
+          platform: video.platform,
+          account_name: video.account.accountName,
+          play_count: video.playCount,
+          like_count: video.likeCount,
+          comment_count: video.commentCount,
+          interaction_rate: video.interactionRate ? Number(video.interactionRate) : null,
+          cover_url: video.coverUrl,
+          video_url: video.videoUrl,
+        },
+        elementHighlights: [video.title],
+        publishedAt: new Date(),
+      },
+    })
+    res.json({ success: true, asset_id: asset.id })
+  } catch (error) {
+    console.error('[POST viral-videos/:id/benchmark]', error)
+    res.status(500).json({ error: 'Failed to mark as benchmark' })
   }
 })
 

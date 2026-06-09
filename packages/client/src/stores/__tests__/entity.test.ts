@@ -48,14 +48,14 @@ const mockDeleteResource = vi.mocked(deleteResource)
 const fakeEntities: Entity[] = [
   {
     id: 'ent-1', name: '星巴克', aliases: 'Starbucks',
-    entity_type: 'brand', region: '北京', city: '北京',
+    entity_type: 'other', region: '北京', city: '北京',
     address: '朝阳区xxx', phone: '010-12345678',
     longitude: '116.46', latitude: '39.92',
     remark: null, resource_count: 3, created_at: '2026-01-01', updated_at: '2026-01-01',
   },
   {
     id: 'ent-2', name: '瑞幸咖啡', aliases: 'Luckin',
-    entity_type: 'brand', region: '上海', city: '上海',
+    entity_type: 'other', region: '上海', city: '上海',
     address: '浦东新区xxx', phone: '021-87654321',
     longitude: '121.47', latitude: '31.23',
     remark: null, resource_count: 1, created_at: '2026-01-02', updated_at: '2026-01-02',
@@ -65,12 +65,12 @@ const fakeEntities: Entity[] = [
 const fakeResources: Resource[] = [
   {
     id: 'res-1', entity_id: 'ent-1', name: '咖啡豆供应商A',
-    resource_type: 'supplier', unit: 'kg', unit_price: '50.00',
+    resource_type: 'other', unit: 'kg', unit_price: '50.00',
     remark: null, created_at: '2026-01-01', updated_at: '2026-01-01',
   },
   {
     id: 'res-2', entity_id: 'ent-1', name: '咖啡豆供应商B',
-    resource_type: 'supplier', unit: 'kg', unit_price: '45.00',
+    resource_type: 'other', unit: 'kg', unit_price: '45.00',
     remark: '优质阿拉比卡', created_at: '2026-01-02', updated_at: '2026-01-02',
   },
 ]
@@ -111,7 +111,7 @@ describe('useEntityStore', () => {
       mockFetchEntities.mockResolvedValue({ items: [], total: 0 })
 
       const store = useEntityStore()
-      store.filterType = 'brand'
+      store.filterType = 'other'
       store.filterKeyword = '星巴克'
       store.filterCity = '北京'
       store.currentPage = 2
@@ -120,7 +120,7 @@ describe('useEntityStore', () => {
       await store.loadEntities()
 
       expect(mockFetchEntities).toHaveBeenCalledWith({
-        entity_type: 'brand',
+        entity_type: 'other',
         keyword: '星巴克',
         city: '北京',
         page: 2,
@@ -136,10 +136,10 @@ describe('useEntityStore', () => {
       mockFetchEntities.mockResolvedValue({ items: fakeEntities, total: 3 })
 
       const store = useEntityStore()
-      const id = await store.addEntity({ name: '库迪咖啡', entity_type: 'brand' })
+      const id = await store.addEntity({ name: '库迪咖啡', entity_type: 'other' })
 
       expect(id).toBe('ent-3')
-      expect(mockCreateEntity).toHaveBeenCalledWith({ name: '库迪咖啡', entity_type: 'brand' })
+      expect(mockCreateEntity).toHaveBeenCalledWith({ name: '库迪咖啡', entity_type: 'other' })
       expect(mockFetchEntities).toHaveBeenCalled()
     })
   })
@@ -217,7 +217,7 @@ describe('useEntityStore', () => {
       mockAmapSearch.mockResolvedValue({ items: fakeAmapResults, total: 2 })
 
       const store = useEntityStore()
-      await store.searchAmap('星巴克', '北京', 'brand')
+      await store.searchAmap('星巴克', '北京', 'other' as any)
 
       expect(store.amapResults).toEqual(fakeAmapResults)
       expect(store.amapResults).toHaveLength(2)
@@ -225,7 +225,7 @@ describe('useEntityStore', () => {
       expect(mockAmapSearch).toHaveBeenCalledWith({
         keyword: '星巴克',
         city: '北京',
-        entity_type: 'brand',
+        entity_type: 'other',
       })
     })
   })
@@ -238,7 +238,7 @@ describe('useEntityStore', () => {
 
       const store = useEntityStore()
       const poi = fakeAmapResults[0]
-      const id = await store.addFromAmap(poi, 'brand')
+      const id = await store.addFromAmap(poi, 'other' as any)
 
       expect(id).toBe('ent-5')
       expect(mockCreateEntityFromAmap).toHaveBeenCalledWith({
@@ -249,7 +249,7 @@ describe('useEntityStore', () => {
         region: poi.region,
         longitude: poi.longitude ?? '',
         latitude: poi.latitude ?? '',
-        entity_type: 'brand',
+        entity_type: 'other',
         amap_type: poi.amap_type,
       })
       expect(mockFetchEntities).toHaveBeenCalled()
@@ -278,10 +278,10 @@ describe('useEntityStore', () => {
       mockFetchResources.mockResolvedValue({ items: fakeResources, total: 3 } as any)
 
       const store = useEntityStore()
-      const id = await store.addResource('ent-1', { name: '新供应商', resource_type: 'supplier' })
+      const id = await store.addResource('ent-1', { name: '新供应商', resource_type: 'other' })
 
       expect(id).toBe('res-3')
-      expect(mockCreateResource).toHaveBeenCalledWith('ent-1', { name: '新供应商', resource_type: 'supplier' })
+      expect(mockCreateResource).toHaveBeenCalledWith('ent-1', { name: '新供应商', resource_type: 'other' })
       expect(mockFetchResources).toHaveBeenCalledWith('ent-1')
     })
   })

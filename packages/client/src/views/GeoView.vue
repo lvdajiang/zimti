@@ -164,6 +164,7 @@
         <button class="btn" :disabled="store.searchAndBuilding" @click="showSearchPanel = true">🔍 全网搜索</button>
         <button class="btn" @click="showKnowledgeForm = true">手动添加</button>
         <button class="btn" @click="router.push('/geo/build')">🔧 构建引擎</button>
+        <button class="btn" @click="router.push('/geo/fact-extract')">📋 事实提取</button>
       </div>
 
       <!-- 全网搜索建库面板 -->

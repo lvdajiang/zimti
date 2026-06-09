@@ -514,7 +514,7 @@ async function handlePublish() {
     published.value = true
 
     // 更新流水线步骤状态
-    const stepResult = await store.runStep(5, {
+    await store.runStep(5, {
       platforms: store.targetPlatforms,
       publish_records: adaptedPlatforms.value.map(a => ({ platform: a.platform, title: a.title })),
     })

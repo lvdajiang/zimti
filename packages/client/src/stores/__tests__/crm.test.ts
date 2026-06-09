@@ -30,7 +30,7 @@ const mockCustomers = [
   {
     id: 'c1', name: '张三', aliases: '小张', phone: '13800001111',
     wechat: 'wx_zhang', source_type: 'manual', source_ref_id: null,
-    intent_level: 'hot' as const, stage: 'new' as const,
+    intent_level: 'high' as const, stage: 'new_friend' as const,
     travel_intent: null, notes: 'VIP客户',
     last_follow_up_at: null,
     tags: [{ id: 't1', customer_id: 'c1', tag: 'VIP' }],
@@ -38,8 +38,8 @@ const mockCustomers = [
   },
   {
     id: 'c2', name: '李四', aliases: '', phone: null,
-    wechat: 'wx_li', source_type: 'voice', source_ref_id: null,
-    intent_level: 'warm' as const, stage: 'following' as const,
+    wechat: 'wx_li', source_type: 'group_chat', source_ref_id: null,
+    intent_level: 'medium' as const, stage: 'chatting' as const,
     travel_intent: null, notes: null,
     last_follow_up_at: '2026-05-01',
     tags: [],
@@ -47,11 +47,11 @@ const mockCustomers = [
   },
 ]
 
-const mockFunnelStats = { new: 10, following: 5, negotiated: 3, closed_won: 8, closed_lost: 2 }
+const mockFunnelStats = { new_friend: 10, chatting: 5, deep_consult: 3, ordered: 8, completed: 2 }
 
 const mockTemplates = [
-  { id: 'tpl1', stage: 'new', category: 'greeting', content: '您好！', effectiveness_score: 0.9, created_at: '2026-01-01' },
-  { id: 'tpl2', stage: 'new', category: 'promotion', content: '我们有优惠', effectiveness_score: 0.8, created_at: '2026-01-02' },
+  { id: 'tpl1', stage: 'new_friend', category: 'greeting' as const, content: '您好！', effectiveness_score: 0.9, created_at: '2026-01-01' },
+  { id: 'tpl2', stage: 'new_friend', category: 'closing' as const, content: '我们有优惠', effectiveness_score: 0.8, created_at: '2026-01-02' },
 ]
 
 const mockReminders = [
@@ -99,8 +99,8 @@ describe('useCrmStore', () => {
       vi.mocked(fetchCustomers).mockResolvedValue({ items: [], total: 0 })
 
       const store = useCrmStore()
-      store.filterStage = 'new'
-      store.filterIntent = 'hot'
+      store.filterStage = 'new_friend'
+      store.filterIntent = 'high'
       store.filterKeyword = '张'
       store.currentPage = 2
       store.pageSize = 10
@@ -108,8 +108,8 @@ describe('useCrmStore', () => {
       await store.loadCustomers()
 
       expect(fetchCustomers).toHaveBeenCalledWith({
-        stage: 'new',
-        intent_level: 'hot',
+        stage: 'new_friend',
+        intent_level: 'high',
         keyword: '张',
         page: 2,
         page_size: 10,
@@ -168,24 +168,24 @@ describe('useCrmStore', () => {
 
   describe('changeStage', () => {
     it('调 updateCustomerStage → loadCustomers', async () => {
-      vi.mocked(updateCustomerStage).mockResolvedValue({ id: 'c1', stage: 'following' })
+      vi.mocked(updateCustomerStage).mockResolvedValue({ id: 'c1', stage: 'chatting' })
       vi.mocked(fetchCustomers).mockResolvedValue({ items: mockCustomers, total: 2 })
 
       const store = useCrmStore()
-      await store.changeStage('c1', 'following', '客户有意向')
+      await store.changeStage('c1', 'chatting', '客户有意向')
 
-      expect(updateCustomerStage).toHaveBeenCalledWith('c1', 'following', '客户有意向')
+      expect(updateCustomerStage).toHaveBeenCalledWith('c1', 'chatting', '客户有意向')
       expect(fetchCustomers).toHaveBeenCalledTimes(1)
     })
 
     it('不传 note 时正常调用', async () => {
-      vi.mocked(updateCustomerStage).mockResolvedValue({ id: 'c1', stage: 'negotiated' })
+      vi.mocked(updateCustomerStage).mockResolvedValue({ id: 'c1', stage: 'deep_consult' })
       vi.mocked(fetchCustomers).mockResolvedValue({ items: mockCustomers, total: 2 })
 
       const store = useCrmStore()
-      await store.changeStage('c1', 'negotiated')
+      await store.changeStage('c1', 'deep_consult')
 
-      expect(updateCustomerStage).toHaveBeenCalledWith('c1', 'negotiated', undefined)
+      expect(updateCustomerStage).toHaveBeenCalledWith('c1', 'deep_consult', undefined)
     })
   })
 

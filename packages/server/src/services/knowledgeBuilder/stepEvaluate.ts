@@ -183,9 +183,9 @@ async function parseAndBuildPlan(
       isLargeTopic: totalItems >= 30,
       strategy: totalItems >= 30 ? 'skeleton_then_fill' : 'full',
       qualityStandard: plan.qualityStandard || {
-        minContentLength: 300,
-        targetContentLength: 400,
-        maxContentLength: 600,
+        minContentLength: 20,
+        targetContentLength: 50,
+        maxContentLength: 100,
       },
       dimensions: (plan.dimensions || []).map((d: Record<string, unknown>) => ({
         dimension: String(d.dimension || '未命名维度'),

@@ -55,6 +55,7 @@
               <button class="btn-link" @click="openEditModal(c)">编辑</button>
               <button class="btn-link" @click="openStageModal(c)">阶段</button>
               <button class="btn-link" @click="openTagModal(c)">标签</button>
+              <button class="btn-link btn-quotation" @click="openQuotationModal(c)">报价</button>
               <button class="btn-link btn-danger" @click="handleDelete(c.id)">删除</button>
             </td>
           </tr>
@@ -339,6 +340,55 @@
         </div>
       </div>
     </div>
+
+    <!-- 报价弹窗 -->
+    <div v-if="showQuotationModal" class="modal-overlay" @click.self="showQuotationModal = false">
+      <div class="modal" style="width: 520px">
+        <h3 class="modal-title">生成报价 — {{ quotationCustomer?.name }}</h3>
+        <div v-if="quotationLoading" class="loading-wrapper">报价生成中...</div>
+        <div v-else-if="quotationResult">
+          <div class="quotation-result">
+            <div class="qr-row"><span class="qr-label">报价单号</span><span class="qr-value">{{ quotationResult.quotation_id }}</span></div>
+            <div class="qr-row"><span class="qr-label">总售价</span><span class="qr-value qr-price">¥{{ quotationResult.total_price.toLocaleString() }}</span></div>
+            <div class="qr-row"><span class="qr-label">总成本</span><span class="qr-value">¥{{ quotationResult.total_cost.toLocaleString() }}</span></div>
+            <div class="qr-row"><span class="qr-label">毛利率</span><span class="qr-value">{{ quotationResult.profit_margin }}%</span></div>
+            <div class="qr-row"><span class="qr-label">明细数</span><span class="qr-value">{{ quotationResult.details_count }} 条</span></div>
+          </div>
+          <div v-if="quotationResult.image_url" class="qr-image">
+            <img :src="quotationResult.image_url" alt="报价单" style="width:100%; border-radius: 6px; border: 1px solid var(--color-border-light)" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn" @click="showQuotationModal = false">关闭</button>
+          </div>
+        </div>
+        <div v-else>
+          <div class="form-group"><label>目的地 *</label><input v-model="quotationForm.destination" class="input" placeholder="如：云南、新疆" /></div>
+          <div class="form-row">
+            <div class="form-group"><label>天数</label>
+              <select v-model="quotationForm.days" class="input">
+                <option v-for="n in [3,4,5,6,7,8,10,12,15]" :key="n" :value="n">{{ n }}天</option>
+              </select>
+            </div>
+            <div class="form-group"><label>人数</label><input v-model.number="quotationForm.people_count" type="number" min="1" class="input" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>钻级</label>
+              <select v-model="quotationForm.grade" class="input">
+                <option value="3钻">3钻（经济）</option>
+                <option value="4钻">4钻（舒适）</option>
+                <option value="5钻">5钻（豪华）</option>
+                <option value="豪华">豪华尊享</option>
+              </select>
+            </div>
+            <div class="form-group"><label>出发日期</label><input v-model="quotationForm.tour_date" type="date" class="input" /></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn" @click="showQuotationModal = false">取消</button>
+            <button class="btn-primary" :disabled="!quotationForm.destination" @click="handleCreateQuotation">生成报价</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -353,6 +403,7 @@ import {
   REFERRAL_SOURCE_TYPE_LABELS,
 } from '@zimti/shared'
 import type { Customer } from '../api/crm'
+import { createQuotation, type BridgeQuotationResult } from '../api/bridge'
 import type { CustomerStage, IntentLevel, ChatTemplateCategory, ContactHealth, ReferralSourceType, ReferralStatus } from '@zimti/shared'
 
 const store = useCrmStore()
@@ -387,6 +438,13 @@ const selectedHealthIds = ref<string[]>([])
 
 // 推荐管理
 const referralFilter = ref('')
+
+// 报价桥接
+const showQuotationModal = ref(false)
+const quotationCustomer = ref<Customer | null>(null)
+const quotationForm = ref({ destination: '', days: 5, people_count: 2, grade: '4钻', tour_date: '' })
+const quotationLoading = ref(false)
+const quotationResult = ref<BridgeQuotationResult | null>(null)
 
 onMounted(() => {
   store.loadCustomers()
@@ -506,6 +564,44 @@ async function handleBatchWake() {
 
 async function copyText(text: string) {
   try { await navigator.clipboard.writeText(text) } catch { /* fallback */ }
+}
+
+// 报价桥接
+function openQuotationModal(c: Customer) {
+  quotationCustomer.value = c
+  quotationResult.value = null
+  quotationLoading.value = false
+  // 从客户旅行意向预填
+  const intent = c.travel_intent as { destination?: string; people?: number; date?: string } | null
+  quotationForm.value = {
+    destination: intent?.destination || '',
+    days: 5,
+    people_count: intent?.people || 2,
+    grade: '4钻',
+    tour_date: intent?.date || '',
+  }
+  showQuotationModal.value = true
+}
+
+async function handleCreateQuotation() {
+  if (!quotationCustomer.value || !quotationForm.value.destination) return
+  quotationLoading.value = true
+  try {
+    quotationResult.value = await createQuotation({
+      customer_id: quotationCustomer.value.id,
+      destination: quotationForm.value.destination,
+      days: quotationForm.value.days,
+      people_count: quotationForm.value.people_count,
+      grade: quotationForm.value.grade,
+      tour_date: quotationForm.value.tour_date,
+    })
+    // 刷新客户列表（阶段可能已变为"犹豫对比"）
+    store.loadCustomers()
+  } catch (err) {
+    alert('报价生成失败：' + (err instanceof Error ? err.message : '未知错误'))
+  } finally {
+    quotationLoading.value = false
+  }
 }
 
 // 推荐管理
@@ -649,4 +745,12 @@ textarea.input { resize: vertical; font-family: inherit; }
 .referral-code { padding: var(--space-4); text-align: center; margin-bottom: var(--space-4); }
 .code-text { font-size: var(--font-size-base); font-weight: 500; margin-bottom: var(--space-2); }
 .code-link { font-size: var(--font-size-sm); color: var(--color-primary); margin-bottom: var(--space-2); }
+/* 报价 */
+.btn-quotation { color: #eb2f96; font-weight: 500; }
+.quotation-result { margin-bottom: var(--space-4); }
+.qr-row { display: flex; justify-content: space-between; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-light); }
+.qr-label { color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.qr-value { font-weight: 500; font-size: var(--font-size-sm); }
+.qr-price { color: var(--color-danger); font-size: var(--font-size-lg); }
+.qr-image { margin-bottom: var(--space-3); }
 </style>

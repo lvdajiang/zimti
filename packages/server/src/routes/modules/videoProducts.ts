@@ -1,12 +1,87 @@
 import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
-import { DEMO_USER_ID, str } from '../../constants.js'
+import { DEMO_USER_ID, str, toInt } from '../../constants.js'
 import { startRender } from '../../services/render/renderService.js'
 import { runTask } from '../../services/ai/taskManager.js'
 import { generateCopy } from '../../services/ai/generators/copyGenerate.js'
 
 const router: Router = Router()
+
+// GET /api/v1/video-products — 视频作品列表（按 script_id 筛选）
+router.get('/video-products', async (req: Request, res: Response) => {
+  try {
+    const scriptId = toInt(req.query.script_id)
+    const where: Record<string, unknown>[] = [{ task: { userId: DEMO_USER_ID } }]
+    if (scriptId) where.push({ scriptId })
+
+    const items = await prisma.videoProduct.findMany({
+      where: { AND: where },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({
+      items: items.map(vp => ({
+        id: vp.id,
+        title: vp.title,
+        status: vp.status,
+        platform: vp.platform,
+        resolution: vp.resolution,
+        video_url: vp.videoUrl,
+        duration: vp.duration ? Number(vp.duration) : null,
+        created_at: vp.createdAt.toISOString(),
+      })),
+    })
+  } catch (error) {
+    console.error('[GET /video-products]', error)
+    res.status(500).json({ error: 'Failed to list video products' })
+  }
+})
+
+// POST /api/v1/video-products — 创建视频作品
+router.post('/video-products', async (req: Request, res: Response) => {
+  try {
+    const { script_id, title, platform, resolution } = req.body as {
+      script_id?: number
+      title?: string
+      platform?: string
+      resolution?: string
+    }
+    if (!script_id || !title) {
+      res.status(400).json({ error: 'script_id and title are required' })
+      return
+    }
+
+    // 查找关联的 Task（通过 Script → Task）
+    const script = await prisma.script.findUnique({ where: { id: script_id } })
+    if (!script) {
+      res.status(404).json({ error: 'Script not found' })
+      return
+    }
+
+    const vp = await prisma.videoProduct.create({
+      data: {
+        taskId: script.taskId,
+        scriptId: script_id,
+        title,
+        platform: platform || 'main',
+        resolution: resolution || '1080p',
+      },
+    })
+    res.status(201).json({
+      id: vp.id,
+      title: vp.title,
+      status: vp.status,
+      platform: vp.platform,
+      resolution: vp.resolution,
+      video_url: vp.videoUrl,
+      duration: vp.duration ? Number(vp.duration) : null,
+      created_at: vp.createdAt.toISOString(),
+    })
+  } catch (error) {
+    console.error('[POST /video-products]', error)
+    res.status(500).json({ error: 'Failed to create video product' })
+  }
+})
 
 // GET /api/v1/video-products/:id/publish-workspace — 发布工作区
 router.get('/video-products/:id/publish-workspace', async (req: Request, res: Response) => {

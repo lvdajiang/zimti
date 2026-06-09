@@ -2,6 +2,12 @@ import { Router } from 'express'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { DEMO_USER_ID, str, toInt } from '../../constants.js'
+import {
+  registerCollectSchedule,
+  unregisterCollectSchedule,
+  getCollectSchedule,
+  getActiveCollectScheduleIds,
+} from '../../services/collectScheduler.js'
 
 const router: Router = Router()
 
@@ -213,11 +219,73 @@ router.get('/collect-tasks/:id/logs', async (req: Request, res: Response) => {
   }
 })
 
-// PUT /api/v1/collect-tasks/schedule — 定时配置（桩）
-router.put('/collect-tasks/schedule', async (_req: Request, res: Response) => {
+// GET /api/v1/collect-tasks/schedule — 查询调度状态
+router.get('/collect-tasks/schedule', async (req: Request, res: Response) => {
   try {
-    // TODO: 接入定时调度服务
-    res.json({ success: true, message: 'Schedule config saved (stub)' })
+    const taskId = str(req.query.task_id)
+    if (taskId) {
+      const schedule = getCollectSchedule(taskId)
+      res.json({ task_id: taskId, schedule })
+      return
+    }
+    // 返回所有活跃调度
+    res.json({ active_schedules: getActiveCollectScheduleIds() })
+  } catch (error) {
+    console.error('[GET /collect-tasks/schedule]', error)
+    res.status(500).json({ error: 'Failed to get schedule' })
+  }
+})
+
+// PUT /api/v1/collect-tasks/schedule — 定时调度配置
+router.put('/collect-tasks/schedule', async (req: Request, res: Response) => {
+  try {
+    const { task_id, cron_expr, is_active } = req.body as {
+      task_id?: string
+      cron_expr?: string
+      is_active?: boolean
+    }
+
+    if (!task_id) {
+      res.status(400).json({ error: 'task_id is required' })
+      return
+    }
+
+    // 确认任务存在
+    const task = await prisma.collectTask.findFirst({
+      where: { id: task_id, userId: DEMO_USER_ID },
+    })
+    if (!task) {
+      res.status(404).json({ error: 'Collect task not found' })
+      return
+    }
+
+    if (is_active === false) {
+      // 停止调度
+      unregisterCollectSchedule(task_id)
+      await prisma.collectTaskLog.create({
+        data: { taskId: task_id, level: 'info', message: '定时调度已停止' },
+      })
+      res.json({ success: true, task_id, is_active: false })
+      return
+    }
+
+    // 注册/更新调度
+    if (!cron_expr) {
+      res.status(400).json({ error: 'cron_expr is required when activating schedule' })
+      return
+    }
+
+    const ok = registerCollectSchedule(task_id, cron_expr)
+    if (!ok) {
+      res.status(400).json({ error: 'Invalid cron expression' })
+      return
+    }
+
+    await prisma.collectTaskLog.create({
+      data: { taskId: task_id, level: 'info', message: `定时调度已配置: ${cron_expr}` },
+    })
+
+    res.json({ success: true, task_id, cron_expr, is_active: true })
   } catch (error) {
     console.error('[PUT /collect-tasks/schedule]', error)
     res.status(500).json({ error: 'Failed to save schedule' })

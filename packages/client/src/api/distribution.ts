@@ -128,13 +128,17 @@ export async function fetchDistributionAnalytics(): Promise<{
   by_status: Array<{ status: string; count: number }>
   recent_published: DistributionRecord[]
 }> {
-  return api.get('/distribution/analytics') as unknown as Promise<typeof ReturnType<typeof fetchDistributionAnalytics> extends Promise<infer T> ? T : never>
+  return api.get('/distribution/analytics') as unknown as Promise<{
+    by_platform: Array<{ platform: string; count: number }>
+    by_status: Array<{ status: string; count: number }>
+    recent_published: DistributionRecord[]
+  }>
 }
 
 // --- 平台配置 ---
 
 export async function fetchPlatformConfigs(): Promise<{
-  configs: Array<Platform & { name: string; maxLength: number; tagLimit: number; optimalTimes: string[] }>
+  configs: Array<{ platform: Platform; name: string; maxLength: number; tagLimit: number; optimalTimes: string[] }>
 }> {
-  return api.get('/distribution/platform-configs') as unknown as Promise<{ configs: Array<Platform & { name: string; maxLength: number; tagLimit: number; optimalTimes: string[] }> }>
+  return api.get('/distribution/platform-configs') as unknown as Promise<{ configs: Array<{ platform: Platform; name: string; maxLength: number; tagLimit: number; optimalTimes: string[] }> }>
 }

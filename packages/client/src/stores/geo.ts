@@ -6,14 +6,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   fetchGeoQuestions, createGeoQuestion, updateGeoQuestion, deleteGeoQuestion,
-  generateGeoQuestions, getGenerateQuestionsStatus, batchCreateGeoQuestions,
-  fetchGeoContents, fetchGeoContent, createGeoContent, updateGeoContent,
-  deleteGeoContent, generateGeoContent, getGenerateContentStatus,
-  batchGenerateGeoContent, getBatchGenerateStatus, fetchSchemaPreview,
-  fetchGeoMentions, checkGeoMentions, getCheckMentionsStatus, fetchGeoDashboard,
+  generateGeoQuestions, batchCreateGeoQuestions,
+  fetchGeoContents, fetchGeoContent, updateGeoContent,
+  deleteGeoContent, generateGeoContent,
+  batchGenerateGeoContent, fetchSchemaPreview,
+  fetchGeoMentions, checkGeoMentions, fetchGeoDashboard,
   fetchGeoKnowledge, createGeoKnowledge, updateGeoKnowledge, deleteGeoKnowledge,
-  generateGeoKnowledge, getGenerateKnowledgeStatus,
-  fetchDistillBatches, fetchDistillResults, startDistill, getDistillStatus,
+  generateGeoKnowledge,
+  fetchDistillBatches, fetchDistillResults, startDistill,
   importDistillToQuestions, updateDistillResult, deleteDistillBatch,
   searchAndBuildKnowledge, getSearchAndBuildStatus,
 } from '../api/geo'

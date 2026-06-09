@@ -37,6 +37,9 @@ export const useProductionStore = defineStore('production', () => {
   const audioUrls = ref<string[]>([])
   const audioDuration = ref(0)
   const ttsVoice = ref('zh-CN-XiaoxiaoNeural')
+  const ttsEngine = ref<'edge_tts' | 'fish_audio' | 'uploaded'>('edge_tts')
+  const ttsVoiceProfileId = ref<string | null>(null)
+  const uploadedAudioMap = ref<Record<string, string>>({})
 
   // --- 步骤3: 视频数据 ---
   const videoProductId = ref('')
@@ -189,6 +192,9 @@ export const useProductionStore = defineStore('production', () => {
     videoType.value = 'knowledge'
     audioUrls.value = []
     audioDuration.value = 0
+    ttsEngine.value = 'edge_tts'
+    ttsVoiceProfileId.value = null
+    uploadedAudioMap.value = {}
     videoProductId.value = ''
     renderJobId.value = ''
     renderProgress.value = 0
@@ -238,7 +244,7 @@ export const useProductionStore = defineStore('production', () => {
 
   // --- 内部方法 ---
 
-  async function pollStepCompletion(step: number, maxAttempts = 60): Promise<void> {
+  async function pollStepCompletion(step: number, maxAttempts = 90): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 2000))
       await refreshProgress()
@@ -256,7 +262,7 @@ export const useProductionStore = defineStore('production', () => {
     // State
     jobId, taskId, scriptId, currentStep, steps, loading, executing, jobStatus,
     fullText, videoType, oralRatio,
-    audioUrls, audioDuration, ttsVoice,
+    audioUrls, audioDuration, ttsVoice, ttsEngine, ttsVoiceProfileId, uploadedAudioMap,
     videoProductId, renderJobId, renderProgress, videoUrl,
     subtitleStyle,
     targetPlatforms,

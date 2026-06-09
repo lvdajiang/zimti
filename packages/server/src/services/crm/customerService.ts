@@ -338,6 +338,7 @@ export class CustomerService {
         id: true,
         name: true,
         stage: true,
+        intentLevel: true,
         lastFollowUpAt: true,
         notes: true,
         tags: { select: { tag: true } },
@@ -345,7 +346,8 @@ export class CustomerService {
       },
     })
 
-    const ai = getAIProvider()
+    // 懒加载战术调度器（避免循环依赖和启动时加载）
+    const { selectTactic, getTacticProvider, formatTacticPrompt } = await import('../ai/salesTacticEngine.js')
     const results: Array<{ customerId: string; name: string; script: string }> = []
 
     for (const customer of customers) {
@@ -358,26 +360,21 @@ export class CustomerService {
         ? JSON.stringify(customer.travelIntent)
         : '未知'
 
-      const prompt = `你是旅游私域运营专家。请为以下沉默客户生成一条唤醒消息（非营销，要像朋友间的关心）。
+      // 战术调度：沉默客户自动用 at_risk 策略
+      const health = daysSilent > 30 ? 'lost' : daysSilent > 14 ? 'at_risk' : undefined
+      const tactic = selectTactic(customer.stage, customer.intentLevel ?? undefined, health)
+      const ai = getTacticProvider(tactic)
 
-客户信息：
-- 姓名：${customer.name}
-- 当前阶段：${customer.stage}
-- 沉默天数：${daysSilent}天
-- 标签：${tagsStr}
-- 旅行意向：${intentStr}
-- 备注：${customer.notes || '无'}
+      const contextStr = `姓名：${customer.name}，阶段：${customer.stage}，沉默${daysSilent}天，标签：${tagsStr}，意向：${intentStr}，备注：${customer.notes || '无'}`
 
-要求：
-1. 语气自然亲切，不要像机器人
-2. 可以结合旅行意向或者最近的热门目的地
-3. 不要直接推销，先引起对话
-4. 控制在 2-3 句话，50字以内
-
-只返回唤醒消息文本，不要任何额外内容。`
+      const prompt = formatTacticPrompt(tactic.userPromptTemplate, {
+        name: customer.name,
+        context: contextStr,
+        count: 1,
+      })
 
       try {
-        const script = await ai.generate(prompt, '你是私域运营话术专家。')
+        const script = await ai.generate(prompt, tactic.systemPrompt)
         results.push({
           customerId: customer.id,
           name: customer.name,

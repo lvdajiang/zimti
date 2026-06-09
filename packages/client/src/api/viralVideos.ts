@@ -43,3 +43,7 @@ export function extractTranscript(id: number) {
 export function batchAnalyze(videoIds: number[]) {
   return api.post('/viral-videos/analyze-batch', { video_ids: videoIds }) as Promise<{ success: boolean; count: number }>
 }
+
+export function markAsBenchmark(id: number) {
+  return api.post<{ success: boolean; asset_id?: string; message?: string }>(`/viral-videos/${id}/benchmark`) as Promise<{ success: boolean; asset_id?: string; message?: string }>
+}

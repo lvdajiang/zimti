@@ -1,5 +1,6 @@
 import { prisma } from '../../../db.js'
 import { getAIProvider } from '../provider.js'
+import { renderPrompt, type PromptVariables } from '../../promptEngine/index.js'
 
 interface StoryboardGenerateInput {
   script_id: number
@@ -17,10 +18,23 @@ export async function generateStoryboard(input: StoryboardGenerateInput): Promis
     ? `\n\n品牌调性参考：\n${input.brand_context}\n请确保画面风格和文案语气与品牌调性一致。`
     : ''
 
-  const prompt = `根据以下脚本生成短视频分镜。视频类型：${input.video_type ?? '通用'}。${brandSection}
+  const variables: PromptVariables = {
+    video_type: input.video_type ?? '通用',
+    brand_section: brandSection,
+    script_full_text: script.fullText,
+  }
+
+  const { systemPrompt, userPrompt } = await renderPrompt(
+    'storyboard_generate',
+    variables,
+    undefined,
+    // 硬编码降级：PromptEngine 不可用时回退到原始逻辑
+    (vars) => ({
+      systemPrompt: undefined,
+      userPrompt: `根据以下脚本生成短视频分镜。视频类型：${vars.video_type}。${vars.brand_section}
 
 脚本全文：
-${script.fullText}
+${vars.script_full_text}
 
 要求：将脚本拆分为 5-10 个分镜片段，每个片段包含：
 - segmentType: "oral"（口播段）、"visual"（画面段）或 "transition"（转场段）
@@ -29,9 +43,11 @@ ${script.fullText}
 - duration: 时长（秒，口播段 3-8秒，画面段 2-5秒，转场 0.5-1秒）
 - transitionType: 转场类型（淡入、滑动、缩放等）
 
-返回 JSON 数组。`
+返回 JSON 数组。`,
+    }),
+  )
 
-  const result = await provider.generate(prompt)
+  const result = await provider.generate(userPrompt, systemPrompt)
   try {
     return JSON.parse(result)
   } catch {

@@ -262,4 +262,16 @@ router.post('/topic-proposals/add-videos', async (req: Request, res: Response) =
   }
 })
 
+// DELETE /api/v1/topic-proposals/:id — 删除选题
+router.delete('/topic-proposals/:id', async (req: Request, res: Response) => {
+  try {
+    const id = toInt(req.params.id)
+    await prisma.topicProposal.delete({ where: { id } })
+    res.json({ success: true })
+  } catch (error) {
+    console.error('[DELETE /topic-proposals/:id]', error)
+    res.status(500).json({ error: 'Failed to delete topic proposal' })
+  }
+})
+
 export default router

@@ -199,4 +199,16 @@ router.get('/hotspots/recommended', async (_req: Request, res: Response) => {
   }
 })
 
+// DELETE /api/v1/hotspots/:id — 删除热点
+router.delete('/hotspots/:id', async (req: Request, res: Response) => {
+  try {
+    const id = toInt(req.params.id)
+    await prisma.hotspot.delete({ where: { id } })
+    res.json({ success: true })
+  } catch (error) {
+    console.error('[DELETE /hotspots/:id]', error)
+    res.status(500).json({ error: 'Failed to delete hotspot' })
+  }
+})
+
 export default router

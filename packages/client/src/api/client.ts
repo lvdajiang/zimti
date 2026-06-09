@@ -3,7 +3,7 @@ import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import { toast } from '../utils/toast.js'
 
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.BASE_URL + 'api/v1',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })

@@ -1,5 +1,6 @@
 import { prisma } from '../../../db.js'
 import { getAIProvider } from '../provider.js'
+import { renderPrompt, type PromptVariables } from '../../promptEngine/index.js'
 
 interface TopicGenerateInput {
   task_id: string
@@ -18,11 +19,27 @@ export async function generateTopics(input: TopicGenerateInput): Promise<unknown
     ? `\n\n品牌画像参考：\n${input.brand_context}\n请确保选题风格与品牌调性一致。`
     : ''
 
-  const prompt = `根据任务"${task.title}"（描述：${task.description ?? '无'}），生成 ${count} 个短视频选题。${brandSection}
-每个选题包含：title（标题）、contentSkeleton（内容骨架，100字左右）、targetAudience（目标受众）、estimatedHotValue（预估热度 1-100）。
-返回 JSON 数组。`
+  const variables: PromptVariables = {
+    task_title: task.title,
+    task_description: task.description ?? '无',
+    count,
+    brand_section: brandSection,
+  }
 
-  const result = await provider.generate(prompt)
+  const { systemPrompt, userPrompt } = await renderPrompt(
+    'topic_generate',
+    variables,
+    undefined,
+    // 硬编码降级：PromptEngine 不可用时回退到原始逻辑
+    (vars) => ({
+      systemPrompt: undefined,
+      userPrompt: `根据任务"${vars.task_title}"（描述：${vars.task_description}），生成 ${vars.count} 个短视频选题。${vars.brand_section}
+每个选题包含：title（标题）、contentSkeleton（内容骨架，100字左右）、targetAudience（目标受众）、estimatedHotValue（预估热度 1-100）。
+返回 JSON 数组。`,
+    }),
+  )
+
+  const result = await provider.generate(userPrompt, systemPrompt)
   try {
     return JSON.parse(result)
   } catch {
@@ -42,9 +59,18 @@ export async function mergeTopics(proposalIds: number[]): Promise<unknown> {
 
   const provider = getAIProvider()
   const titles = proposals.map(p => p.title).join('、')
-  const prompt = `合并以下选题为一个更优选题：${titles}。返回合并后的 title 和 contentSkeleton。`
 
-  const result = await provider.generate(prompt)
+  const { systemPrompt, userPrompt } = await renderPrompt(
+    'topic_merge',
+    { titles },
+    undefined,
+    (vars) => ({
+      systemPrompt: undefined,
+      userPrompt: `合并以下选题为一个更优选题：${vars.titles}。返回合并后的 title 和 contentSkeleton。`,
+    }),
+  )
+
+  const result = await provider.generate(userPrompt, systemPrompt)
   try {
     return JSON.parse(result)
   } catch {

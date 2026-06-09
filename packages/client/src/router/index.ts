@@ -183,6 +183,12 @@ const router = createRouter({
       meta: { title: '构建引擎' },
     },
     {
+      path: '/geo/fact-extract',
+      name: 'FactExtract',
+      component: () => import('@/views/FactExtractView.vue'),
+      meta: { title: '事实提取' },
+    },
+    {
       path: '/auth',
       name: 'Auth',
       component: () => import('@/views/AuthView.vue'),

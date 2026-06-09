@@ -153,6 +153,8 @@ ${avoidTitles}
     url: k.source_url,
     snippet: k.content.slice(0, 100),
     source: 'glm' as const,
+    urlVerified: false,
+    isGovSource: false,
   }))
 
   return { searchResults, knowledgeItems }

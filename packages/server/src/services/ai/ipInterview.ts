@@ -255,7 +255,11 @@ ${answersSummary}
 }
 
 export class IndustryTemplateService {
-  constructor() {}
+  private userId: string
+
+  constructor(userId: string = DEMO_USER_ID) {
+    this.userId = userId
+  }
 
   async list(industry?: string): Promise<Array<{
     id: string
@@ -295,11 +299,65 @@ export class IndustryTemplateService {
     const config = template.config as Record<string, unknown> | null
     if (!config) return null
 
-    return {
-      persona_default: (config.persona_default as Record<string, unknown>) || {},
-      content_types: (config.content_types as string[]) || [],
-      pipeline_presets: (config.pipeline_presets as Record<string, boolean>) || {},
+    const personaDefault = (config.persona_default as Record<string, unknown>) || {}
+    const contentTypes = (config.content_types as string[]) || []
+    const pipelinePresets = (config.pipeline_presets as Record<string, boolean>) || {}
+
+    // 1. 应用到 PersonaConfig — 更新人设风格信息
+    const persona = personaDefault as { tone?: string; style?: string; target_audience?: string }
+    await prisma.personaConfig.upsert({
+      where: { userId: this.userId },
+      update: {
+        ...(persona.tone && { styleDescription: persona.tone }),
+        ...(persona.target_audience && { oneLinePositioning: `面向${persona.target_audience}的${template.name}` }),
+      },
+      create: {
+        userId: this.userId,
+        displayName: template.name,
+        styleDescription: persona.tone || '',
+        oneLinePositioning: persona.target_audience ? `面向${persona.target_audience}的${template.name}` : '',
+      },
+    })
+
+    // 2. 根据模板创建/更新 PipelineTemplate（如果启用流水线模式）
+    const activeModes = Object.entries(pipelinePresets)
+      .filter(([, enabled]) => enabled)
+      .map(([mode]) => mode)
+
+    if (activeModes.length > 0) {
+      // 删除同名的旧模板，重新创建
+      await prisma.pipelineTemplate.deleteMany({
+        where: { userId: this.userId, name: `[模板] ${template.name}` },
+      })
+      await prisma.pipelineTemplate.create({
+        data: {
+          userId: this.userId,
+          name: `[模板] ${template.name}`,
+          mode: activeModes[0],
+          steps: [
+            { step: 1, service: 'script', config: { content_types: contentTypes } },
+            { step: 2, service: 'tts', config: {} },
+            { step: 3, service: 'visual', config: {} },
+            { step: 4, service: 'subtitle', config: {} },
+            { step: 5, service: 'publish', config: { platforms: ['douyin'] } },
+          ],
+        },
+      })
     }
+
+    // 3. 写入品牌记忆
+    try {
+      const { BrandMemoryService } = await import('../aiHub/brandMemory.js')
+      const brandMemory = new BrandMemoryService(this.userId)
+      await brandMemory.batchUpsert([
+        { category: 'style', key: 'industry_template', value: { id: template.id, name: template.name, industry: template.industry } },
+        { category: 'preference', key: 'content_types', value: contentTypes },
+      ])
+    } catch {
+      // 品牌记忆写入失败不影响主流程
+    }
+
+    return { persona_default: personaDefault, content_types: contentTypes, pipeline_presets: pipelinePresets }
   }
 
   async initPresets(): Promise<number> {
@@ -329,7 +387,7 @@ export class IndustryTemplateService {
 export function createInterviewRouter(): Router {
   const router = Router()
   const interviewService = new IpInterviewService()
-  const templateService = new IndustryTemplateService()
+  const templateService = new IndustryTemplateService(DEMO_USER_ID)
 
   // GET /api/v1/ip-interview/layers — 获取四层提问框架
   router.get('/ip-interview/layers', (_req: Request, res: Response) => {

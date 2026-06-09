@@ -38,6 +38,15 @@ router.post('/crm/customers', async (req: Request, res: Response) => {
     sourceType: source_type, sourceRefId: source_ref_id,
     intentLevel: intent_level, stage, travelIntent: travel_intent, notes, tags,
   })
+
+  // 桥接同步：异步推送到智派（不阻塞CRM响应，失败只记日志）
+  setImmediate(async () => {
+    try {
+      const { syncCustomerToZhiPai } = await import('../../bridge/sync.js')
+      await syncCustomerToZhiPai(customer)
+    } catch { /* 桥接失败不影响CRM主流程 */ }
+  })
+
   res.status(201).json({ id: customer.id })
 })
 
@@ -122,24 +131,40 @@ router.get('/crm/chat-templates', async (req: Request, res: Response) => {
   res.json({ items })
 })
 
-// POST /api/v1/crm/chat-templates/generate — AI 生成话术
+// POST /api/v1/crm/chat-templates/generate — AI 生成话术（人设 + 战术调度）
 router.post('/crm/chat-templates/generate', async (req: Request, res: Response) => {
   const { stage, customer_context } = req.body
   if (!stage) { res.status(400).json({ error: 'stage is required' }); return }
 
-  const { getAIProvider } = await import('../../services/ai/provider.js')
-  const ai = getAIProvider()
-  if (!ai) { res.status(503).json({ error: 'AI 服务不可用' }); return }
-
-  const prompt = `为客户阶段"${stage}"生成 2-3 条私聊回复话术。
-${customer_context ? `客户背景：${customer_context}` : ''}
-
-返回 JSON：{ "templates": [{ "content": "话术内容", "category": "greeting|probing|closing|objection|general" }] }`
-
   try {
-    const result = await ai.generate(prompt, '你是私域转化专家。返回纯 JSON。')
+    // 1. 加载销售人设（"你是谁" — 稳定不变）
+    const { SalesPersonaService } = await import('../../services/ai/salesPersona.js')
+    const personaService = new SalesPersonaService(getUserId(req as any))
+    const personaPrompt = await personaService.buildPersonaSystemPrompt(stage)
+
+    // 2. 战术调度（"你怎么做" — 随客户阶段变化）
+    const { selectTactic, getTacticProvider, formatTacticPrompt } = await import('../../services/ai/salesTacticEngine.js')
+
+    const ctx = typeof customer_context === 'string' ? {} : (customer_context || {})
+    const intent = ctx.intent_level || ctx.intentLevel
+    const health = ctx.health || ctx.contact_health
+
+    const tactic = selectTactic(stage, intent, health)
+    const ai = getTacticProvider(tactic)
+
+    // 3. 合并 prompt：人设系统词 + 战术策略词
+    const systemPrompt = personaPrompt + '\n\n' + tactic.systemPrompt
+
+    const prompt = formatTacticPrompt(tactic.userPromptTemplate, {
+      name: ctx.name || '客户',
+      context: typeof customer_context === 'string' ? customer_context : JSON.stringify(ctx),
+      count: tactic.maxSentences,
+    })
+
+    const result = await ai.generate(prompt, systemPrompt)
     const parsed = JSON.parse(result)
-    res.json(parsed)
+    // 附加战术+人设信息，便于前端展示和日志
+    res.json({ ...parsed, _tactic: { provider: tactic.provider, persona: tactic.persona, goal: tactic.goal } })
   } catch { res.status(502).json({ error: 'AI 生成失败' }) }
 })
 
@@ -264,6 +289,35 @@ router.get('/crm/funnel-analysis', async (req: Request, res: Response) => {
     res.json(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : '漏斗分析失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// ============ 销售分身人设 ============
+
+// GET /api/v1/crm/sales-persona — 获取当前销售人设
+router.get('/crm/sales-persona', async (req: Request, res: Response) => {
+  try {
+    const { SalesPersonaService } = await import('../../services/ai/salesPersona.js')
+    const service = new SalesPersonaService(getUserId(req as any))
+    const persona = await service.getPersona()
+    res.json(persona)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '获取人设失败'
+    res.status(500).json({ error: message })
+  }
+})
+
+// PUT /api/v1/crm/sales-persona — 更新销售人设
+router.put('/crm/sales-persona', async (req: Request, res: Response) => {
+  try {
+    const { SalesPersonaService } = await import('../../services/ai/salesPersona.js')
+    const service = new SalesPersonaService(getUserId(req as any))
+    await service.updatePersona(req.body)
+    const updated = await service.getPersona()
+    res.json(updated)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '更新人设失败'
     res.status(500).json({ error: message })
   }
 })

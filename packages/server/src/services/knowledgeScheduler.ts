@@ -5,7 +5,7 @@
  * 注册到 node-cron，到达执行时间自动触发 Pipeline。
  */
 
-import cron from 'node-cron'
+import cron, { type ScheduledTask } from 'node-cron'
 import { prisma } from '../db.js'
 import { KnowledgeBuildPipeline } from './knowledgeBuilder/index.js'
 
@@ -14,7 +14,7 @@ type ScheduleTask = {
   userId: string
   topic: string
   cronExpr: string
-  task: cron.ScheduledTask
+  task: ScheduledTask
 }
 
 const activeTasks = new Map<string, ScheduleTask>()
@@ -87,7 +87,7 @@ async function executeSchedule(id: string, userId: string, topic: string): Promi
   })
 
   // 创建构建任务
-  const pipeline = new KnowledgeBuildPipeline({
+  new KnowledgeBuildPipeline({
     jobId: '',
     userId,
     topic,

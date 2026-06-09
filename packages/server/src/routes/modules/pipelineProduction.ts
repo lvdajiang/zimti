@@ -3,7 +3,7 @@ import { prisma } from '../../db.js'
 import { getUserId, str } from '../../constants.js'
 import { optionalAuth } from '../../services/auth/authService.js'
 import { synthesizeSpeech } from '../../services/tts/index.js'
-import { startRender } from '../../services/render/renderService.js'
+import { startRender, getJobStatus } from '../../services/render/renderService.js'
 import { generateStoryboard } from '../../services/ai/generators/storyboardGenerate.js'
 import type { Request, Response } from 'express'
 import type { ProductionStepName } from '@zimti/shared'
@@ -180,8 +180,26 @@ router.get('/pipeline/production/:jobId/progress', async (req: Request, res: Res
       steps[2].status = 'completed'
       steps[2].data = { video_product_id: output.video_product_id, video_url: output.video_url }
     } else if (output.render_job_id) {
-      steps[2].status = 'running'
-      steps[2].data = { video_product_id: output.video_product_id, render_job_id: output.render_job_id }
+      // 检查渲染 job 实际状态
+      const renderJob = getJobStatus(output.render_job_id)
+      if (renderJob?.status === 'completed' && renderJob.outputPath) {
+        // 渲染完成但 output 还没同步，自动补齐
+        const videoUrl = `/uploads/renders/render_${output.video_product_id}.mp4`
+        steps[2].status = 'completed'
+        steps[2].data = { video_product_id: output.video_product_id, video_url: videoUrl, render_progress: 100 }
+        // 异步回写 output.video_url，下次轮询直接命中
+        updateOutput(job.id, { video_url: videoUrl }).catch(() => {})
+      } else if (renderJob?.status === 'failed') {
+        steps[2].status = 'failed'
+        steps[2].data = { video_product_id: output.video_product_id, render_job_id: output.render_job_id, error: renderJob.error || '渲染失败' }
+      } else {
+        steps[2].status = 'running'
+        steps[2].data = {
+          video_product_id: output.video_product_id,
+          render_job_id: output.render_job_id,
+          render_progress: renderJob?.progress ?? 0,
+        }
+      }
     }
     if (output.subtitle_style) {
       steps[3].status = 'completed'
@@ -511,7 +529,7 @@ async function executeScriptStep(
   await updateOutput(jobId, { segment_ids: segmentIds })
 }
 
-/** 步骤2: TTS 配音 */
+/** 步骤2: TTS 配音（支持多引擎） */
 async function executeTtsStep(
   jobId: string,
   output: ProductionOutput,
@@ -520,9 +538,18 @@ async function executeTtsStep(
   const scriptId = output.script_id
   if (!scriptId) throw new Error('script_id not found in output')
 
-  const voice = (config?.voice as string) || 'zh-CN-XiaoxiaoNeural'
+  // 引擎选择: edge_tts（默认） / fish_audio / uploaded
+  const engine = (config?.engine as 'edge_tts' | 'fish_audio' | 'uploaded') || 'edge_tts'
   const rate = (config?.rate as string) || '+0%'
   const volume = (config?.volume as string) || '+0%'
+
+  // 解析音色：voice_profile_id 优先，否则用 voice 字段
+  let voice = (config?.voice as string) || 'zh-CN-XiaoxiaoNeural'
+  const voiceProfileId = config?.voice_profile_id as string | undefined
+  if (voiceProfileId) {
+    const profile = await prisma.voiceProfile.findUnique({ where: { id: voiceProfileId } })
+    if (profile?.engineRef) voice = profile.engineRef
+  }
 
   // 获取所有 oral 类型的分镜片段
   const segments = await prisma.storyboardSegment.findMany({
@@ -532,16 +559,32 @@ async function executeTtsStep(
 
   if (segments.length === 0) throw new Error('No oral segments found')
 
+  // 模式 C: 上传录音映射（分镜段ID → 音频文件路径）
+  const uploadedAudioMap = (config?.uploaded_audio_map as Record<string, string>) || {}
+
   const audioUrls: string[] = []
   let totalDuration = 0
 
   for (const seg of segments) {
     if (!seg.oralText) continue
+
+    // 模式 C: 优先使用该段的上传录音
+    if (engine === 'uploaded' && uploadedAudioMap[seg.id]) {
+      const filePath = uploadedAudioMap[seg.id]
+      await prisma.storyboardSegment.update({
+        where: { id: seg.id },
+        data: { oralAudioUrl: filePath },
+      })
+      audioUrls.push(filePath)
+      continue
+    }
+
     const result = await synthesizeSpeech({
       text: seg.oralText,
       voice,
       rate,
       volume,
+      engine,
     })
 
     // 更新分镜片段的音频 URL

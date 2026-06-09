@@ -17,6 +17,7 @@ export interface MergedItem {
   sourceIds: string[]
   credibility: number
   category: string
+  needsReview: boolean
 }
 
 export interface SemanticDedupInput {
@@ -123,6 +124,7 @@ async function clusterMerge(
       sourceIds: [item.id],
       credibility: item.credibility,
       category: '',
+      needsReview: false,
     }))
   }
 
@@ -133,24 +135,25 @@ async function clusterMerge(
 内容: ${(item.snippet || item.content).slice(0, 150)}`
   }).join('\n\n')
 
-  const prompt = `你是一个知识聚合专家。请对以下 ${candidates.length} 条搜索结果进行聚类合并。
+  const prompt = `你是一个事实聚合专家。请对以下 ${candidates.length} 条搜索结果进行语义去重。
 
 ${itemsText}
 
-请将高度相似的条目合并为一条，保留更可信、更详细的信息。
-合并规则：
-- 核心信息点一致的条目应合并
-- 合并后取最高的可信度
-- 标题取最有代表性的
-- 维度和来源URL全部保留
+规则：
+- 如果多条结果陈述同一个事实（核心数据点一致），合并为一条，保留最详细的描述
+- 如果信息不完全一致（如不同数字），保留为独立条目，标记 needsReview=true
+- 不要把不同的事实合并成文章
+- 保留所有来源URL
+- 合并后取最高可信度
 
 返回 JSON 数组，每项包含：
 - ids: 要合并的条目ID数组（单条也放数组）
-- title: 合并后的标题
-- content: 合并后的内容（保留关键信息，100-200字）
+- title: 事实的简短描述
+- content: 事实的完整描述（1-3句话，保留关键数据点，不超过150字）
 - category: 初步分类（brand_intro/route/service/case/faq/industry 之一）
+- needsReview: 如果信息有冲突或不确定则为 true
 
-[{"ids": ["id1", "id2"], "title": "合并标题", "content": "合并内容", "category": "route"}, ...]
+[{"ids": ["id1", "id2"], "title": "标题", "content": "内容", "category": "route", "needsReview": false}, ...]
 
 只返回 JSON，不要其他文字。`
 
@@ -164,6 +167,7 @@ ${itemsText}
       title: string
       content: string
       category: string
+      needsReview: boolean
     }>
 
     const idMap = new Map<string, FilteredItem>()
@@ -180,6 +184,7 @@ ${itemsText}
       sourceIds: cluster.ids,
       credibility: Math.max(...cluster.ids.map(id => idMap.get(id)?.credibility ?? 0.5)),
       category: cluster.category || '',
+      needsReview: cluster.needsReview ?? false,
     }))
   } catch (err) {
     console.warn(
@@ -194,6 +199,7 @@ ${itemsText}
       sourceIds: [item.id],
       credibility: item.credibility,
       category: '',
+      needsReview: true,
     }))
   }
 }

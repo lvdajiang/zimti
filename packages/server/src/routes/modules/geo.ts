@@ -10,6 +10,7 @@ import cron from 'node-cron'
 import { prisma } from '../../db.js'
 import type { Request, Response } from 'express'
 import { getUserId, str, toInt } from '../../constants.js'
+import { markStub } from '../../middleware/stubMarker.js'
 import { optionalAuth } from '../../services/auth/authService.js'
 import { runTask, getTask } from '../../services/ai/index.js'
 import { generateGeoQuestions } from '../../services/ai/generators/geoQuestionGenerate.js'
@@ -19,11 +20,14 @@ import { generateBrandKnowledge } from '../../services/ai/generators/brandKnowle
 import { distillKeywords } from '../../services/ai/generators/keywordDistillGenerate.js'
 import { buildKnowledgeFromWeb } from '../../services/ai/generators/webKnowledgeGenerate.js'
 import { KnowledgeBuildPipeline } from '../../services/knowledgeBuilder/index.js'
+import { extractFactsFromTranscript } from '../../services/knowledgeBuilder/extractFactsFromTranscript.js'
+import { verifyFacts } from '../../services/knowledgeBuilder/verifyFacts.js'
+import type { FactType } from '@zimti/shared'
 import {
-  initKnowledgeScheduler, triggerSchedule,
+  triggerSchedule,
   refreshSchedule, stopSchedule,
 } from '../../services/knowledgeScheduler.js'
-import type { KnowledgeBuildMode, KnowledgeBuildStepType } from '@zimti/shared'
+import type { KnowledgeBuildMode, KnowledgeBuildStepType, GeoQuestionCategory } from '@zimti/shared'
 
 const router: Router = Router()
 router.use(optionalAuth)
@@ -429,6 +433,9 @@ router.post('/geo/mentions/check', async (req: Request, res: Response) => {
     return
   }
 
+  // 标注为桩端点：提及检测目前使用模拟数据，未接入真实 AI 搜索 API
+  markStub(res, 'GEO 提及检测使用模拟数据，未接入真实 AI 搜索 API')
+
   try {
     const userId = getUserId(req as any)
     const contents = await prisma.geoContent.findMany({
@@ -490,6 +497,7 @@ router.get('/geo/dashboard', async (req: Request, res: Response) => {
     contentCount,
     publishedCount,
     mentionStats,
+    mentionedAgg,
     topContents,
   ] = await Promise.all([
     prisma.geoQuestion.count({ where: { userId } }),
@@ -500,6 +508,12 @@ router.get('/geo/dashboard', async (req: Request, res: Response) => {
       where: { userId },
       _count: { id: true },
       _sum: { mentionRank: true },
+    }),
+    // 按 engine 统计 mentioned=true 的数量
+    prisma.geoMention.groupBy({
+      by: ['searchEngine'],
+      where: { userId, mentioned: true },
+      _count: { id: true },
     }),
     prisma.geoContent.findMany({
       where: { userId, status: 'published' },
@@ -521,6 +535,7 @@ router.get('/geo/dashboard', async (req: Request, res: Response) => {
     mention_by_engine: mentionStats.map(s => ({
       engine: s.searchEngine,
       total_checks: typeof s._count === 'object' ? s._count.id ?? 0 : 0,
+      mentioned_count: mentionedAgg.find(m => m.searchEngine === s.searchEngine)?._count?.id ?? 0,
       avg_rank: s._sum?.mentionRank ?? null,
     })),
     top_contents: topContents.map(c => ({
@@ -905,7 +920,8 @@ router.post('/geo/knowledge/build/:jobId/confirm-plan', async (req: Request, res
         plan.dimensions = adjustedDimensions
         await prisma.knowledgeBuildStep.update({
           where: { id: evalStep.id },
-          data: { output: plan },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data: { output: plan as any },
         })
       }
     }
@@ -1326,6 +1342,10 @@ function mapKnowledge(r: any) {
     tags: r.tags,
     is_active: r.isActive,
     sort_order: r.sortOrder,
+    content_type: r.contentType || null,
+    fact_type: r.factType || null,
+    verification_status: r.verificationStatus || null,
+    metadata: r.metadata || null,
     created_at: r.createdAt?.toISOString?.() ?? r.created_at,
     updated_at: r.updatedAt?.toISOString?.() ?? r.updated_at,
   }
@@ -1350,5 +1370,238 @@ function mapDistill(r: any) {
     updated_at: r.updatedAt?.toISOString?.() ?? r.updated_at,
   }
 }
+
+// ============================================================
+// 原子事实提取
+// ============================================================
+
+// POST /api/v1/geo/facts/extract — 从文案提取原子事实
+router.post('/geo/facts/extract', async (req: Request, res: Response) => {
+  const userId = getUserId(req as any)
+  const { transcript, topic, verify: doVerify } = req.body
+
+  if (!transcript || typeof transcript !== 'string' || transcript.trim().length < 50) {
+    res.status(400).json({ error: 'transcript 为必填字段，至少50字' })
+    return
+  }
+
+  try {
+    const task = await runTask(
+      { type: 'fact_extract', input: { topic, verify: !!doVerify } },
+      async () => {
+        const result = await extractFactsFromTranscript({
+          transcript: String(transcript).trim(),
+          topic: topic ? String(topic) : undefined,
+          maxFacts: 80,
+        })
+
+        let facts = result.facts
+
+        // 可选：验证后直接写入 BrandKnowledge
+        if (doVerify && facts.length > 0) {
+          facts = await verifyFacts(facts)
+        }
+
+        // 写入 BrandKnowledge（contentType='fact'）
+        const createdIds: string[] = []
+        for (const fact of facts) {
+          try {
+            const record = await prisma.brandKnowledge.create({
+              data: {
+                userId,
+                title: fact.content.slice(0, 200),
+                content: fact.content,
+                category: 'industry',
+                source: 'fact_extract',
+                credibility: fact.confidence,
+                tags: fact.tags,
+                isActive: !('verificationStatus' in fact && (fact as any).verificationStatus === 'rejected'),
+                contentType: 'fact',
+                factType: fact.factType,
+                verificationStatus: doVerify ? (('verificationStatus' in fact) ? (fact as any).verificationStatus : 'unverified') : null,
+                metadata: {
+                  sourceUrls: fact.sourceUrls,
+                  confidence: fact.confidence,
+                  factContext: fact.factContext,
+                  extractSource: 'transcript',
+                },
+              },
+            })
+            createdIds.push(record.id)
+          } catch (err) {
+            console.warn(`[FactExtract] 写入失败:`, err instanceof Error ? err.message : err)
+          }
+        }
+
+        return {
+          topic: result.topic,
+          total_extracted: result.totalCount,
+          saved_count: createdIds.length,
+          facts: facts.map(f => ({
+            content: f.content,
+            fact_type: f.factType,
+            confidence: f.confidence,
+            fact_context: f.factContext,
+            tags: f.tags,
+            needs_verification: f.needsVerification,
+            verification_status: 'verificationStatus' in f ? (f as any).verificationStatus : null,
+            verification_note: 'verificationNote' in f ? (f as any).verificationNote : null,
+          })),
+        }
+      },
+    )
+    res.json({ task_id: task.id, status: task.status })
+  } catch (error) {
+    console.error('[POST geo/facts/extract]', error)
+    res.status(500).json({ error: '事实提取失败' })
+  }
+})
+
+// GET /api/v1/geo/facts/extract/:taskId/status
+router.get('/geo/facts/extract/:taskId/status', async (req: Request, res: Response) => {
+  const task = await getTask(str(req.params.taskId))
+  if (!task) { res.status(404).json({ error: 'Task not found' }); return }
+  res.json({ task_id: task.id, status: task.status, output: task.output, error: task.error })
+})
+
+// POST /api/v1/geo/facts/verify — 批量验证已有事实
+router.post('/geo/facts/verify', async (req: Request, res: Response) => {
+  const userId = getUserId(req as any)
+  const { fact_ids } = req.body
+
+  if (!Array.isArray(fact_ids) || fact_ids.length === 0) {
+    res.status(400).json({ error: 'fact_ids 为必填数组' })
+    return
+  }
+
+  const facts = await prisma.brandKnowledge.findMany({
+    where: { id: { in: fact_ids }, userId, contentType: 'fact' },
+  })
+
+  if (facts.length === 0) {
+    res.json({ task_id: null, verified: 0 })
+    return
+  }
+
+  try {
+    const task = await runTask(
+      { type: 'fact_verify', input: { fact_ids } },
+      async () => {
+        const atomicFacts = facts.map(f => ({
+          content: f.content,
+          factType: (f.factType as FactType) || 'definition',
+          confidence: f.credibility,
+          factContext: (f.metadata as any)?.factContext || '',
+          sourceUrls: (f.metadata as any)?.sourceUrls || [],
+          tags: f.tags,
+          needsVerification: true,
+        }))
+
+        const verified = await verifyFacts(atomicFacts)
+
+        let verifiedCount = 0
+        for (let i = 0; i < facts.length; i++) {
+          const v = verified.find(vf => vf.content === facts[i].content)
+          if (v) {
+            await prisma.brandKnowledge.update({
+              where: { id: facts[i].id },
+              data: {
+                verificationStatus: v.verificationStatus,
+                credibility: v.confidence,
+                isActive: v.verificationStatus !== 'rejected',
+                metadata: {
+                  ...(typeof facts[i].metadata === 'object' && facts[i].metadata ? facts[i].metadata as Record<string, unknown> : {}),
+                  sourceUrls: v.sourceUrls,
+                  verifiedAt: new Date().toISOString(),
+                  verifiedBy: 'ai',
+                },
+              },
+            })
+            if (v.verificationStatus === 'verified') verifiedCount++
+          }
+        }
+        return { verified: verifiedCount, total: facts.length }
+      },
+    )
+    res.json({ task_id: task.id, status: task.status })
+  } catch (error) {
+    console.error('[POST geo/facts/verify]', error)
+    res.status(500).json({ error: '验证失败' })
+  }
+})
+
+// GET /api/v1/geo/facts/verify/:taskId/status
+router.get('/geo/facts/verify/:taskId/status', async (req: Request, res: Response) => {
+  const task = await getTask(str(req.params.taskId))
+  if (!task) { res.status(404).json({ error: 'Task not found' }); return }
+  res.json({ task_id: task.id, status: task.status, output: task.output, error: task.error })
+})
+
+// GET /api/v1/geo/facts — 查询事实列表
+router.get('/geo/facts', async (req: Request, res: Response) => {
+  const userId = getUserId(req as any)
+  const factType = str(req.query.fact_type)
+  const verificationStatus = str(req.query.verification_status)
+  const keyword = str(req.query.keyword)
+  const p = toInt(req.query.page, 1)
+  const ps = Math.min(toInt(req.query.page_size, 50), 200)
+  const skip = (p - 1) * ps
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = { userId, contentType: 'fact' }
+  if (factType && factType !== 'all') where.factType = factType
+  if (verificationStatus && verificationStatus !== 'all') where.verificationStatus = verificationStatus
+  if (keyword) {
+    where.OR = [
+      { content: { contains: keyword, mode: 'insensitive' } },
+      { title: { contains: keyword, mode: 'insensitive' } },
+    ]
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.brandKnowledge.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: ps }),
+    prisma.brandKnowledge.count({ where }),
+  ])
+
+  res.json({
+    items: items.map(f => ({
+      id: f.id,
+      content: f.content,
+      title: f.title,
+      fact_type: f.factType,
+      verification_status: f.verificationStatus,
+      credibility: f.credibility,
+      tags: f.tags,
+      metadata: f.metadata,
+      is_active: f.isActive,
+      created_at: f.createdAt.toISOString(),
+    })),
+    total,
+  })
+})
+
+// PUT /api/v1/geo/facts/:id — 编辑事实
+router.put('/geo/facts/:id', async (req: Request, res: Response) => {
+  const userId = getUserId(req as any)
+  const id = str(req.params.id)
+  const { content, factType, verificationStatus, tags, is_active } = req.body
+
+  const existing = await prisma.brandKnowledge.findFirst({
+    where: { id, userId, contentType: 'fact' },
+  })
+  if (!existing) { res.status(404).json({ error: 'Fact not found' }); return }
+
+  const item = await prisma.brandKnowledge.update({
+    where: { id },
+    data: {
+      ...(content !== undefined && { content: String(content), title: String(content).slice(0, 200) }),
+      ...(factType !== undefined && { factType: String(factType) }),
+      ...(verificationStatus !== undefined && { verificationStatus: String(verificationStatus) }),
+      ...(tags !== undefined && { tags: Array.isArray(tags) ? tags : [] }),
+      ...(is_active !== undefined && { isActive: Boolean(is_active) }),
+    },
+  })
+  res.json({ id: item.id, ok: true })
+})
 
 export default router

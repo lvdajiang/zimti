@@ -75,6 +75,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api/client'
+import { markAsBenchmark as apiMarkBenchmark } from '@/api/viralVideos'
 import { toast } from '@/utils/toast'
 import { formatNumber, formatDate } from '@/utils/format'
 
@@ -144,8 +145,18 @@ async function reExtractTranscript(): Promise<void> {
   } catch (e) { console.error(e); toast.error('提取文案失败') }
 }
 
-function markAsBenchmark(): void {
-  toast.info('已标记为对标视频')
+async function markAsBenchmark(): Promise<void> {
+  try {
+    const result = await apiMarkBenchmark(Number(videoId.value))
+    if (result.message === 'already_marked') {
+      toast.info('该视频已标记为对标')
+    } else {
+      toast.success('已标记为对标视频，可在内容资产中查看')
+    }
+  } catch (e) {
+    console.error(e)
+    toast.error('标记失败')
+  }
 }
 
 watch(videoId, loadVideo)

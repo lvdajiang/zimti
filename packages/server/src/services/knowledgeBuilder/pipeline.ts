@@ -8,7 +8,6 @@
 import { prisma } from '../../db.js'
 import type {
   KnowledgeBuildMode,
-  KnowledgeBuildStatus,
   KnowledgeBuildStepType,
   KnowledgeBuildJobRecord,
   KnowledgeBuildStepRecord,
@@ -55,6 +54,45 @@ type StepResult =
   | SemanticDedupOutput
   | RefineOutput
   | PersistOutput
+
+// Prisma 返回 camelCase，Record 接口期望 snake_case — 映射辅助函数
+type PrismaJob = Awaited<ReturnType<typeof prisma.knowledgeBuildJob.findUniqueOrThrow>>
+type PrismaStep = NonNullable<Awaited<ReturnType<typeof prisma.knowledgeBuildStep.findFirst>>>
+
+function mapJobRecord(j: PrismaJob): KnowledgeBuildJobRecord {
+  return {
+    id: j.id,
+    user_id: j.userId,
+    topic: j.topic,
+    mode: j.mode as KnowledgeBuildMode,
+    status: j.status as unknown as KnowledgeBuildJobRecord['status'],
+    current_step: j.currentStep,
+    progress: j.progress,
+    input: j.input as Record<string, unknown>,
+    output: j.output as Record<string, unknown> | null,
+    error: j.error,
+    started_at: j.startedAt?.toISOString() ?? null,
+    completed_at: j.completedAt?.toISOString() ?? null,
+    created_at: j.createdAt.toISOString(),
+    updated_at: j.updatedAt.toISOString(),
+  }
+}
+
+function mapStepRecord(s: PrismaStep): KnowledgeBuildStepRecord {
+  return {
+    id: s.id,
+    job_id: s.jobId,
+    step_type: s.stepType as KnowledgeBuildStepType,
+    status: s.status as unknown as KnowledgeBuildStepRecord['status'],
+    progress: s.progress,
+    input: s.input as Record<string, unknown> | null,
+    output: s.output as Record<string, unknown> | null,
+    error: s.error,
+    started_at: s.startedAt?.toISOString() ?? null,
+    completed_at: s.completedAt?.toISOString() ?? null,
+    created_at: s.createdAt.toISOString(),
+  }
+}
 
 export class KnowledgeBuildPipeline {
   private ctx: PipelineContext
@@ -134,7 +172,7 @@ export class KnowledgeBuildPipeline {
       orderBy: { createdAt: 'asc' },
     })
 
-    return { ...job, steps }
+    return { ...mapJobRecord(job), steps: steps.map(mapStepRecord) }
   }
 
   // ============================================================
@@ -170,7 +208,7 @@ export class KnowledgeBuildPipeline {
 
     for (const step of steps) {
       if (step.output && typeof step.output === 'object') {
-        this.stepData.set(step.stepType as KnowledgeBuildStepType, step.output as StepResult)
+        this.stepData.set(step.stepType as KnowledgeBuildStepType, step.output as unknown as StepResult)
       }
     }
   }
@@ -206,7 +244,7 @@ export class KnowledgeBuildPipeline {
             where: { id: this.ctx.jobId },
             data: { status: 'waiting_confirm' },
           })
-          return prisma.knowledgeBuildJob.findUniqueOrThrow({ where: { id: this.ctx.jobId } })
+          return mapJobRecord(await prisma.knowledgeBuildJob.findUniqueOrThrow({ where: { id: this.ctx.jobId } }))
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
@@ -217,7 +255,7 @@ export class KnowledgeBuildPipeline {
           data: { status: 'failed', error: errorMsg },
         })
 
-        return prisma.knowledgeBuildJob.findUniqueOrThrow({ where: { id: this.ctx.jobId } })
+        return mapJobRecord(await prisma.knowledgeBuildJob.findUniqueOrThrow({ where: { id: this.ctx.jobId } }))
       }
     }
 
@@ -231,7 +269,7 @@ export class KnowledgeBuildPipeline {
       },
     })
 
-    return prisma.knowledgeBuildJob.findUniqueOrThrow({ where: { id: this.ctx.jobId } })
+    return mapJobRecord(await prisma.knowledgeBuildJob.findUniqueOrThrow({ where: { id: this.ctx.jobId } }))
   }
 
   /**
@@ -283,7 +321,7 @@ export class KnowledgeBuildPipeline {
         data: {
           status: 'completed',
           progress: 100,
-          output: result as Record<string, unknown>,
+          output: result as any,
           completedAt: new Date(),
         },
       })

@@ -5,8 +5,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
-  fetchDistributionRecords, createDistributionRecord, updateDistributionRecord,
-  deleteDistributionRecord, adaptContent, getAdaptStatus, batchAdaptContent,
+  fetchDistributionRecords,
+  deleteDistributionRecord, adaptContent, batchAdaptContent,
   getBatchAdaptStatus, fetchDistributionCalendar, scheduleDistribution,
   publishDistribution, fetchDistributionAnalytics, fetchPlatformConfigs,
 } from '../api/distribution'
@@ -31,7 +31,7 @@ export const useDistributionStore = defineStore('distribution', () => {
     recent_published: DistributionRecord[]
   } | null>(null)
 
-  const platformConfigs = ref<Array<Platform & { name: string; maxLength: number; tagLimit: number; optimalTimes: string[] }>>([])
+  const platformConfigs = ref<Array<{ platform: Platform; name: string; maxLength: number; tagLimit: number; optimalTimes: string[] }>>([])
 
   async function loadRecords(): Promise<void> {
     loading.value = true
