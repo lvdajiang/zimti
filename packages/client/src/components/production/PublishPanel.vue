@@ -122,6 +122,36 @@
             🎉 已成功发布到 {{ publishedCount }} 个平台
           </div>
 
+          <!-- ─── 自动数据采集 ─── -->
+          <div v-if="published && supportedCollectPlatforms.length > 0" class="optimize-section auto-collect-section">
+            <div class="section-header">
+              <h4>📊 自动数据采集</h4>
+              <span class="collect-status" v-if="autoCollectEnabled">🟢 已启用</span>
+              <span class="collect-status" v-else>⚪ 未启用</span>
+            </div>
+            <p class="collect-hint">设置平台视频ID后，系统将自动定时拉取播放量、完播率等数据，无需手动录入。</p>
+            <div class="collect-form">
+              <div class="collect-field">
+                <label>平台视频ID {{ platformIdHint }}</label>
+                <input v-model="platformVideoIdInput" class="input" placeholder="如 BV1GJ411x7G8" />
+              </div>
+              <div class="collect-actions">
+                <label class="toggle-label">
+                  <input type="checkbox" v-model="autoCollectEnabled" @change="toggleAutoCollect" />
+                  启用自动采集（每6小时）
+                </label>
+                <button class="btn btn-sm btn-primary" :disabled="!platformVideoIdInput.trim() || collectLoading" @click="handleManualCollect">
+                  {{ collectLoading ? '采集中...' : '立即采集' }}
+                </button>
+              </div>
+              <div v-if="lastCollectedAt" class="collect-info">上次采集: {{ lastCollectedAt }}</div>
+              <div v-if="collectResult" class="collect-result" :class="collectResult.failed > 0 ? 'has-error' : 'success'">
+                {{ collectResult.succeeded }}/{{ collectResult.total }} 条采集成功
+                <span v-if="collectResult.failed > 0">，{{ collectResult.failed }} 条失败</span>
+              </div>
+            </div>
+          </div>
+
           <!-- ─── 排期区 ─── -->
           <div v-if="published" class="optimize-section schedule-section">
             <div class="section-header">
@@ -290,6 +320,69 @@ const recordTags = ref<string[]>([])
 // 发布记录ID（用于数据追踪）
 const publishRecordIds = ref<string[]>([])
 
+// ─── 自动数据采集 ───
+const supportedCollectPlatforms = ref<string[]>([])
+const platformVideoIdInput = ref('')
+const autoCollectEnabled = ref(false)
+const lastCollectedAt = ref<string | null>(null)
+const collectLoading = ref(false)
+const collectResult = ref<{ total: number; succeeded: number; failed: number } | null>(null)
+
+const platformIdHint = computed(() => {
+  const platforms = store.targetPlatforms
+  if (platforms.includes('bilibili')) return '(B站: BV号)'
+  return ''
+})
+
+async function loadSupportedPlatforms() {
+  try {
+    const res = await api.get('/auto-collect/supported-platforms') as any
+    supportedCollectPlatforms.value = res.platforms ?? []
+  } catch { /* 静默 */ }
+}
+
+async function toggleAutoCollect() {
+  const recordId = publishRecordIds.value[0]
+  if (!recordId) return
+  try {
+    await api.put(`/publish-records/${recordId}/auto-collect`, {
+      platform_video_id: platformVideoIdInput.value.trim() || null,
+      auto_collect: autoCollectEnabled.value,
+    })
+    if (!autoCollectEnabled.value) {
+      lastCollectedAt.value = null
+    }
+  } catch (err: any) {
+    console.error('[toggleAutoCollect]', err)
+    autoCollectEnabled.value = !autoCollectEnabled.value // 恢复
+  }
+}
+
+async function handleManualCollect() {
+  const recordId = publishRecordIds.value[0]
+  if (!recordId || !platformVideoIdInput.value.trim()) return
+  collectLoading.value = true
+  collectResult.value = null
+  try {
+    // 先确保 platformVideoId 已设置
+    await api.put(`/publish-records/${recordId}/auto-collect`, {
+      platform_video_id: platformVideoIdInput.value.trim(),
+      auto_collect: true,
+    })
+    autoCollectEnabled.value = true
+    // 触发采集
+    const result = await api.post('/auto-collect/snapshots', {
+      publish_record_ids: [recordId],
+    }) as any
+    collectResult.value = result
+    lastCollectedAt.value = new Date().toLocaleString()
+  } catch (err) {
+    console.error('[handleManualCollect]', err)
+  } finally {
+    collectLoading.value = false
+  }
+}
+
 // 从流水线步骤数据中提取发布记录ID
 watch(() => store.steps[4]?.data, (data) => {
   if (data && Array.isArray(data.publish_records)) {
@@ -316,6 +409,7 @@ async function ensureDraftPublishRecord() {
 
 onMounted(() => {
   ensureDraftPublishRecord()
+  loadSupportedPlatforms()
 })
 // 排期状态
 const showScheduleForm = ref(false)
@@ -914,6 +1008,19 @@ async function deleteScheduleEvent(eventId: string) {
 .publish-note { margin-top: 16px; padding: 12px 16px; background: #FFF8E1; border: 1px solid #FFE082; border-radius: 8px; }
 .publish-note p { margin: 0; font-size: 13px; color: var(--color-text); line-height: 1.5; }
 .note-hint { font-size: 12px !important; color: #795548 !important; margin-top: 6px !important; }
+
+/* 自动采集 */
+.auto-collect-section { margin-top: 12px; padding: 14px 16px; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; }
+.collect-status { font-size: 12px; font-weight: 600; }
+.collect-hint { font-size: 12px; color: var(--color-text-secondary); margin: 6px 0; }
+.collect-form { display: flex; flex-direction: column; gap: 8px; }
+.collect-field label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.collect-actions { display: flex; align-items: center; gap: 12px; }
+.toggle-label { font-size: 13px; color: var(--color-text); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.collect-info { font-size: 11px; color: var(--color-text-tertiary); }
+.collect-result { font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+.collect-result.success { background: #D1FAE5; color: #059669; }
+.collect-result.has-error { background: #FEF3C7; color: #D97706; }
 
 .input {
   width: 100%; padding: 6px 10px;

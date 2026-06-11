@@ -64,6 +64,7 @@ model User {
   referrals            Referral[]
   distributionRecords  DistributionRecord[]
   distributionTemplates DistributionTemplate[]
+  dataCollectSchedules DataCollectSchedule[]
   geoQuestions         GeoQuestion[]
   geoContents          GeoContent[]
   geoMentions          GeoMention[]
@@ -190,7 +191,10 @@ model Hotspot {
   keywords       String[]  @default([])
   usageStatus    String    @default("unused") @map("usage_status") @db.VarChar(20)
   note           String?   @db.VarChar(500)
+  pipelineJobId  String?   @map("pipeline_job_id") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at")
+
+  pipelineJob    PipelineJob? @relation(fields: [pipelineJobId], references: [id])
 
   @@index([sourcePlatform])
   @@index([heatValue(sort: Desc)])
@@ -224,18 +228,26 @@ model TopicProposal {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  task    Task     @relation(fields: [taskId], references: [id])
-  scripts Script[]
+  // --- 共振字段 ---
+  pipelineJobId   String?  @map("pipeline_job_id") @db.Uuid
+  dimensionScores Json?    @map("dimension_scores")
+  reasoning       String?  @db.Text
+  sourceSignals   Json?    @map("source_signals")
+
+  task        Task            @relation(fields: [taskId], references: [id])
+  pipelineJob PipelineJob?    @relation(fields: [pipelineJobId], references: [id])
+  scripts     Script[]
   copyWritings CopyWriting[]
 
   @@index([taskId])
+  @@index([pipelineJobId])
   @@map("topic_proposals")
 }
 
 // --- 3.9 scripts ---
 model Script {
   id           Int      @id @default(autoincrement())
-  topicId      Int      @map("topic_id")
+  topicId      Int?     @map("topic_id")
   taskId       String   @map("task_id") @db.Uuid
   fullText     String   @map("full_text") @db.Text
   videoType    String?  @map("video_type") @db.VarChar(20)
@@ -245,7 +257,7 @@ model Script {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  topicProposal     TopicProposal       @relation(fields: [topicId], references: [id])
+  topicProposal     TopicProposal?      @relation(fields: [topicId], references: [id])
   task              Task                @relation(fields: [taskId], references: [id])
   copyWriting       CopyWriting?        @relation(fields: [copyWritingId], references: [id])
   storyboardSegments StoryboardSegment[]
@@ -269,6 +281,18 @@ model StoryboardSegment {
   materialIds       String[] @map("material_ids")
   oralAudioUrl      String?  @map("oral_audio_url") @db.VarChar(500)
   transitionType    String?  @map("transition_type") @db.VarChar(20)
+  // --- v2 扩展字段 ---
+  cameraMovement    String?  @map("camera_movement") @db.VarChar(50)     // 运镜方式（推拉摇移跟）
+  emotion           String?  @db.VarChar(30)                              // 情绪基调（欢快/紧张/温馨...）
+  shootingNotes     String?  @map("shooting_notes") @db.Text              // 拍摄备注（场地/道具/光线要求）
+  visualSource      String?  @map("visual_source") @db.VarChar(20)        // 画面来源（shoot/ai_generate/stock）
+  aiPrompt          String?  @map("ai_prompt") @db.Text                   // AI 画面生成提示词
+  materialCandidates Json?   @map("material_candidates")                  // 候选素材 [{materialId, score, reason}]
+  // --- v3 共振字段 ---
+  musicMood          String?  @map("music_mood") @db.VarChar(50)         // 听觉层: epic/tense/warm/bouncy/calm/silent
+  rhythmInstruction  String?  @map("rhythm_instruction") @db.VarChar(50) // 节奏层: fast_cut/slow_reveal/steady/pause_beat/build_up
+  resonanceGoal      String?  @map("resonance_goal") @db.VarChar(200)   // 共振目标: 四层这一刻要共同达成什么
+  sfxNote            String?  @map("sfx_note") @db.VarChar(200)          // 音效备注: whoosh/impact/riser
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -364,6 +388,9 @@ model PublishRecord {
   aigcConfirmed    Boolean  @default(false) @map("aigc_confirmed")
   geoInfo          Json?    @map("geo_info") @db.JsonB
   publishedAt      DateTime? @map("published_at") @db.Timestamptz()
+  platformVideoId  String?  @map("platform_video_id") @db.VarChar(100)
+  autoCollect      Boolean  @default(false) @map("auto_collect")
+  lastCollectedAt  DateTime? @map("last_collected_at") @db.Timestamptz()
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -901,7 +928,9 @@ model PipelineJob {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  user      User      @relation(fields: [userId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  topicProposals TopicProposal[]
+  hotspots       Hotspot[]
 
   @@index([userId])
   @@index([mode])
@@ -1102,6 +1131,24 @@ model DistributionRecord {
 }
 
 // --- 分发模板 ---
+model DataCollectSchedule {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  platform  String    @db.VarChar(20)
+  cronExpr  String    @map("cron_expr") @db.VarChar(50)
+  isActive  Boolean   @default(true) @map("is_active")
+  lastRunAt DateTime? @map("last_run_at") @db.Timestamptz()
+  nextRunAt DateTime? @map("next_run_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("data_collect_schedules")
+}
+
 model DistributionTemplate {
   id               String   @id @default(uuid()) @db.Uuid
   userId           String   @map("user_id") @db.Uuid

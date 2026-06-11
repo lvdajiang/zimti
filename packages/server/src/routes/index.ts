@@ -41,6 +41,7 @@ import prohibitedWords from './modules/prohibitedWords.js'
 import voiceProfiles from './modules/voiceProfiles.js'
 import productionVisual from './modules/productionVisual.js'
 import dataTracking from './modules/dataTracking.js'
+import autoCollect from './modules/autoCollect.js'
 
 export const router: Router = Router()
 
@@ -86,3 +87,4 @@ router.use(prohibitedWords)
 router.use(voiceProfiles)
 router.use(productionVisual)
 router.use(dataTracking)
+router.use(autoCollect)
