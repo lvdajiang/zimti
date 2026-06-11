@@ -9,7 +9,7 @@
     <div class="tabs">
       <button class="tab" :class="{ active: activeTab === 'questions' }" @click="activeTab = 'questions'">意图题库</button>
       <button class="tab" :class="{ active: activeTab === 'content' }" @click="activeTab = 'content'; loadContentTab()">内容生成</button>
-      <button class="tab" :class="{ active: activeTab === 'knowledge' }" @click="activeTab = 'knowledge'; loadKnowledgeTab()">知识库</button>
+      <router-link to="/knowledge" class="tab-link">知识库</router-link>
       <button class="tab" :class="{ active: activeTab === 'distill' }" @click="activeTab = 'distill'; loadDistillTab()">关键词蒸馏</button>
       <button class="tab" :class="{ active: activeTab === 'monitor' }" @click="activeTab = 'monitor'; loadMonitorTab()">效果监测</button>
     </div>
@@ -153,124 +153,6 @@
       <div v-else class="empty-state"><div class="empty-text">加载中...</div></div>
     </template>
 
-    <!-- ========== 知识库 ========== -->
-    <template v-if="activeTab === 'knowledge'">
-      <div class="filter-bar">
-        <div class="category-pills">
-          <button class="pill" :class="{ active: store.knowledgeFilterCategory === 'all' }" @click="store.knowledgeFilterCategory = 'all'; store.loadKnowledge()">全部</button>
-          <button v-for="(label, key) in knowledgeCategoryLabels" :key="key" class="pill" :class="{ active: store.knowledgeFilterCategory === key }" @click="store.knowledgeFilterCategory = key as string; store.loadKnowledge()">{{ label }}</button>
-        </div>
-        <button class="btn btn-primary" :disabled="store.generatingKnowledge" @click="handleGenerateKnowledge">AI 生成</button>
-        <button class="btn" :disabled="store.searchAndBuilding" @click="showSearchPanel = true">🔍 全网搜索</button>
-        <button class="btn" @click="showKnowledgeForm = true">手动添加</button>
-        <button class="btn" @click="router.push('/geo/build')">🔧 构建引擎</button>
-        <button class="btn" @click="router.push('/geo/fact-extract')">📋 事实提取</button>
-      </div>
-
-      <!-- 全网搜索建库面板 -->
-      <div v-if="showSearchPanel" class="card form-card search-panel">
-        <div class="form-group">
-          <label>🌐 搜索主题</label>
-          <input v-model="searchTopic" class="input" placeholder="输入主题，如：新疆旅游攻略、亲子游注意事项..." @keyup.enter="handleSearchAndBuild" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>分类（可选）</label>
-            <select v-model="searchCategory" class="input">
-              <option value="">自动分类</option>
-              <option v-for="(label, key) in knowledgeCategoryLabels" :key="key" :value="key">{{ label }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>生成数量</label>
-            <input v-model.number="searchCount" type="number" class="input" min="1" max="10" />
-          </div>
-          <div class="form-group" style="display:flex;align-items:flex-end">
-            <button class="btn btn-primary" :disabled="store.searchAndBuilding || !searchTopic.trim()" @click="handleSearchAndBuild">
-              {{ store.searchAndBuilding ? '搜索提取中...' : '⚡ 搜索并建库' }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 搜索进度/结果 -->
-        <div v-if="store.searchAndBuilding" class="search-progress">
-          <div class="progress-bar"><div class="progress-fill animating"></div></div>
-          <div class="progress-text">正在全网搜索「{{ searchTopic }}」并提取知识...</div>
-        </div>
-        <div v-else-if="store.searchBuildResult" class="search-result">
-          <div class="search-result-summary">
-            🎉 搜索完成！找到 {{ store.searchBuildResult.search_results_count }} 条网页结果，
-            成功写入 <strong>{{ store.searchBuildResult.created_count }}</strong> 条知识。
-          </div>
-          <div v-for="item in store.searchBuildResult.knowledge_items" :key="item.title" class="search-result-item">
-            <div class="search-result-item-header">
-              <span class="knowledge-badge" :class="item.category">{{ knowledgeCategoryLabels[item.category as keyof typeof knowledgeCategoryLabels] || item.category }}</span>
-              <span class="confidence-badge">{{ Math.round(item.confidence * 100) }}% 置信</span>
-            </div>
-            <div class="search-result-item-title">{{ item.title }}</div>
-            <div class="search-result-item-url" v-if="item.source_url">
-              📎 <a :href="item.source_url" target="_blank" rel="noopener">{{ item.source_url }}</a>
-            </div>
-          </div>
-          <button class="btn" @click="showSearchPanel = false; store.searchBuildResult = null">关闭</button>
-        </div>
-      </div>
-
-      <!-- 添加知识表单 -->
-      <div v-if="showKnowledgeForm" class="card form-card">
-        <div class="form-group">
-          <label>标题</label>
-          <input v-model="newKnowledge.title" class="input" placeholder="知识标题，如：新疆独家路线推荐" />
-        </div>
-        <div class="form-group">
-          <label>正文</label>
-          <textarea v-model="newKnowledge.content" class="input" rows="5" placeholder="知识内容，200-500字..." />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>分类</label>
-            <select v-model="newKnowledge.category" class="input">
-              <option v-for="(label, key) in knowledgeCategoryLabels" :key="key" :value="key">{{ label }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>标签（逗号分隔）</label>
-            <input v-model="newKnowledge.tagsStr" class="input" placeholder="标签1,标签2" />
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="btn btn-primary" @click="handleAddKnowledge">添加</button>
-          <button class="btn" @click="showKnowledgeForm = false">取消</button>
-        </div>
-      </div>
-
-      <!-- 知识列表 -->
-      <div v-if="store.knowledgeLoading" class="loading-wrapper">加载中...</div>
-      <div v-else-if="store.knowledgeItems.length === 0" class="empty-state">
-        <div class="empty-text">暂无知识条目。添加品牌知识后，AI 生成 GEO 内容时会自动注入。</div>
-      </div>
-      <div v-else class="knowledge-list">
-        <div v-for="item in store.knowledgeItems" :key="item.id" class="card knowledge-card" :class="{ inactive: !item.is_active }">
-          <div class="knowledge-header">
-            <span class="knowledge-badge" :class="item.category">{{ knowledgeCategoryLabels[item.category as keyof typeof knowledgeCategoryLabels] || item.category }}</span>
-            <span class="knowledge-source">{{ item.source === 'ai_generated' ? 'AI生成' : '手动' }}</span>
-            <label class="toggle-label">
-              <input type="checkbox" :checked="item.is_active" @change="store.editKnowledge(item.id, { is_active: !item.is_active })" />
-              <span class="toggle-text">{{ item.is_active ? '启用' : '停用' }}</span>
-            </label>
-          </div>
-          <div class="knowledge-title">{{ item.title }}</div>
-          <div class="knowledge-content">{{ item.content.slice(0, 200) }}{{ item.content.length > 200 ? '...' : '' }}</div>
-          <div v-if="item.tags?.length" class="knowledge-tags">
-            <span v-for="tag in item.tags" :key="tag" class="tag">{{ tag }}</span>
-          </div>
-          <div class="knowledge-actions">
-            <button class="btn btn-sm btn-danger" @click="store.removeKnowledge(item.id)">删除</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
     <!-- ========== 关键词蒸馏 ========== -->
     <template v-if="activeTab === 'distill'">
       <!-- 输入区 -->
@@ -356,23 +238,20 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useGeoStore } from '@/stores/geo'
 import {
   GEO_QUESTION_CATEGORY_LABELS, GEO_INTENT_TYPE_LABELS,
-  GEO_CONTENT_STATUS_LABELS, BRAND_KNOWLEDGE_CATEGORY_LABELS,
+  GEO_CONTENT_STATUS_LABELS,
   KEYWORD_COMPETITION_LABELS,
 } from '@zimti/shared'
-import { getGenerateQuestionsStatus, getGenerateKnowledgeStatus, getDistillStatus, getSearchAndBuildStatus } from '@/api/geo'
-import type { GeoQuestionCategory, GeoIntentType, BrandKnowledgeCategory } from '@zimti/shared'
+import { getGenerateQuestionsStatus, getDistillStatus } from '@/api/geo'
+import type { GeoQuestionCategory, GeoIntentType } from '@zimti/shared'
 
 const store = useGeoStore()
-const router = useRouter()
 const activeTab = ref('questions')
 const categoryLabels = GEO_QUESTION_CATEGORY_LABELS
 const intentLabels = GEO_INTENT_TYPE_LABELS
 const contentStatusLabels = GEO_CONTENT_STATUS_LABELS
-const knowledgeCategoryLabels = BRAND_KNOWLEDGE_CATEGORY_LABELS
 const compLabels = KEYWORD_COMPETITION_LABELS
 
 const showAddForm = ref(false)
@@ -381,17 +260,6 @@ const newCategory = ref<GeoQuestionCategory>('general')
 const newIntentType = ref<GeoIntentType>('informational')
 const contentFilter = ref('all')
 
-// --- 知识库 ---
-const showKnowledgeForm = ref(false)
-const newKnowledge = ref({ title: '', content: '', category: 'brand_intro' as BrandKnowledgeCategory, tagsStr: '' })
-
-// --- 全网搜索建库 ---
-const showSearchPanel = ref(false)
-const searchTopic = ref('')
-const searchCategory = ref<BrandKnowledgeCategory | ''>('')
-const searchCount = ref(5)
-
-// --- 蒸馏 ---
 const distillInput = ref('')
 const distillDomain = ref('新疆旅游')
 const selectedDistillIds = ref<string[]>([])
@@ -474,42 +342,6 @@ function viewSchema(id: string): void {
   store.loadSchemaPreview(id).then(schema => {
     alert(JSON.stringify(schema, null, 2))
   })
-}
-
-// --- 知识库 ---
-
-function loadKnowledgeTab(): void {
-  store.loadKnowledge()
-}
-
-async function handleAddKnowledge(): Promise<void> {
-  const { title, content, category, tagsStr } = newKnowledge.value
-  if (!title.trim() || !content.trim()) return
-  const tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean)
-  await store.addKnowledge({ title: title.trim(), content: content.trim(), category, tags })
-  newKnowledge.value = { title: '', content: '', category: 'brand_intro', tagsStr: '' }
-  showKnowledgeForm.value = false
-}
-
-async function handleGenerateKnowledge(): Promise<void> {
-  const taskId = await store.startGenerateKnowledge({ domain: distillDomain.value || undefined, count: 5 })
-  await pollTask(taskId, () => store.loadKnowledge(), '知识生成完成', '知识生成失败', getGenerateKnowledgeStatus)
-}
-
-async function handleSearchAndBuild(): Promise<void> {
-  if (!searchTopic.value.trim()) return
-  const taskId = await store.startSearchAndBuild({
-    topic: searchTopic.value.trim(),
-    category: searchCategory.value || undefined,
-    count: searchCount.value,
-  })
-  await pollTask(
-    taskId,
-    () => { store.loadKnowledge() },
-    `搜索建库完成！写入 ${store.searchBuildResult?.created_count ?? 0} 条知识`,
-    '搜索建库失败',
-    getSearchAndBuildStatus,
-  )
 }
 
 // --- 蒸馏 ---
@@ -654,26 +486,6 @@ onMounted(() => {
 
 .empty-state { text-align: center; padding: 40px; color: var(--color-text-secondary); }
 .loading-wrapper { text-align: center; padding: 40px; color: var(--color-text-secondary); }
-
-/* --- 知识库 --- */
-.knowledge-list { display: flex; flex-direction: column; gap: 10px; }
-.knowledge-card { padding: 14px; transition: opacity 0.2s; }
-.knowledge-card.inactive { opacity: 0.5; }
-.knowledge-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.knowledge-badge { padding: 2px 10px; border-radius: 12px; font-size: 12px; }
-.knowledge-badge.brand_intro { background: #e3f2fd; color: #1565c0; }
-.knowledge-badge.route { background: #fff3e0; color: #e65100; }
-.knowledge-badge.service { background: #e8f5e9; color: #2e7d32; }
-.knowledge-badge.case { background: #fce4ec; color: #c62828; }
-.knowledge-badge.faq { background: #f3e5f5; color: #7b1fa2; }
-.knowledge-badge.industry { background: #e0f2f1; color: #00695c; }
-.knowledge-source { font-size: 11px; color: var(--color-text-secondary); }
-.knowledge-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.knowledge-content { font-size: 14px; line-height: 1.5; color: var(--color-text-secondary); margin-bottom: 8px; }
-.knowledge-tags { margin-bottom: 8px; }
-.knowledge-actions { display: flex; gap: 8px; }
-.toggle-label { display: flex; align-items: center; gap: 4px; margin-left: auto; cursor: pointer; font-size: 12px; color: var(--color-text-secondary); }
-.toggle-text { font-size: 12px; }
 
 /* --- 全网搜索建库 --- */
 .search-panel { margin-bottom: 16px; border: 1px solid var(--color-border); }
