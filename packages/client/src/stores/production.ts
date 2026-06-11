@@ -10,6 +10,22 @@ import {
   type PipelineTemplateItem,
 } from '../api/production'
 import type { StepState } from '../api/production'
+import {
+  PRODUCTION_PHASES,
+  ALL_PIPELINE_STEPS,
+  STEP_TO_BACKEND_MAP,
+  AUTO_RUNNABLE_STEPS,
+  type StepStatus,
+} from '@zimti/shared'
+import {
+  generateTopicsForPipelineApi,
+  fetchTopicProposalsByJob,
+  selectTopicApi,
+  fetchTopicSourcesApi,
+  pollTopicGenerationStatus,
+  type TopicProposalItem,
+  type TopicSourceAggregate,
+} from '../api/topicProposals'
 
 export const useProductionStore = defineStore('production', () => {
   // --- 核心状态 ---
@@ -27,6 +43,72 @@ export const useProductionStore = defineStore('production', () => {
   const loading = ref(false)
   const executing = ref(false)
   const jobStatus = ref('')
+
+  // --- v2 阶段状态 ---
+  /** 当前阶段 (1-5) */
+  const currentPhase = ref(1)
+  /** 当前选中的前端步骤ID */
+  const activeStepId = ref<string | null>(null)
+  /** 文案链各步骤完成标记 */
+  const copyDraftDone = ref(false)
+  const copyProhibitedDone = ref(false)
+  const copyFinalized = ref(false)
+
+  // --- 选题共振状态 ---
+  const topicId = ref<number | null>(null)
+  const topicTitle = ref('')
+  const topicProposals = ref<TopicProposalItem[]>([])
+  const topicLoading = ref(false)
+  const topicSelected = ref(false)
+  const topicSources = ref<TopicSourceAggregate | null>(null)
+
+  // --- 发现信号（Phase 1 摘要步骤 → 选题灵感的数据管道）---
+  const discoverySignals = ref<Array<{
+    id: string
+    source: string       // 'hotspot' | 'benchmark' | 'collect' | 'transcript'
+    type: string         // 信号类型
+    content: string      // 信号内容
+    metadata?: Record<string, unknown>
+    createdAt: number
+  }>>([])
+
+  function addDiscoverySignal(signal: {
+    source: string
+    type: string
+    content: string
+    metadata?: Record<string, unknown>
+  }) {
+    // 去重：同 source + type + content 不重复添加
+    const dup = discoverySignals.value.find(
+      s => s.source === signal.source && s.type === signal.type && s.content === signal.content,
+    )
+    if (!dup) {
+      discoverySignals.value.push({
+        ...signal,
+        id: `${signal.source}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        createdAt: Date.now(),
+      })
+    }
+  }
+
+  function removeDiscoverySignal(id: string) {
+    discoverySignals.value = discoverySignals.value.filter(s => s.id !== id)
+  }
+
+  function clearDiscoverySignals() {
+    discoverySignals.value = []
+  }
+
+  /** 格式化发现信号为 AI 上下文文本 */
+  function getDiscoveryContext(): string {
+    if (discoverySignals.value.length === 0) return ''
+    const sourceLabels: Record<string, string> = {
+      hotspot: '热点追踪', benchmark: '对标账号', collect: '数据采集', transcript: '爆款文案',
+    }
+    return discoverySignals.value
+      .map(s => `[${sourceLabels[s.source] || s.source}] ${s.type}: ${s.content}`)
+      .join('\n')
+  }
 
   // --- 步骤1: 脚本数据 ---
   const fullText = ref('')
@@ -74,6 +156,77 @@ export const useProductionStore = defineStore('production', () => {
   const isAllCompleted = computed(() =>
     steps.value.every(s => s.status === 'completed'),
   )
+
+  // --- v2 Getters ---
+
+  /** 当前阶段的步骤列表 */
+  const currentPhaseSteps = computed(() => {
+    const phase = PRODUCTION_PHASES[currentPhase.value - 1]
+    return phase?.steps || []
+  })
+
+  /** 前端 19 步的状态映射表（从后端 5 步 + 文案状态推导） */
+  const stepStatusMap = computed<Record<string, StepStatus>>(() => {
+    const map: Record<string, StepStatus> = {}
+
+    // Phase 1: 摘要步骤始终 completed（用户手动查看）
+    map['p1_hotspot_viral'] = 'completed'
+    map['p1_benchmark'] = 'completed'
+    map['p1_collect'] = 'completed'
+    map['p1_transcript'] = 'completed'
+
+    // Phase 1: 选题灵感 — 从选题选定状态推导
+    map['p1_inspiration'] = topicSelected.value ? 'completed' : 'pending'
+
+    // Phase 2: 各步骤独立完成状态（串联约束）
+    map['p2_draft'] = copyDraftDone.value ? 'completed' : 'pending'
+    map['p2_prohibited'] = copyProhibitedDone.value ? 'completed' : 'pending'
+    map['p2_finalize'] = copyFinalized.value ? 'completed' : 'pending'
+
+    // Phase 3: 后端 step 1 (script)
+    const scriptStatus = steps.value[0]?.status || 'pending'
+    map['p3_script'] = scriptStatus as StepStatus
+    map['p3_storyboard'] = scriptStatus === 'completed' ? 'completed' : (scriptStatus as StepStatus)
+    map['p3_shooting'] = scriptStatus === 'completed' ? 'completed' : 'pending'
+    map['p3_visual_make'] = 'pending' // 摘要步骤
+
+    // Phase 4: 后端 step 2(tts), 3(visual), 4(subtitle)
+    map['p4_dubbing'] = (steps.value[1]?.status || 'pending') as StepStatus
+    map['p4_rough_cut'] = (steps.value[2]?.status || 'pending') as StepStatus
+    map['p4_fine_cut'] = (steps.value[2]?.status === 'completed' ? 'completed' : 'pending') as StepStatus // 可选增强，粗剪完成即可视为通过
+    map['p4_subtitle'] = (steps.value[3]?.status || 'pending') as StepStatus
+
+    // Phase 5: 后端 step 5 (publish)
+    const publishStatus = (steps.value[4]?.status || 'pending') as StepStatus
+    map['p5_keyword'] = publishStatus === 'completed' ? 'completed' : 'pending'
+    map['p5_hotspot_tag'] = publishStatus === 'completed' ? 'completed' : 'pending'
+    map['p5_publish'] = publishStatus
+    map['p5_tracking'] = 'pending' // 摘要步骤
+    map['p5_schedule'] = 'pending' // 摘要步骤
+
+    return map
+  })
+
+  /** 某阶段的完成进度 {completed, total} */
+  const phaseProgress = computed(() => (phase: number) => {
+    const phaseDef = PRODUCTION_PHASES[phase - 1]
+    if (!phaseDef) return { completed: 0, total: 0 }
+    const total = phaseDef.steps.length
+    const completed = phaseDef.steps.filter(s => stepStatusMap.value[s.id] === 'completed').length
+    return { completed, total }
+  })
+
+  /** 某步骤是否可操作（前置条件满足） */
+  const canRunStep = computed(() => (stepId: string) => {
+    // 找到该步骤在扁平列表中的位置
+    const idx = ALL_PIPELINE_STEPS.findIndex(s => s.id === stepId)
+    if (idx < 0) return false
+    // 前面所有步骤都 completed 才能操作
+    for (let i = 0; i < idx; i++) {
+      if (stepStatusMap.value[ALL_PIPELINE_STEPS[i].id] !== 'completed') return false
+    }
+    return true
+  })
 
   // --- Actions ---
 
@@ -124,6 +277,9 @@ export const useProductionStore = defineStore('production', () => {
 
       const s4 = progress.steps[3]?.data
       if (s4?.subtitle_style) subtitleStyle.value = s4.subtitle_style as typeof subtitleStyle.value
+
+      // 恢复选题状态
+      await loadExistingTopics()
     } finally {
       loading.value = false
     }
@@ -165,6 +321,69 @@ export const useProductionStore = defineStore('production', () => {
     currentStep.value = step
   }
 
+  // --- v2 Actions ---
+
+  /** 切换到指定阶段 */
+  function setPhase(phase: number): void {
+    if (phase < 1 || phase > PRODUCTION_PHASES.length) return
+    currentPhase.value = phase
+    // 自动选中该阶段的第一个未完成工作步骤
+    const phaseSteps = PRODUCTION_PHASES[phase - 1].steps
+    const firstPending = phaseSteps.find(s => s.displayType === 'work' && stepStatusMap.value[s.id] !== 'completed')
+    activeStepId.value = firstPending?.id || phaseSteps[0]?.id || null
+  }
+
+  /** 选中某个前端步骤 */
+  function setActiveStep(stepId: string): void {
+    activeStepId.value = stepId
+  }
+
+  /** 执行 v2 前端步骤（内部映射到后端步骤） */
+  async function runV2Step(stepId: string, config?: Record<string, unknown>): Promise<void> {
+    const backendStep = STEP_TO_BACKEND_MAP[stepId]
+    if (backendStep !== null && backendStep !== undefined) {
+      // 走后端执行器
+      await runStep(backendStep, config)
+    }
+    // copyWriting 步骤不走后端执行器，由面板组件自己调用 copyWriting store
+    // 摘要步骤不执行任何后端逻辑
+  }
+
+  /** 标记文案链已完成（由 CopyFinalizePanel 调用） */
+  function markCopyDraftDone(): void {
+    copyDraftDone.value = true
+  }
+
+  function markCopyProhibitedDone(): void {
+    copyProhibitedDone.value = true
+  }
+
+  function markCopyFinalized(): void {
+    copyFinalized.value = true
+  }
+
+  /** v2 一键生产：自动执行所有可执行步骤 */
+  async function autoRunV2(): Promise<void> {
+    executing.value = true
+    try {
+      for (const stepId of AUTO_RUNNABLE_STEPS) {
+        const status = stepStatusMap.value[stepId]
+        if (status === 'completed') continue
+        if (!canRunStep.value(stepId)) continue
+
+        activeStepId.value = stepId
+        const backendStep = STEP_TO_BACKEND_MAP[stepId]
+        if (backendStep !== null && backendStep !== undefined) {
+          await runStep(backendStep)
+        }
+        // 文案链步骤由面板组件处理，一键生产时跳过
+        if (stepId.startsWith('p2_')) continue
+      }
+    } finally {
+      executing.value = false
+    }
+  }
+
   async function refreshProgress(): Promise<void> {
     if (!jobId.value) return
     try {
@@ -188,6 +407,17 @@ export const useProductionStore = defineStore('production', () => {
     scriptId.value = 0
     currentStep.value = 1
     jobStatus.value = ''
+    currentPhase.value = 1
+    activeStepId.value = null
+    copyDraftDone.value = false
+    copyProhibitedDone.value = false
+    copyFinalized.value = false
+    topicId.value = null
+    topicTitle.value = ''
+    topicProposals.value = []
+    topicLoading.value = false
+    topicSelected.value = false
+    topicSources.value = null
     fullText.value = ''
     videoType.value = 'knowledge'
     audioUrls.value = []
@@ -258,6 +488,64 @@ export const useProductionStore = defineStore('production', () => {
     throw new Error(`步骤 ${step} 超时（等待了 ${maxAttempts * 2} 秒）`)
   }
 
+  // --- 选题共振方法 ---
+
+  /** 加载多源灵感数据 */
+  async function loadTopicSources(): Promise<void> {
+    try {
+      topicSources.value = await fetchTopicSourcesApi()
+    } catch { /* 静默 */ }
+  }
+
+  /** AI 生成选题（异步：触发 → 轮询 → 加载结果） */
+  async function generateTopics(count?: number): Promise<void> {
+    if (!jobId.value) return
+    topicLoading.value = true
+    try {
+      const res = await generateTopicsForPipelineApi(jobId.value, count)
+      // 轮询直到完成
+      const maxPoll = 60
+      for (let i = 0; i < maxPoll; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        const status = await pollTopicGenerationStatus(res.task_id)
+        if (status.status === 'success' || status.status === 'completed') break
+        if (status.status === 'failed') throw new Error('AI 生成选题失败')
+      }
+      // 加载结果
+      await loadExistingTopics()
+    } catch (e) {
+      console.error('[generateTopics]', e)
+    } finally {
+      topicLoading.value = false
+    }
+  }
+
+  /** 选用选题 */
+  async function selectTopicAction(proposalId: number): Promise<void> {
+    await selectTopicApi(proposalId)
+    const selected = topicProposals.value.find(p => p.id === proposalId)
+    if (selected) {
+      topicId.value = selected.id
+      topicTitle.value = selected.title
+      topicSelected.value = true
+    }
+  }
+
+  /** 加载已有选题（恢复项目时） */
+  async function loadExistingTopics(): Promise<void> {
+    if (!jobId.value) return
+    try {
+      const res = await fetchTopicProposalsByJob(jobId.value)
+      topicProposals.value = res.items || []
+      const selected = topicProposals.value.find(p => p.status === 'selected')
+      if (selected) {
+        topicId.value = selected.id
+        topicTitle.value = selected.title
+        topicSelected.value = true
+      }
+    } catch { /* 静默 */ }
+  }
+
   return {
     // State
     jobId, taskId, scriptId, currentStep, steps, loading, executing, jobStatus,
@@ -266,11 +554,23 @@ export const useProductionStore = defineStore('production', () => {
     videoProductId, renderJobId, renderProgress, videoUrl,
     subtitleStyle,
     targetPlatforms,
+    // v2 State
+    currentPhase, activeStepId, copyDraftDone, copyProhibitedDone, copyFinalized,
+    // 选题共振 State
+    topicId, topicTitle, topicProposals, topicLoading, topicSelected, topicSources,
+    // 发现信号
+    discoverySignals, addDiscoverySignal, removeDiscoverySignal, clearDiscoverySignals, getDiscoveryContext,
     // Getters
     isStepCompleted, canAdvanceTo, isAllCompleted, hasUnsavedChanges,
+    // v2 Getters
+    currentPhaseSteps, stepStatusMap, phaseProgress, canRunStep,
     // Actions
     createJob, loadJob, runStep, saveStepData, goToStep, refreshProgress, reset,
     rollbackToStep, loadTemplates,
+    // v2 Actions
+    setPhase, setActiveStep, runV2Step, markCopyDraftDone, markCopyProhibitedDone, markCopyFinalized, autoRunV2,
+    // 选题共振 Actions
+    loadTopicSources, generateTopics, selectTopicAction, loadExistingTopics,
     // Templates
     templates,
   }

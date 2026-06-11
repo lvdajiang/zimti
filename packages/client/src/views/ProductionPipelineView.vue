@@ -1,33 +1,233 @@
 <template>
   <div class="production-page">
-    <!-- 工具栏 -->
-    <div class="toolbar">
-      <h2 class="page-title">生产流水线</h2>
-      <span class="toolbar-hint">脚本 → 配音 → 画面 → 字幕 → 发布，一站完成</span>
-      <div class="toolbar-actions">
-        <button v-if="!store.jobId" class="btn btn-primary" @click="handleNewJob">新建任务</button>
-        <button v-else class="btn" @click="handleReset">新建任务</button>
+    <!-- ========== 第二层：项目列表（无 jobId） ========== -->
+    <template v-if="!routeJobId">
+      <div class="toolbar">
+        <h2 class="page-title">生产流水线</h2>
+        <div class="toolbar-actions">
+          <button class="btn btn-primary" @click="showNewProjectDialog = true">+ 新建项目</button>
+        </div>
       </div>
-    </div>
 
-    <!-- 无任务：入口面板（保持不变） -->
-    <div v-if="!store.jobId" class="entry-panel">
-      <div class="entry-card">
-        <div class="entry-icon">🎬</div>
-        <h3>开始生产视频</h3>
-        <p>从脚本编写到多平台发布，一条流水线搞定</p>
-        <div class="form-group">
-          <label>视频标题</label>
-          <input v-model="newTitle" class="input" placeholder="例如：新疆旅行 7 天攻略" />
+      <!-- 项目列表 -->
+      <div v-if="projectsLoading" class="empty-state">加载中...</div>
+      <div v-else-if="projects.length === 0" class="empty-state">
+        <div class="empty-icon">🎬</div>
+        <p>还没有项目，点击「新建项目」开始生产</p>
+        <button class="btn btn-primary" @click="showNewProjectDialog = true">新建项目</button>
+      </div>
+      <div v-else class="project-grid">
+        <div v-for="p in projects" :key="p.id" class="project-card" @click="openProject(p.id)">
+          <div class="project-card-header">
+            <span class="project-status" :class="statusClass(p.status)">{{ statusLabel(p.status) }}</span>
+            <span class="project-date">{{ formatDate(p.createdAt) }}</span>
+          </div>
+          <h4 class="project-title">{{ (p.input as any)?.title || '未命名项目' }}</h4>
+          <div class="project-meta">
+            <span v-if="p.mode">{{ p.mode }}</span>
+          </div>
+          <div class="project-actions">
+            <button class="btn btn-sm btn-primary" @click.stop="openProject(p.id)">编辑</button>
+            <button class="btn btn-sm" @click.stop="deleteProject(p.id)">删除</button>
+          </div>
         </div>
-        <div v-if="store.templates.length > 0" class="form-group">
-          <label>从模板创建（可选）</label>
-          <select v-model="selectedTemplateId" class="input">
-            <option value="">空白开始</option>
-            <option v-for="t in store.templates" :key="t.id" :value="t.id">{{ t.name }}</option>
-          </select>
+      </div>
+    </template>
+
+    <!-- ========== 第三层：项目流水线（有 jobId） ========== -->
+    <template v-else>
+      <div class="toolbar">
+        <h2 class="page-title">生产流水线</h2>
+        <span v-if="store.jobId" class="toolbar-hint">{{ toolbarHint }}</span>
+        <div class="toolbar-actions">
+          <router-link :to="{ name: 'ProductionProjectList' }" class="btn">返回项目列表</router-link>
+          <button class="btn btn-primary" :disabled="saving" @click="handleSaveProject">{{ saving ? '保存中...' : '保存项目' }}</button>
         </div>
-        <div class="form-row">
+      </div>
+
+      <template v-if="store.jobId">
+        <!-- 一键生产 -->
+        <div class="auto-run-bar">
+          <button
+            class="auto-run-btn"
+            :class="{ completed: allDone, running: store.executing }"
+            :disabled="store.executing || allDone"
+            @click="handleAutoRun"
+          >
+            <template v-if="allDone">✅ 全部完成</template>
+            <template v-else-if="store.executing">⏳ 生产中...</template>
+            <template v-else>🔥 一键生产</template>
+          </button>
+          <div class="auto-run-progress">
+            {{ completedWorkSteps }}/{{ totalWorkSteps }} 工作步骤完成
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: (completedWorkSteps / totalWorkSteps * 100) + '%' }" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 流水线 -->
+        <div class="flat-pipeline">
+          <template v-for="phase in PRODUCTION_PHASES" :key="phase.phase">
+            <div class="phase-header" :class="'phase-bg-' + phase.phase">
+              <span class="phase-indicator">{{ isPhaseCompleted(phase.phase) ? '✅' : isPhaseActive(phase.phase) ? '🔵' : '⚪' }}</span>
+              <h3>阶段{{ phase.phase }}：{{ phase.label }}</h3>
+              <span class="phase-count">{{ getPhaseProgressText(phase.phase) }}</span>
+            </div>
+
+            <template v-for="(step, si) in phase.steps" :key="step.id">
+
+              <!-- 摘要步骤 -->
+              <div v-if="step.id === 'p1_hotspot_viral'" class="flat-step flat-step-embedded" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header">
+                  <span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span>
+                  <button class="signal-btn" @click.stop="toggleSignalInput(step.id)" title="标记发现，供选题灵感参考">📌 标记</button>
+                  <span class="step-status">{{ getStatusIcon(step.id) }}</span>
+                </div>
+                <div v-if="activeSignalStep === step.id" class="signal-input-row">
+                  <input v-model="signalInputs[step.id]" class="signal-input" placeholder="记下你的发现，如：这个话题最近很火..." @keyup.enter="addSignal(step.id, 'p1_hotspot_viral')" />
+                  <button class="btn btn-sm btn-primary" @click="addSignal(step.id, 'p1_hotspot_viral')">记入</button>
+                </div>
+                <HotspotsView :pipeline-job-id="routeJobId" />
+              </div>
+              <div v-else-if="step.id === 'p1_benchmark'" class="flat-step flat-step-embedded" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header">
+                  <span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span>
+                  <button class="signal-btn" @click.stop="toggleSignalInput(step.id)" title="标记发现">📌 标记</button>
+                  <span class="step-status">{{ getStatusIcon(step.id) }}</span>
+                </div>
+                <div v-if="activeSignalStep === step.id" class="signal-input-row">
+                  <input v-model="signalInputs[step.id]" class="signal-input" placeholder="记下对标账号的特点或可借鉴之处..." @keyup.enter="addSignal(step.id, 'p1_benchmark')" />
+                  <button class="btn btn-sm btn-primary" @click="addSignal(step.id, 'p1_benchmark')">记入</button>
+                </div>
+                <BenchmarkAccountsView />
+              </div>
+              <div v-else-if="step.id === 'p1_collect'" class="flat-step flat-step-embedded" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header">
+                  <span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span>
+                  <button class="signal-btn" @click.stop="toggleSignalInput(step.id)" title="标记发现">📌 标记</button>
+                  <span class="step-status">{{ getStatusIcon(step.id) }}</span>
+                </div>
+                <div v-if="activeSignalStep === step.id" class="signal-input-row">
+                  <input v-model="signalInputs[step.id]" class="signal-input" placeholder="记下采集到的有价值数据..." @keyup.enter="addSignal(step.id, 'p1_collect')" />
+                  <button class="btn btn-sm btn-primary" @click="addSignal(step.id, 'p1_collect')">记入</button>
+                </div>
+                <CollectTasksView />
+              </div>
+              <div v-else-if="step.id === 'p1_transcript'" class="flat-step flat-step-embedded" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header">
+                  <span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span>
+                  <button class="signal-btn" @click.stop="toggleSignalInput(step.id)" title="标记发现">📌 标记</button>
+                  <span class="step-status">{{ getStatusIcon(step.id) }}</span>
+                </div>
+                <div v-if="activeSignalStep === step.id" class="signal-input-row">
+                  <input v-model="signalInputs[step.id]" class="signal-input" placeholder="记下爆款文案的结构或亮点..." @keyup.enter="addSignal(step.id, 'p1_transcript')" />
+                  <button class="btn btn-sm btn-primary" @click="addSignal(step.id, 'p1_transcript')">记入</button>
+                </div>
+                <ViralVideosView />
+              </div>
+              <div v-else-if="step.id === 'p1_inspiration'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <TopicInspirationPanel />
+              </div>
+              <div v-else-if="step.id === 'p3_visual_make'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <MaterialConfigPanel />
+              </div>
+              <div v-else-if="step.id === 'p4_fine_cut'" class="flat-step flat-step-summary" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <p class="summary-desc">精剪后期（调色/转场/特效）为可选增强步骤。基础版本在粗剪步骤已完成，可直接进入字幕配置。</p>
+              </div>
+              <div v-else-if="step.id === 'p5_tracking'" class="flat-step flat-step-embedded" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <MonitoringView />
+              </div>
+              <div v-else-if="step.id === 'p5_schedule'" class="flat-step flat-step-embedded" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <OperationCalendarView />
+              </div>
+
+              <!-- work 步骤 -->
+              <div v-else-if="step.id === 'p2_draft'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <CopyDraftPanel />
+              </div>
+              <div v-else-if="step.id === 'p2_prohibited'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <ProhibitedCheckPanel />
+              </div>
+              <div v-else-if="step.id === 'p2_finalize'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <CopyFinalizePanel @to-script="handleToScript" />
+              </div>
+              <div v-else-if="step.id === 'p3_script'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">脚本 + 分镜</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <ScriptPanel />
+              </div>
+              <div v-else-if="step.id === 'p3_storyboard'" class="flat-step flat-step-summary" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <p class="summary-desc">分镜规划已在「脚本生成」步骤中完成（四通道总谱：口播+画面+音乐+节奏）</p>
+              </div>
+              <div v-else-if="step.id === 'p3_shooting'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <ShootingPlanPanel :job-id="store.jobId || ''" />
+              </div>
+              <div v-else-if="step.id === 'p4_dubbing'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <TtsPanel />
+              </div>
+              <div v-else-if="step.id === 'p4_rough_cut'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <VisualPanel initial-tab="timeline" />
+              </div>
+              <div v-else-if="step.id === 'p4_subtitle'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <SubtitlePanel />
+              </div>
+              <div v-else-if="step.id === 'p5_keyword'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <PublishPanel :activeSection="'keyword'" />
+              </div>
+              <div v-else-if="step.id === 'p5_hotspot_tag'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <PublishPanel :activeSection="'hotspot'" />
+              </div>
+              <div v-else-if="step.id === 'p5_publish'" class="flat-step flat-step-work" :class="'phase-step-' + phase.phase">
+                <div class="flat-step-header"><span class="step-num">{{ phase.phase }}.{{ si + 1 }}</span><span class="step-label">{{ step.label }}</span><span class="step-status">{{ getStatusIcon(step.id) }}</span></div>
+                <PublishPanel :activeSection="'publish'" />
+              </div>
+
+            </template>
+          </template>
+        </div>
+      </template>
+
+      <!-- 加载失败 -->
+      <div v-else class="empty-state">
+        <p>项目数据加载中，或项目不存在。</p>
+        <router-link :to="{ name: 'ProductionProjectList' }" class="btn btn-primary">返回项目列表</router-link>
+      </div>
+    </template>
+
+    <!-- ========== 新建项目弹窗 ========== -->
+    <div v-if="showNewProjectDialog" class="overlay" @click.self="showNewProjectDialog = false">
+      <div class="dialog">
+        <div class="dialog-header">
+          <h3>新建项目</h3>
+          <button class="dialog-close" @click="showNewProjectDialog = false">&times;</button>
+        </div>
+        <div class="dialog-body">
+          <div class="form-group">
+            <label>项目名称 <span class="required">*</span></label>
+            <input v-model="newTitle" class="input" placeholder="例如：新疆旅行系列" />
+          </div>
+          <div v-if="store.templates.length > 0" class="form-group">
+            <label>从模板创建（可选）</label>
+            <select v-model="selectedTemplateId" class="input">
+              <option value="">空白开始</option>
+              <option v-for="t in store.templates" :key="t.id" :value="t.id">{{ t.name }}</option>
+            </select>
+          </div>
           <div class="form-group">
             <label>视频类型</label>
             <select v-model="newVideoType" class="input">
@@ -38,741 +238,419 @@
             </select>
           </div>
         </div>
-        <div class="form-group">
-          <label>脚本内容（可选，也可在下一步编写）</label>
-          <textarea v-model="newFullText" class="input textarea" rows="4" placeholder="粘贴或输入脚本内容..." />
+        <div class="dialog-footer">
+          <button class="btn" @click="showNewProjectDialog = false">取消</button>
+          <button class="btn btn-primary" :disabled="!newTitle.trim() || store.loading" @click="handleCreate">
+            {{ store.loading ? '创建中...' : '开始生产' }}
+          </button>
         </div>
-        <button class="btn btn-primary btn-lg" :disabled="!newTitle.trim() || store.loading" @click="handleCreate">
-          {{ store.loading ? '创建中...' : '开始生产' }}
-        </button>
       </div>
     </div>
-
-    <!-- 有任务：看板区 -->
-    <template v-else>
-      <!-- 一键生产按钮 -->
-      <div class="auto-run-bar">
-        <button
-          class="auto-run-btn"
-          :class="{ completed: store.isAllCompleted, running: store.executing }"
-          :disabled="store.executing || store.isAllCompleted"
-          @click="handleAutoRun"
-        >
-          <template v-if="store.isAllCompleted">✅ 全部完成</template>
-          <template v-else-if="store.executing">⏳ 生产中...</template>
-          <template v-else>🔥 一键生产</template>
-        </button>
-        <div class="auto-run-progress">
-          {{ completedCount }}/5 步骤完成
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: (completedCount / 5 * 100) + '%' }" />
-          </div>
-        </div>
-      </div>
-
-      <!-- 步骤卡片列表 -->
-      <div class="step-cards">
-        <div
-          v-for="s in stepList"
-          :key="s.step"
-          class="step-card"
-          :class="[
-            store.steps[s.step - 1]?.status || 'pending',
-            { expanded: expandedSteps.has(s.step) },
-          ]"
-        >
-          <!-- 卡片头部（始终可见） -->
-          <div class="step-card-header" @click="toggleStep(s.step)">
-            <div class="step-number" :class="store.steps[s.step - 1]?.status">
-              <span v-if="store.isStepCompleted(s.step)" class="check">✓</span>
-              <span v-else-if="store.steps[s.step - 1]?.status === 'running'" class="spinner">⟳</span>
-              <span v-else>{{ s.step }}</span>
-            </div>
-            <div class="step-meta">
-              <span class="step-title">{{ s.label }}</span>
-              <span class="step-subtitle">{{ getStepSubtitle(s.step) }}</span>
-            </div>
-            <div class="step-actions" @click.stop>
-              <button
-                class="btn btn-sm btn-execute"
-                :disabled="!canExecuteStep(s.step)"
-                @click="handleExecuteStep(s.step)"
-              >
-                {{ getExecuteLabel(s.step) }}
-              </button>
-              <button class="btn-toggle" :class="{ collapsed: !expandedSteps.has(s.step) }">
-                {{ expandedSteps.has(s.step) ? '▲' : '▼' }}
-              </button>
-            </div>
-          </div>
-
-          <!-- 卡片内容（折叠/展开） -->
-          <div class="step-card-body" :class="{ collapsed: !expandedSteps.has(s.step) }">
-            <div class="step-card-body-inner">
-              <ScriptPanel v-if="s.step === 1" />
-              <TtsPanel v-else-if="s.step === 2" />
-              <VisualPanel v-else-if="s.step === 3" />
-              <SubtitlePanel v-else-if="s.step === 4" />
-              <PublishPanel v-else-if="s.step === 5" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
-import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useProductionStore } from '@/stores/production'
-import { PRODUCTION_STEPS } from '@zimti/shared'
+import { PRODUCTION_PHASES, ALL_PIPELINE_STEPS } from '@zimti/shared'
+import type { StepStatus } from '@zimti/shared'
+import api from '@/api/client'
+import { toast } from '@/utils/toast'
+
+// 面板组件
 import ScriptPanel from '@/components/production/ScriptPanel.vue'
 import TtsPanel from '@/components/production/TtsPanel.vue'
 import VisualPanel from '@/components/production/VisualPanel.vue'
 import SubtitlePanel from '@/components/production/SubtitlePanel.vue'
 import PublishPanel from '@/components/production/PublishPanel.vue'
+import ShootingPlanPanel from '@/components/production/visual/ShootingPlanPanel.vue'
+import MaterialConfigPanel from '@/components/production/MaterialConfigPanel.vue'
+import CopyDraftPanel from '@/components/production/CopyDraftPanel.vue'
+import ProhibitedCheckPanel from '@/components/production/ProhibitedCheckPanel.vue'
+import CopyFinalizePanel from '@/components/production/CopyFinalizePanel.vue'
+import TopicInspirationPanel from '@/components/production/TopicInspirationPanel.vue'
+
+// 内嵌页面视图
+import HotspotsView from '@/views/HotspotsView.vue'
+import BenchmarkAccountsView from '@/views/BenchmarkAccountsView.vue'
+import CollectTasksView from '@/views/CollectTasksView.vue'
+import ViralVideosView from '@/views/ViralVideosView.vue'
+import MonitoringView from '@/views/MonitoringView.vue'
+import OperationCalendarView from '@/views/OperationCalendarView.vue'
 
 const route = useRoute()
+const router = useRouter()
 const store = useProductionStore()
 
-const stepList = PRODUCTION_STEPS
+// --- 项目列表 ---
+interface ProjectItem {
+  id: string
+  status: string
+  mode: string | null
+  input: { title?: string; [k: string]: unknown } | null
+  createdAt: string
+}
+const projects = ref<ProjectItem[]>([])
+const projectsLoading = ref(false)
 
-// 新建表单
+async function loadProjects() {
+  projectsLoading.value = true
+  try {
+    const res = await api.get('/pipeline/jobs') as { items: ProjectItem[]; total: number }
+    projects.value = res.items || []
+  } catch { projects.value = [] }
+  finally { projectsLoading.value = false }
+}
+
+function openProject(jobId: string) {
+  router.push({ name: 'ProductionPipeline', params: { jobId } })
+}
+
+async function deleteProject(jobId: string) {
+  if (!confirm('确定删除此项目？')) return
+  try {
+    await api.delete(`/pipeline/jobs/${jobId}`)
+    projects.value = projects.value.filter(p => p.id !== jobId)
+  } catch { /* 静默 */ }
+}
+
+function statusClass(status: string): string {
+  if (status === 'completed') return 'status-done'
+  if (status === 'running' || status === 'producing') return 'status-running'
+  return 'status-pending'
+}
+
+function statusLabel(status: string): string {
+  if (status === 'completed') return '已完成'
+  if (status === 'running' || status === 'producing') return '生产中'
+  return '进行中'
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// --- 新建项目 ---
+const showNewProjectDialog = ref(false)
 const newTitle = ref('')
 const newVideoType = ref('knowledge')
-const newFullText = ref('')
 const selectedTemplateId = ref('')
-
-// 展开/折叠状态（用 reactive 确保增删触发视图更新）
-const expandedSteps = reactive(new Set<number>())
-
-// 已完成步骤数
-const completedCount = computed(() =>
-  store.steps.filter(s => s.status === 'completed').length,
-)
-
-// 初始化展开状态：展开第一个未完成的步骤
-function initExpanded() {
-  const firstPending = store.steps.findIndex(s => s.status !== 'completed')
-  expandedSteps.clear()
-  if (firstPending >= 0) {
-    expandedSteps.add(firstPending + 1)
-  } else {
-    // 全部完成，展开最后一步
-    expandedSteps.add(5)
-  }
-}
-
-// 监听 currentStep 变化（runStep 完成后会自动推进），展开新步骤
-watch(() => store.currentStep, (newStep) => {
-  expandedSteps.add(newStep)
-})
-
-// 监听 jobId 变化，初始化展开状态
-watch(() => store.jobId, (id) => {
-  if (id) initExpanded()
-})
-
-onMounted(async () => {
-  store.loadTemplates()
-  const jobId = route.params.jobId as string
-  // 'new' 或非 UUID 格式不加载，避免 Prisma 报错
-  const isUuid = jobId && /^[0-9a-f-]{36}$/i.test(jobId)
-  if (isUuid) {
-    await store.loadJob(jobId)
-    initExpanded()
-  }
-})
-
-// --- 交互方法 ---
-
-function toggleStep(step: number) {
-  if (expandedSteps.has(step)) {
-    expandedSteps.delete(step)
-  } else {
-    expandedSteps.add(step)
-  }
-}
-
-function handleNewJob() {
-  newTitle.value = ''
-  newVideoType.value = 'knowledge'
-  newFullText.value = ''
-}
 
 async function handleCreate() {
   if (!newTitle.value.trim()) return
-  await store.createJob({
+  const jobId = await store.createJob({
     title: newTitle.value.trim(),
-    full_text: newFullText.value || undefined,
     video_type: newVideoType.value,
   })
-  initExpanded()
+  store.setPhase(1)
+  showNewProjectDialog.value = false
+  newTitle.value = ''
+  newVideoType.value = 'knowledge'
+  router.push({ name: 'ProductionPipeline', params: { jobId } })
 }
 
-function handleReset() {
-  store.reset()
-  expandedSteps.clear()
-}
+// --- 路由 ---
+const saving = ref(false)
 
-// 判断某步骤是否可执行
-function canExecuteStep(step: number): boolean {
-  if (store.executing) return false
-  if (store.isStepCompleted(step)) return true // 已完成可重新执行
-  // 前置步骤必须全部完成
-  return store.canAdvanceTo(step)
-}
+async function handleSaveProject() {
+  if (!store.jobId) return
+  saving.value = true
+  try {
+    const saves: Promise<void>[] = []
 
-// 获取执行按钮文字
-function getExecuteLabel(step: number): string {
-  const status = store.steps[step - 1]?.status
-  if (status === 'running') return '执行中...'
-  if (status === 'completed') return '重新执行'
-  if (!store.canAdvanceTo(step) && !store.isStepCompleted(step)) return '等待前置'
-  return '执行'
-}
+    // 步骤1: 脚本
+    saves.push(store.saveStepData(1, {
+      script_id: store.scriptId || undefined,
+      full_text: store.fullText || undefined,
+    }))
 
-// 获取步骤副标题
-function getStepSubtitle(step: number): string {
-  const status = store.steps[step - 1]?.status
-  const labels: Record<string, string> = {
-    pending: '等待执行',
-    running: '执行中...',
-    completed: '已完成',
-    failed: '执行失败',
+    // 步骤2: TTS
+    if (store.audioUrls.length > 0) {
+      saves.push(store.saveStepData(2, {
+        audio_urls: store.audioUrls,
+        audio_duration: store.audioDuration,
+      }))
+    }
+
+    // 步骤3: 视频
+    if (store.videoProductId) {
+      saves.push(store.saveStepData(3, {
+        video_product_id: store.videoProductId,
+        video_url: store.videoUrl || undefined,
+      }))
+    }
+
+    // 步骤4: 字幕
+    saves.push(store.saveStepData(4, { subtitle_style: store.subtitleStyle }))
+
+    // 步骤5: 发布
+    if (store.targetPlatforms.length > 0) {
+      saves.push(store.saveStepData(5, { platforms: store.targetPlatforms }))
+    }
+
+    await Promise.all(saves)
+    toast.success('项目已保存')
+  } catch (err) {
+    console.error('[保存项目失败]', err)
+    toast.error('保存失败: ' + (err instanceof Error ? err.message : String(err)))
+  } finally {
+    saving.value = false
   }
-  return labels[status] || ''
 }
 
-// 单步执行
-async function handleExecuteStep(step: number) {
-  // 如果已完成，需要确认是否重新执行
-  if (store.isStepCompleted(step) && step < 5) {
-    const hasLaterCompleted = store.steps.slice(step).some(s => s.status === 'completed')
-    if (hasLaterCompleted) {
-      if (!confirm('重新执行此步骤会清除后续步骤的数据，确定吗？')) return
-      await store.rollbackToStep(step)
+const routeJobId = computed(() => {
+  const id = route.params.jobId as string
+  return id && /^[0-9a-f-]{36}$/i.test(id) ? id : ''
+})
+
+// --- 流水线 computed ---
+const toolbarHint = computed(() => {
+  const phase = PRODUCTION_PHASES[store.currentPhase - 1]
+  return phase ? `阶段 ${phase.phase}/5 — ${phase.label}` : ''
+})
+const workSteps = computed(() => ALL_PIPELINE_STEPS.filter(s => s.displayType === 'work'))
+const totalWorkSteps = computed(() => workSteps.value.length)
+const completedWorkSteps = computed(() => workSteps.value.filter(s => store.stepStatusMap[s.id] === 'completed').length)
+const allDone = computed(() => {
+  const workSteps = ALL_PIPELINE_STEPS.filter(s => s.displayType === 'work')
+  return workSteps.every(s => store.stepStatusMap[s.id] === 'completed')
+})
+
+function getStatusIcon(stepId: string): string {
+  const status: StepStatus = store.stepStatusMap[stepId] || 'pending'
+  switch (status) { case 'completed': return '✅'; case 'running': return '🔄'; case 'failed': return '❌'; default: return '' }
+}
+function getPhaseProgressText(phase: number): string {
+  const p = store.phaseProgress(phase); return `${p.completed}/${p.total} 完成`
+}
+function isPhaseCompleted(phase: number): boolean {
+  const p = store.phaseProgress(phase); return p.completed === p.total && p.total > 0
+}
+function isPhaseActive(phase: number): boolean {
+  for (const ph of PRODUCTION_PHASES) { if (!isPhaseCompleted(ph.phase)) return ph.phase === phase } return false
+}
+
+// --- 流水线 methods ---
+function handleToScript(scriptId: number) {
+  store.markCopyFinalized()
+  if (scriptId) { store.scriptId = scriptId; store.saveStepData(1, { script_id: scriptId }) }
+  store.setPhase(3)
+}
+async function handleAutoRun() { await store.autoRunV2() }
+
+// --- 发现信号（Phase 1 摘要步骤 → 选题灵感的数据管道）---
+const activeSignalStep = ref<string | null>(null)
+const signalInputs = ref<Record<string, string>>({})
+
+function toggleSignalInput(stepId: string) {
+  if (activeSignalStep.value === stepId) {
+    activeSignalStep.value = null
+  } else {
+    activeSignalStep.value = stepId
+    if (!(stepId in signalInputs.value)) {
+      signalInputs.value[stepId] = ''
     }
   }
-  expandedSteps.add(step)
-  await store.runStep(step)
 }
 
-// 一键生产
-async function handleAutoRun() {
-  for (let step = 1; step <= 5; step++) {
-    if (store.isStepCompleted(step)) continue
-    expandedSteps.add(step)
-    try {
-      await store.runStep(step)
-    } catch {
-      expandedSteps.add(step)
-      alert(`步骤 ${step}（${stepList[step - 1].label}）执行失败，请检查后重试`)
-      break
-    }
-    if (store.steps[step - 1].status === 'failed') {
-      expandedSteps.add(step)
-      break
-    }
+function addSignal(stepId: string, source: string) {
+  const content = signalInputs.value[stepId]?.trim()
+  if (!content) return
+  // 映射 stepId → source key
+  const sourceMap: Record<string, string> = {
+    p1_hotspot_viral: 'hotspot',
+    p1_benchmark: 'benchmark',
+    p1_collect: 'collect',
+    p1_transcript: 'transcript',
   }
+  const stepDef = ALL_PIPELINE_STEPS.find(s => s.id === stepId)
+  store.addDiscoverySignal({
+    source: sourceMap[source] || sourceMap[stepId] || 'unknown',
+    type: stepDef?.label || '观察',
+    content,
+  })
+  signalInputs.value[stepId] = ''
+  activeSignalStep.value = null
 }
 
-// beforeunload 保护
-function onBeforeUnload(e: BeforeUnloadEvent) {
-  if (store.hasUnsavedChanges) {
-    e.preventDefault()
+// --- Lifecycle ---
+onMounted(async () => {
+  store.loadTemplates()
+  if (routeJobId.value) {
+    await store.loadJob(routeJobId.value)
+    if (store.jobId) store.setPhase(store.currentPhase)
+  } else {
+    await loadProjects()
   }
-}
+})
+
+function onBeforeUnload(e: BeforeUnloadEvent) { if (store.hasUnsavedChanges) e.preventDefault() }
 onMounted(() => { window.addEventListener('beforeunload', onBeforeUnload) })
 onUnmounted(() => { window.removeEventListener('beforeunload', onBeforeUnload) })
-
-// 路由离开确认
-onBeforeRouteLeave(() => {
-  if (store.hasUnsavedChanges) {
-    if (!confirm('有步骤正在执行中，确定要离开吗？')) return false
-  }
-  return true
-})
+onBeforeRouteLeave(() => { if (store.hasUnsavedChanges) { if (!confirm('有步骤正在执行中，确定要离开吗？')) return false } return true })
 </script>
 
 <style scoped>
-.production-page {
-  padding: var(--page-padding, 20px);
-  max-width: 1200px;
-  margin: 0 auto;
+.production-page { padding: var(--page-padding, 20px); max-width: 1200px; margin: 0 auto; }
+
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.page-title { font-size: 22px; font-weight: 700; color: var(--color-text); margin: 0; }
+.toolbar-hint { color: var(--color-text-secondary); font-size: 14px; }
+.toolbar-actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* 按钮 */
+.btn { padding: 8px 16px; border: 1px solid var(--color-border); border-radius: 6px; background: transparent; color: var(--color-text); cursor: pointer; font-size: 14px; text-decoration: none; }
+.btn:hover:not(:disabled) { background: var(--color-surface-hover, rgba(0,0,0,0.04)); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+.btn-primary:hover:not(:disabled) { opacity: 0.9; background: var(--color-primary); }
+.btn-sm { padding: 4px 12px; font-size: 13px; border-radius: 4px; }
+
+/* 项目列表 */
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.project-card {
+  background: var(--color-surface, #fff); border: 1px solid var(--color-border);
+  border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.2s;
 }
+.project-card:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.project-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.project-status { font-size: 12px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+.status-done { background: #D1FAE5; color: #059669; }
+.status-running { background: #DBEAFE; color: #2563EB; }
+.status-pending { background: #F3F4F6; color: #6B7280; }
+.project-date { font-size: 12px; color: var(--color-text-secondary); }
+.project-title { margin: 0 0 8px; font-size: 16px; font-weight: 600; color: var(--color-text); }
+.project-meta { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px; }
+.project-actions { display: flex; gap: 8px; }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+/* 空状态 */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--color-text-secondary); }
+.empty-state p { margin-bottom: 16px; }
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+/* 弹窗 */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dialog { background: var(--color-surface, #ffffff); border-radius: 10px; width: 90%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+.dialog-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--color-border); }
+.dialog-header h3 { margin: 0; font-size: 16px; }
+.dialog-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-text-secondary); }
+.dialog-body { padding: 20px; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--color-border); }
+.form-group { margin-bottom: 16px; text-align: left; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 6px; }
+.required { color: #EF4444; }
+.input { width: 100%; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-background); color: var(--color-text); font-size: 14px; box-sizing: border-box; }
+.input:focus { outline: none; border-color: var(--color-primary); }
+
+/* 一键生产 */
+.auto-run-bar { display: flex; align-items: center; gap: 20px; padding: 16px 20px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 20px; }
+.auto-run-btn { flex-shrink: 0; padding: 12px 32px; font-size: 16px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #FF6B35, #FF8C42); border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; letter-spacing: 1px; }
+.auto-run-btn:hover:not(:disabled) { filter: brightness(1.1); box-shadow: 0 4px 12px rgba(255,107,53,0.35); }
+.auto-run-btn:disabled { cursor: not-allowed; opacity: 0.7; }
+.auto-run-btn.running { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+.auto-run-btn.completed { background: linear-gradient(135deg, #10b981, #34d399); }
+.auto-run-progress { flex: 1; display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--color-text-secondary); }
+.progress-bar { flex: 1; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 3px; transition: width 0.4s ease; }
+
+/* 流水线 */
+.flat-pipeline { display: flex; flex-direction: column; gap: 0; }
+.phase-header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; margin-top: 24px; border-radius: 8px; position: relative; }
+.phase-header:first-child { margin-top: 0; }
+.phase-header::before { content: ''; position: absolute; top: -12px; left: 20px; right: 20px; height: 1px; background: var(--color-border); }
+.phase-header:first-child::before { display: none; }
+.phase-indicator { font-size: 18px; flex-shrink: 0; }
+.phase-header h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--color-text); }
+.phase-count { font-size: 13px; color: var(--color-text-secondary); margin-left: auto; }
+.flat-step { margin-top: 12px; }
+.flat-step-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 22px; padding: 0 4px;
+  background: var(--color-primary); color: #fff;
+  font-size: 11px; font-weight: 700; border-radius: 4px;
+  flex-shrink: 0; letter-spacing: 0.5px;
 }
+.flat-step-header .step-label { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.flat-step-header .step-status { margin-left: auto; font-size: 14px; }
 
-.page-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-text);
-  margin: 0;
-}
+/* 阶段色：每个阶段不同的左边框 */
+.phase-step-1 { border-left: 3px solid #3B82F6 !important; }  /* 内容发现 - 蓝 */
+.phase-step-2 { border-left: 3px solid #8B5CF6 !important; }  /* 文案创作 - 紫 */
+.phase-step-3 { border-left: 3px solid #10B981 !important; }  /* 脚本画面 - 绿 */
+.phase-step-4 { border-left: 3px solid #F59E0B !important; }  /* 配音剪辑 - 橙 */
+.phase-step-5 { border-left: 3px solid #EF4444 !important; }  /* 优化发布 - 红 */
 
-.toolbar-hint {
-  color: var(--color-text-secondary);
-  font-size: 14px;
-}
+/* 阶段头部不同色 */
+.phase-bg-1 { background: linear-gradient(135deg, #EFF6FF, #DBEAFE) !important; }  /* 蓝 */
+.phase-bg-2 { background: linear-gradient(135deg, #F5F3FF, #EDE9FE) !important; }  /* 紫 */
+.phase-bg-3 { background: linear-gradient(135deg, #ECFDF5, #D1FAE5) !important; }  /* 绿 */
+.phase-bg-4 { background: linear-gradient(135deg, #FFFBEB, #FEF3C7) !important; }  /* 橙 */
+.phase-bg-5 { background: linear-gradient(135deg, #FEF2F2, #FEE2E2) !important; }  /* 红 */
+.phase-bg-1.completed { background: linear-gradient(135deg, #EFF6FF, #DBEAFE) !important; }
+.phase-bg-2.completed { background: linear-gradient(135deg, #F5F3FF, #EDE9FE) !important; }
+.phase-bg-3.completed { background: linear-gradient(135deg, #ECFDF5, #D1FAE5) !important; }
+.phase-bg-4.completed { background: linear-gradient(135deg, #FFFBEB, #FEF3C7) !important; }
+.phase-bg-5.completed { background: linear-gradient(135deg, #FEF2F2, #FEE2E2) !important; }
 
-.toolbar-actions {
-  margin-left: auto;
-}
+.flat-step-embedded { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 16px 20px; }
+.flat-step-embedded > :deep(.hotspots-page > .back-nav),
+.flat-step-embedded > :deep(.collect-page > .back-nav),
+.flat-step-embedded > :deep(.viral-page > .back-nav),
+.flat-step-embedded > :deep(.monitor-page > .back-nav) { display: none !important; }
+.flat-step-embedded > :deep(.topic-page > .sub-nav) { display: none !important; }
+.flat-step-embedded > :deep(.hotspots-page),
+.flat-step-embedded > :deep(.collect-page),
+.flat-step-embedded > :deep(.viral-page),
+.flat-step-embedded > :deep(.topic-page),
+.flat-step-embedded > :deep(.materials-page),
+.flat-step-embedded > :deep(.monitor-page),
+.flat-step-embedded > :deep(.operation-calendar) { padding: 0 !important; }
 
-/* ===================== 入口面板（保持不变） ===================== */
+.flat-step-summary { padding: 14px 18px; background: #F9FAFB; border-left: 3px solid #D1D5DB; border-radius: 0 8px 8px 0; }
+.summary-desc { margin: 4px 0 0; font-size: 13px; color: var(--color-text-secondary); }
 
-.entry-panel {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
-}
+.flat-step-work { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 16px 20px; }
+.flat-step-work > :deep(.script-panel),
+.flat-step-work > :deep(.tts-panel),
+.flat-step-work > :deep(.visual-panel),
+.flat-step-work > :deep(.subtitle-panel),
+.flat-step-work > :deep(.publish-panel),
+.flat-step-work > :deep(.copy-draft-panel),
+.flat-step-work > :deep(.prohibited-check-panel),
+.flat-step-work > :deep(.copy-finalize-panel),
+.flat-step-work > :deep(.shooting-plan-panel) { background: transparent; border: none; border-radius: 0; padding: 0; }
 
-.entry-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 40px;
-  max-width: 560px;
-  width: 100%;
-  text-align: center;
-}
+.hidden-step { display: none; }
 
-.entry-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.entry-card h3 {
-  font-size: 20px;
-  margin: 0 0 8px;
-  color: var(--color-text);
-}
-
-.entry-card p {
-  color: var(--color-text-secondary);
-  margin: 0 0 24px;
-  font-size: 14px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-  text-align: left;
-}
-
-.form-group label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: 6px;
-}
-
-.form-row {
-  display: flex;
-  gap: 12px;
-}
-
-.form-row .form-group {
-  flex: 1;
-}
-
-.input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-background);
-  color: var(--color-text);
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.textarea {
-  resize: vertical;
-  min-height: 80px;
-  font-family: inherit;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: var(--color-primary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
-  background: var(--color-primary);
-}
-
-.btn-lg {
-  padding: 12px 32px;
-  font-size: 16px;
-  margin-top: 8px;
-}
-
-/* ===================== 一键生产按钮 ===================== */
-
-.auto-run-bar {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 16px 20px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  margin-bottom: 16px;
-}
-
-.auto-run-btn {
-  flex-shrink: 0;
-  padding: 12px 32px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #FF6B35, #FF8C42);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+/* 发现信号标记 */
+.signal-btn {
+  font-size: 11px; padding: 2px 8px; border: 1px dashed var(--color-border);
+  border-radius: 4px; background: transparent; color: var(--color-text-secondary);
+  cursor: pointer; margin-left: auto; margin-right: 8px; white-space: nowrap;
   transition: all 0.2s;
-  letter-spacing: 1px;
 }
-
-.auto-run-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.35);
+.signal-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: rgba(59,130,246,0.04); }
+.signal-input-row {
+  display: flex; gap: 8px; padding: 8px 12px; margin-bottom: 8px;
+  background: var(--color-background); border-radius: 6px;
 }
-
-.auto-run-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.auto-run-btn.running {
-  background: linear-gradient(135deg, #3b82f6, #60a5fa);
-}
-
-.auto-run-btn.completed {
-  background: linear-gradient(135deg, #10b981, #34d399);
-}
-
-.auto-run-progress {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
-
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: var(--color-border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-/* ===================== 步骤卡片 ===================== */
-
-.step-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.step-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  overflow: hidden;
-  border-left: 3px solid var(--color-border);
-  transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-.step-card.running {
-  border-left-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
-}
-
-.step-card.completed {
-  border-left-color: #10b981;
-}
-
-.step-card.failed {
-  border-left-color: #ef4444;
-}
-
-.step-card.pending {
-  border-left-color: var(--color-border);
-}
-
-/* --- 卡片头部 --- */
-
-.step-card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s;
-}
-
-.step-card-header:hover {
-  background: var(--color-surface-hover, rgba(0, 0, 0, 0.02));
-}
-
-.step-number {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--color-primary);
-  transition: background 0.3s;
-}
-
-.step-number.completed {
-  background: #10b981;
-}
-
-.step-number.running {
-  background: var(--color-primary);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.step-number.failed {
-  background: #ef4444;
-}
-
-.step-number.pending {
-  background: var(--color-primary);
-}
-
-.check {
-  font-size: 14px;
-}
-
-.spinner {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.step-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.step-title {
-  font-size: 15px;
-  font-weight: 600;
+.signal-input {
+  flex: 1; padding: 6px 10px; border: 1px solid var(--color-border);
+  border-radius: 4px; font-size: 13px; background: var(--color-surface);
   color: var(--color-text);
-  margin-right: 8px;
 }
-
-.step-subtitle {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.step-card.completed .step-subtitle {
-  color: #10b981;
-}
-
-.step-card.running .step-subtitle {
-  color: var(--color-primary);
-}
-
-.step-card.failed .step-subtitle {
-  color: #ef4444;
-}
-
-.step-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.btn-sm {
-  padding: 4px 12px;
-  font-size: 13px;
-  border-radius: 4px;
-}
-
-.btn-execute {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: var(--color-primary);
-}
-
-.btn-execute:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.btn-execute:disabled {
-  background: var(--color-border);
-  color: var(--color-text-secondary);
-  border-color: var(--color-border);
-  opacity: 1;
-}
-
-.btn-toggle {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  border-radius: 4px;
-  transition: background 0.15s, transform 0.2s;
-}
-
-.btn-toggle:hover {
-  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
-}
-
-/* --- 卡片内容（折叠/展开） --- */
-
-.step-card-body {
-  max-height: 2000px;
-  overflow: hidden;
-  transition: max-height 0.4s ease, padding 0.3s ease;
-  border-top: 1px solid var(--color-border);
-}
-
-.step-card-body.collapsed {
-  max-height: 0;
-  border-top-color: transparent;
-  transition: max-height 0.3s ease, padding 0.2s ease;
-}
-
-.step-card-body-inner {
-  padding: 16px;
-}
-
-/* 让嵌入的 Panel 组件更紧凑 */
-.step-card-body-inner > :deep(.script-panel),
-.step-card-body-inner > :deep(.tts-panel),
-.step-card-body-inner > :deep(.visual-panel),
-.step-card-body-inner > :deep(.subtitle-panel),
-.step-card-body-inner > :deep(.publish-panel) {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-}
-
-/* ===================== 移动端适配 ===================== */
+.signal-input:focus { outline: none; border-color: var(--color-primary); }
 
 @media (max-width: 768px) {
-  .production-page {
-    padding: 12px;
-  }
-
-  .auto-run-bar {
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-  }
-
-  .auto-run-btn {
-    width: 100%;
-    text-align: center;
-    padding: 12px 16px;
-  }
-
-  .step-card-header {
-    padding: 10px 12px;
-  }
-
-  .step-title {
-    font-size: 14px;
-  }
-
-  .step-subtitle {
-    font-size: 12px;
-  }
-
-  .step-number {
-    width: 24px;
-    height: 24px;
-    font-size: 12px;
-  }
-
-  .btn-sm {
-    padding: 3px 8px;
-    font-size: 12px;
-  }
-
-  .step-card-body-inner {
-    padding: 12px;
-  }
-
-  .entry-card {
-    padding: 24px;
-  }
-
-  .form-row {
-    flex-direction: column;
-    gap: 0;
-  }
+  .production-page { padding: 12px; }
+  .project-grid { grid-template-columns: 1fr; }
+  .auto-run-bar { flex-direction: column; gap: 12px; padding: 12px; }
+  .auto-run-btn { width: 100%; text-align: center; padding: 12px 16px; }
+  .phase-header { padding: 10px 14px; }
+  .flat-step-work { padding: 12px 14px; }
 }
 </style>

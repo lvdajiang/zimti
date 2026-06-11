@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "^/",
+        "command": "node d:/zimti/.claude/hooks/skill-interceptor.js"
+      }
+    ]
+  }
+}

@@ -4,7 +4,7 @@
       <!-- 左侧：优化建议 + 平台适配 -->
       <div class="main-section">
         <!-- ─── 区域1：关键词建议 ─── -->
-        <div class="optimize-section">
+        <div id="publish-section-keyword" class="optimize-section" v-show="!activeSection || activeSection === 'keyword'">
           <div class="section-header">
             <h4>🔑 关键词优化</h4>
             <button class="btn btn-sm" :disabled="keywordLoading" @click="handleSuggestKeywords">
@@ -28,7 +28,7 @@
         </div>
 
         <!-- ─── 区域2：热点标签匹配 ─── -->
-        <div class="optimize-section">
+        <div id="publish-section-hotspot" class="optimize-section" v-show="!activeSection || activeSection === 'hotspot'">
           <div class="section-header">
             <h4>🔥 热点标签</h4>
             <button class="btn btn-sm" :disabled="hotspotLoading" @click="handleMatchHotspots">
@@ -58,7 +58,7 @@
         </div>
 
         <!-- ─── 区域3：平台选择 + 适配 ─── -->
-        <div class="optimize-section">
+        <div id="publish-section-publish" class="optimize-section" v-show="!activeSection || activeSection === 'publish'">
           <div class="section-header">
             <h4>📱 多平台发布</h4>
           </div>
@@ -197,8 +197,14 @@
             style="margin-top: 8px"
             @click="handlePublish"
           >
-            {{ publishing ? '发布中...' : '一键发布' }}
+            {{ publishing ? '处理中...' : '确认分发' }}
           </button>
+        </div>
+
+        <!-- 分发说明 -->
+        <div v-if="published" class="publish-note">
+          <p>✅ 已创建 {{ publishedCount }} 个平台的分发记录。</p>
+          <p class="note-hint">⚠️ 当前版本使用模拟发布：分发记录已生成、发布排期已创建，但尚未对接平台 API 进行真实发布。请在各平台后台手动发布，或配置平台开放 API 实现自动发布。</p>
         </div>
 
         <!-- 适配进度 -->
@@ -218,11 +224,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useProductionStore } from '@/stores/production'
 import { PLATFORM_LABELS } from '@zimti/shared'
 import api from '@/api/client'
 import DataTrackingPanel from './DataTrackingPanel.vue'
+
+const props = defineProps<{
+  /** v2 步骤聚焦：keyword / hotspot / publish，为空时显示全部 */
+  activeSection?: 'keyword' | 'hotspot' | 'publish'
+}>()
+
+// 当 activeSection 变化时，滚动到对应区域
+watch(() => props.activeSection, async (section) => {
+  if (!section) return
+  await nextTick()
+  const el = document.getElementById(`publish-section-${section}`)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+})
 
 interface AdaptedItem {
   platform: string
@@ -279,6 +298,25 @@ watch(() => store.steps[4]?.data, (data) => {
       .filter(Boolean)
   }
 }, { immediate: true, deep: true })
+
+// 确保有草稿发布记录，使关键词/热点标签在 p5_publish 之前可用
+async function ensureDraftPublishRecord() {
+  if (publishRecordIds.value.length > 0) return
+  // 尝试从后端已有数据获取
+  if (store.steps[4]?.data && Array.isArray((store.steps[4]?.data as any)?.publish_records)) {
+    const records = (store.steps[4]?.data as any).publish_records
+    if (records.length > 0) {
+      publishRecordIds.value = records.map((r: any) => r.publish_record_id || r.id).filter(Boolean)
+      return
+    }
+  }
+  // 没有发布记录 — 关键词/热点标签功能在发布记录创建后自动可用
+  // startPublishTask 会走通用 content-analysis 回退路径
+}
+
+onMounted(() => {
+  ensureDraftPublishRecord()
+})
 // 排期状态
 const showScheduleForm = ref(false)
 const scheduleSaving = ref(false)
@@ -504,13 +542,8 @@ async function handlePublish() {
       return
     }
 
-    // 更新发布记录状态为 published
-    for (const recordId of publishRecordIds.value) {
-      try {
-        await api.post(`/publish-records/${recordId}/publish`)
-      } catch { /* 状态更新失败不阻塞流程 */ }
-    }
-
+    // 分发记录已创建，发布记录保持 unpublished（待平台真实发布后由后端回调更新）
+    // 实际平台发布需配置各平台 API 密钥，当前版本需在平台后台手动操作
     published.value = true
 
     // 更新流水线步骤状态
@@ -548,9 +581,14 @@ async function startPublishTask(endpoint: string): Promise<string | null> {
     const res = await api.post(`/publish-records/${recordId}${endpoint}`) as any
     return res.task_id ?? null
   }
-  // 无发布记录时，走 distribution 兼容流程
+  // 没有发布记录 — 提示用户先创建
+  if (!publishRecordWarningShown.value) {
+    publishRecordWarningShown.value = true
+  }
   return null
 }
+
+const publishRecordWarningShown = ref(false)
 
 /** 轮询发布记录任务状态 */
 async function pollTaskStatus(
@@ -872,6 +910,10 @@ async function deleteScheduleEvent(eventId: string) {
 .success-icon { font-size: 28px; }
 
 .loading-wrapper { text-align: center; padding: 16px; color: var(--color-text-secondary); font-size: 14px; }
+
+.publish-note { margin-top: 16px; padding: 12px 16px; background: #FFF8E1; border: 1px solid #FFE082; border-radius: 8px; }
+.publish-note p { margin: 0; font-size: 13px; color: var(--color-text); line-height: 1.5; }
+.note-hint { font-size: 12px !important; color: #795548 !important; margin-top: 6px !important; }
 
 .input {
   width: 100%; padding: 6px 10px;

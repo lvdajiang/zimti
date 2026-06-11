@@ -55,12 +55,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useCopyWritingStore } from '@/stores/copyWriting'
+import { useProductionStore } from '@/stores/production'
 
 const emit = defineEmits<{
   (e: 'to-script', scriptId: number): void
 }>()
 
 const store = useCopyWritingStore()
+const prodStore = useProductionStore()
 
 const hasCopy = computed(() => !!store.currentCopy)
 const loading = computed(() => store.loading)
@@ -85,11 +87,17 @@ async function handlePolish() {
 
 async function handleFinalize() {
   await store.doFinalize()
+  // 标记文案定稿步骤完成，确保流水线进度正确
+  prodStore.markCopyFinalized()
 }
 
 async function handleToScript() {
   const script = await store.doToScript()
   if (script) {
+    // 将定稿文案内容传递给脚本编辑器，打通 阶段2→阶段3 数据管道
+    if (script.full_text) {
+      prodStore.fullText = script.full_text
+    }
     emit('to-script', script.id)
   }
 }

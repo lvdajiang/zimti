@@ -17,20 +17,29 @@ export interface TopicSourceAggregate {
   crmInsights: Array<{ destination: string; count: number }>
   /** 高热度未过期热点 */
   hotspotHints: Array<{ title: string; heatValue: number; keywords: string[] }>
+  /** 历史发布数据分析洞察（闭环反馈） */
+  historicalInsights: {
+    summary: string
+    topPerformers: Array<{ title: string; platform: string; completionRate: number; playCount: number }>
+    averageCompletionRate: number
+    totalSnapshots: number
+    recentInsight: string | null
+  }
 }
 
 /**
  * 聚合所有模块的选题灵感来源
  */
 export async function aggregateTopicSources(userId: string): Promise<TopicSourceAggregate> {
-  const [geoHints, chatInsights, crmInsights, hotspotHints] = await Promise.all([
+  const [geoHints, chatInsights, crmInsights, hotspotHints, historicalInsights] = await Promise.all([
     loadGeoHints(userId),
     loadChatInsights(userId),
     loadCrmInsights(userId),
     loadHotspotHints(),
+    loadHistoricalInsights(userId),
   ])
 
-  return { geoHints, chatInsights, crmInsights, hotspotHints }
+  return { geoHints, chatInsights, crmInsights, hotspotHints, historicalInsights }
 }
 
 /** 从 GEO 意图题库中取最近未使用的高价值问题 */
@@ -147,5 +156,114 @@ async function loadHotspotHints(): Promise<TopicSourceAggregate['hotspotHints']>
     }))
   } catch {
     return []
+  }
+}
+
+/** 从历史发布数据中提取洞察，实现 数据→创作 反馈闭环 */
+async function loadHistoricalInsights(userId: string): Promise<TopicSourceAggregate['historicalInsights']> {
+  const defaults = {
+    summary: '暂无历史数据，发布视频后将自动分析',
+    topPerformers: [] as Array<{ title: string; platform: string; completionRate: number; playCount: number }>,
+    averageCompletionRate: 0,
+    totalSnapshots: 0,
+    recentInsight: null as string | null,
+  }
+
+  try {
+    // 查询用户最近 60 天的数据快照
+    const thirtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+    const snapshots = await prisma.dataSnapshot.findMany({
+      where: {
+        userId,
+        snapshotAt: { gte: thirtyDaysAgo },
+      },
+      orderBy: { snapshotAt: 'desc' },
+      take: 200,
+      select: {
+        playCount: true,
+        completionRate: true,
+        threeSecondBounceRate: true,
+        commentCount: true,
+        publishRecord: {
+          select: {
+            id: true,
+            title: true,
+            platform: true,
+          },
+        },
+      },
+    })
+
+    if (snapshots.length === 0) return defaults
+
+    // 按发布记录聚合
+    const recordMap = new Map<string, {
+      title: string
+      platform: string
+      totalPlays: number
+      completionRates: number[]
+      bounceRates: number[]
+      commentCount: number
+    }>()
+
+    for (const s of snapshots) {
+      const recordId = s.publishRecord.id
+      if (!recordMap.has(recordId)) {
+        recordMap.set(recordId, {
+          title: s.publishRecord.title || '未命名',
+          platform: s.publishRecord.platform,
+          totalPlays: 0,
+          completionRates: [],
+          bounceRates: [],
+          commentCount: 0,
+        })
+      }
+      const r = recordMap.get(recordId)!
+      r.totalPlays = Math.max(r.totalPlays, s.playCount)
+      r.completionRates.push(Number(s.completionRate))
+      r.commentCount = Math.max(r.commentCount, s.commentCount)
+    }
+
+    // 计算各记录的平均数据
+    const performers = Array.from(recordMap.entries()).map(([, r]) => ({
+      title: r.title,
+      platform: r.platform,
+      completionRate: Math.round(r.completionRates.reduce((a, b) => a + b, 0) / r.completionRates.length),
+      playCount: r.totalPlays,
+    })).sort((a, b) => b.completionRate - a.completionRate)
+
+    const topPerformers = performers.slice(0, 5)
+    const allRates = performers.map(p => p.completionRate)
+    const averageCompletionRate = allRates.length > 0
+      ? Math.round(allRates.reduce((a, b) => a + b, 0) / allRates.length)
+      : 0
+    const totalSnapshots = snapshots.length
+
+    // 生成洞察摘要
+    let summary = `过去 60 天共追踪 ${totalSnapshots} 个数据点，覆盖 ${performers.length} 个发布。`
+    if (topPerformers.length > 0) {
+      summary += `平均完播率 ${averageCompletionRate}%。`
+      summary += `表现最好的内容是「${topPerformers[0].title}」（完播率 ${topPerformers[0].completionRate}%）。`
+    }
+
+    // 生成具体的改进建议
+    let recentInsight: string | null = null
+    if (topPerformers.length >= 2) {
+      const best = topPerformers[0]
+      const worst = topPerformers[topPerformers.length - 1]
+      if (best.completionRate - worst.completionRate > 15) {
+        recentInsight = `高完播率内容（如「${best.title}」完播率 ${best.completionRate}%）vs 低完播内容（如「${worst.title}」完播率 ${worst.completionRate}%）差距明显，建议分析高完播内容的选题角度和开头钩子策略，作为新选题参考。`
+      }
+    }
+
+    return {
+      summary,
+      topPerformers,
+      averageCompletionRate,
+      totalSnapshots,
+      recentInsight,
+    }
+  } catch {
+    return defaults
   }
 }
